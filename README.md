@@ -34,7 +34,7 @@ The wiki is the primary source for all information regarding this project.
 4.  **Verify Dependencies**: Ensure you have the required dependencies installed (see below).
 5.  **Restart** your server or change maps.
 
-> **For a detailed step-by-step guide, please see the [Installation Page on the Wiki](https://github.com/Silorak/TF2-Dodgeball-Modified/wiki/Plugin-Core).**
+> **For a detailed step-by-step guide, please see the [Installation Page on the Wiki](https://github.com/Silorak/TF2-Dodgeball-Modified/wiki/Installation).**
 
 ---
 
