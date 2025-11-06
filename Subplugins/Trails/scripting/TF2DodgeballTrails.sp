@@ -211,12 +211,23 @@ public void OnObjectDeflected(Event hEvent, char[] strEventName, bool bDontBroad
 	float fPosition[3];
 	GetEntPropVector(iOtherEntity, Prop_Send, "m_vecOrigin", fPosition);
 	
+	ParticleAttachmentType iAttachType = PATTACH_POINT_FOLLOW;
+	int iAttachPoint = 1;
+	
+	// Check for custom model attachment point
+	if ((TFDB_GetRocketFlags(iIndex) & RocketFlag_CustomModel) &&
+	    ((iAttachPoint = LookupEntityAttachment(iOtherEntity, "trail")) == 0))
+	{
+		iAttachPoint = -1;
+		iAttachType = PATTACH_ABSORIGIN_FOLLOW;
+	}
+	
 	// Reset previous particles
-	CreateTempParticle(ROCKET_TRAIL_FIRE, fPosition, _, _, iOtherEntity, PATTACH_POINT_FOLLOW, 1, true);
+	CreateTempParticle(ROCKET_TRAIL_FIRE, fPosition, _, _, iOtherEntity, iAttachType, iAttachPoint, true);
 	TE_SendToAll();
 	
 	// Create new particles
-	CreateTempParticle(ROCKET_TRAIL_FIRE, fPosition, _, _, iOtherEntity, PATTACH_POINT_FOLLOW, 1);
+	CreateTempParticle(ROCKET_TRAIL_FIRE, fPosition, _, _, iOtherEntity, iAttachType, iAttachPoint);
 	TE_SendToAll();
 	
 	UpdateRocketSkin(iOtherEntity, iTeam, TestFlags(TFDB_GetRocketFlags(iIndex), RocketFlag_IsNeutral));
