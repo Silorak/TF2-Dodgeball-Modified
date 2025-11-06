@@ -207,6 +207,18 @@ public void OnObjectDeflected(Event hEvent, char[] strEventName, bool bDontBroad
 	
 	if (iOtherEntity == -1) return;
 	
+	// Clear previous rocket trail particles and create new ones on deflection
+	float fPosition[3];
+	GetEntPropVector(iOtherEntity, Prop_Send, "m_vecOrigin", fPosition);
+	
+	// Reset previous particles
+	CreateTempParticle(ROCKET_TRAIL_FIRE, fPosition, _, _, iOtherEntity, PATTACH_POINT_FOLLOW, 1, true);
+	TE_SendToAll();
+	
+	// Create new particles
+	CreateTempParticle(ROCKET_TRAIL_FIRE, fPosition, _, _, iOtherEntity, PATTACH_POINT_FOLLOW, 1);
+	TE_SendToAll();
+	
 	UpdateRocketSkin(iOtherEntity, iTeam, TestFlags(TFDB_GetRocketFlags(iIndex), RocketFlag_IsNeutral));
 }
 
