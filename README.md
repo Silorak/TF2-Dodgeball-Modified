@@ -42,7 +42,8 @@ The wiki is the primary source for all information regarding this project.
 
 * **CollisionHook** (Optional): Only required for the **Anti Snipe Module**.
     * Download from the [AlliedModders thread](https://forums.alliedmods.net/showthread.php?t=197815).
-
+* **Noke Model** (Optional): Only required if you want to use **nuke model**.
+    * Download from the [AlliedModders thread](https://forums.alliedmods.net/showpost.php?s=8fa72450fa0c4941c927d01d2d6245c9&p=2180141&postcount=350).
 ---
 
 ## ⚙️ Basic Configuration
