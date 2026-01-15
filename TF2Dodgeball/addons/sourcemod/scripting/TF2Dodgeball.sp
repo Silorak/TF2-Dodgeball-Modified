@@ -36,133 +36,133 @@ enum Musics
 // *********************************************************************************
 
 // -----<<< Cvars >>>-----
-ConVar g_hCvarEnabled;
-ConVar g_hCvarEnableCfgFile;
-ConVar g_hCvarDisableCfgFile;
-ConVar g_hCvarStealPreventionNumber;
-ConVar g_hCvarStealPreventionDamage;
-ConVar g_hCvarStealDistance;
-ConVar g_hCvarDelayPrevention;
-ConVar g_hCvarDelayPreventionTime;
-ConVar g_hCvarDelayPreventionSpeedup;
-ConVar g_hCvarNoTargetRedirectDamage;
-ConVar g_hCvarStealMessage;
-ConVar g_hCvarDelayMessage;
+ConVar CvarEnabled;
+ConVar CvarEnableCfgFile;
+ConVar CvarDisableCfgFile;
+ConVar CvarStealPreventionNumber;
+ConVar CvarStealPreventionDamage;
+ConVar CvarStealDistance;
+ConVar CvarDelayPrevention;
+ConVar CvarDelayPreventionTime;
+ConVar CvarDelayPreventionSpeedup;
+ConVar CvarNoTargetRedirectDamage;
+ConVar CvarStealMessage;
+ConVar CvarDelayMessage;
 // New CVar for bounce mechanic
-ConVar g_hCvarBounceForceAngle;
-ConVar g_hCvarBounceForceScale;
+ConVar CvarBounceForceAngle;
+ConVar CvarBounceForceScale;
 
 
 // -----<<< Gameplay >>>-----
-bool   g_bEnabled;
-bool   g_bRoundStarted;
-int    g_iRoundCount;
-int    g_iRocketsFired;
-Handle g_hLogicTimer;
-float  g_fNextSpawnTime;
-int    g_iLastDeadTeam;
-int    g_iLastDeadClient;
-int    g_iPlayerCount;
-float  g_fTickModifier;
-int    g_iLastStealer;
+bool   Enabled;
+bool   RoundStarted;
+int    RoundCount;
+int    RocketsFired;
+Handle LogicTimer;
+float  NextSpawnTime;
+int    LastDeadTeam;
+int    LastDeadClient;
+int    PlayerCount;
+float  TickModifier;
+int    LastStealer;
 
-eRocketSteal g_eStealInfo[MAXPLAYERS + 1];
+eRocketSteal StealInfo[MAXPLAYERS + 1];
 
 // -----<<< Configuration >>>-----
-bool g_bMusicEnabled;
-bool g_bMusic[view_as<int>(SizeOfMusicsArray)];
-char g_strMusic[view_as<int>(SizeOfMusicsArray)][PLATFORM_MAX_PATH];
-bool g_bUseWebPlayer;
-char g_strWebPlayerUrl[256];
+bool MusicEnabled;
+bool Music[view_as<int>(SizeOfMusicsArray)];
+char MusicPath[view_as<int>(SizeOfMusicsArray)][PLATFORM_MAX_PATH];
+bool UseWebPlayer;
+char WebPlayerUrl[256];
 
 // -----<<< Structures >>>-----
 // Rockets
-bool        g_bRocketIsValid[MAX_ROCKETS];
-int         g_iRocketEntity[MAX_ROCKETS];
-int         g_iRocketTarget[MAX_ROCKETS];
-int         g_iRocketClass[MAX_ROCKETS];
-RocketFlags g_iRocketFlags[MAX_ROCKETS];
-RocketState g_iRocketState[MAX_ROCKETS];
-float       g_fRocketSpeed[MAX_ROCKETS];
-float       g_fRocketMphSpeed[MAX_ROCKETS];
-float       g_fRocketDirection[MAX_ROCKETS][3];
-int         g_iRocketDeflections[MAX_ROCKETS];
-int         g_iRocketEventDeflections[MAX_ROCKETS];
-float       g_fRocketLastDeflectionTime[MAX_ROCKETS];
-float       g_fRocketLastBeepTime[MAX_ROCKETS];
-float       g_fLastSpawnTime[MAX_ROCKETS];
-int         g_iRocketBounces[MAX_ROCKETS];
-int         g_iRocketCount;
+bool        RocketIsValid[MAX_ROCKETS];
+int         RocketEntity[MAX_ROCKETS];
+int         RocketTarget[MAX_ROCKETS];
+int         RocketClass[MAX_ROCKETS];
+RocketFlags RocketInstanceFlags[MAX_ROCKETS];
+RocketState RocketInstanceState[MAX_ROCKETS];
+float       RocketSpeed[MAX_ROCKETS];
+float       RocketMphSpeed[MAX_ROCKETS];
+float       RocketDirection[MAX_ROCKETS][3];
+int         RocketDeflections[MAX_ROCKETS];
+int         RocketEventDeflections[MAX_ROCKETS];
+float       RocketLastDeflectionTime[MAX_ROCKETS];
+float       RocketLastBeepTime[MAX_ROCKETS];
+float       LastSpawnTime[MAX_ROCKETS];
+int         RocketBounces[MAX_ROCKETS];
+int         RocketCount;
 
 // Classes
-char           g_strRocketClassName[MAX_ROCKET_CLASSES][16];
-char           g_strRocketClassLongName[MAX_ROCKET_CLASSES][32];
-BehaviourTypes g_iRocketClassBehaviour[MAX_ROCKET_CLASSES];
-char           g_strRocketClassModel[MAX_ROCKET_CLASSES][PLATFORM_MAX_PATH];
-RocketFlags    g_iRocketClassFlags[MAX_ROCKET_CLASSES];
-float          g_fRocketClassBeepInterval[MAX_ROCKET_CLASSES];
-char           g_strRocketClassSpawnSound[MAX_ROCKET_CLASSES][PLATFORM_MAX_PATH];
-char           g_strRocketClassBeepSound[MAX_ROCKET_CLASSES][PLATFORM_MAX_PATH];
-char           g_strRocketClassAlertSound[MAX_ROCKET_CLASSES][PLATFORM_MAX_PATH];
-float          g_fRocketClassCritChance[MAX_ROCKET_CLASSES];
-float          g_fRocketClassDamage[MAX_ROCKET_CLASSES];
-float          g_fRocketClassDamageIncrement[MAX_ROCKET_CLASSES];
-float          g_fRocketClassSpeed[MAX_ROCKET_CLASSES];
-float          g_fRocketClassSpeedIncrement[MAX_ROCKET_CLASSES];
-float          g_fRocketClassSpeedLimit[MAX_ROCKET_CLASSES];
-float          g_fRocketClassTurnRate[MAX_ROCKET_CLASSES];
-float          g_fRocketClassTurnRateIncrement[MAX_ROCKET_CLASSES];
-float          g_fRocketClassTurnRateLimit[MAX_ROCKET_CLASSES];
-float          g_fRocketClassElevationRate[MAX_ROCKET_CLASSES];
-float          g_fRocketClassElevationLimit[MAX_ROCKET_CLASSES];
-float          g_fRocketClassRocketsModifier[MAX_ROCKET_CLASSES];
-float          g_fRocketClassPlayerModifier[MAX_ROCKET_CLASSES];
-float          g_fRocketClassControlDelay[MAX_ROCKET_CLASSES];
-float          g_fRocketClassDragTimeMin[MAX_ROCKET_CLASSES];
-float          g_fRocketClassDragTimeMax[MAX_ROCKET_CLASSES];
-float          g_fRocketClassTargetWeight[MAX_ROCKET_CLASSES];
-DataPack       g_hRocketClassCmdsOnSpawn[MAX_ROCKET_CLASSES];
-DataPack       g_hRocketClassCmdsOnDeflect[MAX_ROCKET_CLASSES];
-DataPack       g_hRocketClassCmdsOnKill[MAX_ROCKET_CLASSES];
-DataPack       g_hRocketClassCmdsOnExplode[MAX_ROCKET_CLASSES];
-DataPack       g_hRocketClassCmdsOnNoTarget[MAX_ROCKET_CLASSES];
-int            g_iRocketClassMaxBounces[MAX_ROCKET_CLASSES];
-float          g_fRocketClassBounceScale[MAX_ROCKET_CLASSES];
-int            g_iRocketClassCount;
+char           RocketClassName[MAX_ROCKET_CLASSES][16];
+char           RocketClassLongName[MAX_ROCKET_CLASSES][32];
+BehaviourTypes RocketClassBehaviour[MAX_ROCKET_CLASSES];
+char           RocketClassModel[MAX_ROCKET_CLASSES][PLATFORM_MAX_PATH];
+RocketFlags    RocketClassFlags[MAX_ROCKET_CLASSES];
+float          RocketClassBeepInterval[MAX_ROCKET_CLASSES];
+char           RocketClassSpawnSound[MAX_ROCKET_CLASSES][PLATFORM_MAX_PATH];
+char           RocketClassBeepSound[MAX_ROCKET_CLASSES][PLATFORM_MAX_PATH];
+char           RocketClassAlertSound[MAX_ROCKET_CLASSES][PLATFORM_MAX_PATH];
+float          RocketClassCritChance[MAX_ROCKET_CLASSES];
+float          RocketClassDamage[MAX_ROCKET_CLASSES];
+float          RocketClassDamageIncrement[MAX_ROCKET_CLASSES];
+float          RocketClassSpeed[MAX_ROCKET_CLASSES];
+float          RocketClassSpeedIncrement[MAX_ROCKET_CLASSES];
+float          RocketClassSpeedLimit[MAX_ROCKET_CLASSES];
+float          RocketClassTurnRate[MAX_ROCKET_CLASSES];
+float          RocketClassTurnRateIncrement[MAX_ROCKET_CLASSES];
+float          RocketClassTurnRateLimit[MAX_ROCKET_CLASSES];
+float          RocketClassElevationRate[MAX_ROCKET_CLASSES];
+float          RocketClassElevationLimit[MAX_ROCKET_CLASSES];
+float          RocketClassRocketsModifier[MAX_ROCKET_CLASSES];
+float          RocketClassPlayerModifier[MAX_ROCKET_CLASSES];
+float          RocketClassControlDelay[MAX_ROCKET_CLASSES];
+float          RocketClassDragTimeMin[MAX_ROCKET_CLASSES];
+float          RocketClassDragTimeMax[MAX_ROCKET_CLASSES];
+float          RocketClassTargetWeight[MAX_ROCKET_CLASSES];
+DataPack       RocketClassCmdsOnSpawn[MAX_ROCKET_CLASSES];
+DataPack       RocketClassCmdsOnDeflect[MAX_ROCKET_CLASSES];
+DataPack       RocketClassCmdsOnKill[MAX_ROCKET_CLASSES];
+DataPack       RocketClassCmdsOnExplode[MAX_ROCKET_CLASSES];
+DataPack       RocketClassCmdsOnNoTarget[MAX_ROCKET_CLASSES];
+int            RocketClassMaxBounces[MAX_ROCKET_CLASSES];
+float          RocketClassBounceScale[MAX_ROCKET_CLASSES];
+int            RocketClassCount;
 
 // Spawner classes
-char      g_strSpawnersName[MAX_SPAWNER_CLASSES][32];
-int       g_iSpawnersMaxRockets[MAX_SPAWNER_CLASSES];
-float     g_fSpawnersInterval[MAX_SPAWNER_CLASSES];
-ArrayList g_hSpawnersChancesTable[MAX_SPAWNER_CLASSES];
-StringMap g_hSpawnersTrie;
-int       g_iSpawnersCount;
+char      SpawnersName[MAX_SPAWNER_CLASSES][32];
+int       SpawnersMaxRockets[MAX_SPAWNER_CLASSES];
+float     SpawnersInterval[MAX_SPAWNER_CLASSES];
+ArrayList SpawnersChancesTable[MAX_SPAWNER_CLASSES];
+StringMap SpawnersTrie;
+int       SpawnersCount;
 
-int g_iCurrentRedSpawn;
-int g_iSpawnPointsRedCount;
-int g_iSpawnPointsRedClass[MAX_SPAWN_POINTS];
-int g_iSpawnPointsRedEntity[MAX_SPAWN_POINTS];
+int CurrentRedSpawn;
+int SpawnPointsRedCount;
+int SpawnPointsRedClass[MAX_SPAWN_POINTS];
+int SpawnPointsRedEntity[MAX_SPAWN_POINTS];
 
-int g_iCurrentBluSpawn;
-int g_iSpawnPointsBluCount;
-int g_iSpawnPointsBluClass[MAX_SPAWN_POINTS];
-int g_iSpawnPointsBluEntity[MAX_SPAWN_POINTS];
+int CurrentBluSpawn;
+int SpawnPointsBluCount;
+int SpawnPointsBluClass[MAX_SPAWN_POINTS];
+int SpawnPointsBluEntity[MAX_SPAWN_POINTS];
 
-int g_iDefaultRedSpawner;
-int g_iDefaultBluSpawner;
+int DefaultRedSpawner;
+int DefaultBluSpawner;
 
 // -----<<< Forward handles >>>-----
-Handle g_hForwardOnRocketCreated;
-Handle g_hForwardOnRocketCreatedPre;
-Handle g_hForwardOnRocketDeflect;
-Handle g_hForwardOnRocketDeflectPre;
-Handle g_hForwardOnRocketSteal;
-Handle g_hForwardOnRocketNoTarget;
-Handle g_hForwardOnRocketDelay;
-Handle g_hForwardOnRocketBounce;
-Handle g_hForwardOnRocketBouncePre;
-Handle g_hForwardOnRocketsConfigExecuted;
-Handle g_hForwardOnRocketStateChanged;
+Handle ForwardOnRocketCreated;
+Handle ForwardOnRocketCreatedPre;
+Handle ForwardOnRocketDeflect;
+Handle ForwardOnRocketDeflectPre;
+Handle ForwardOnRocketSteal;
+Handle ForwardOnRocketNoTarget;
+Handle ForwardOnRocketDelay;
+Handle ForwardOnRocketBounce;
+Handle ForwardOnRocketBouncePre;
+Handle ForwardOnRocketsConfigExecuted;
+Handle ForwardOnRocketStateChanged;
 
 // *********************************************************************************
 // PLUGIN LOGIC (INCLUDES)
@@ -188,30 +188,30 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-	char strModName[32]; GetGameFolderName(strModName, sizeof(strModName));
-	if (!StrEqual(strModName, "tf")) SetFailState("This plugin is only for Team Fortress 2.");
+	char modName[32]; GetGameFolderName(modName, sizeof(modName));
+	if (!StrEqual(modName, "tf")) SetFailState("This plugin is only for Team Fortress 2.");
 
 	LoadTranslations("tfdb.phrases.txt");
 
 	CreateConVar("tf_dodgeball_version", PLUGIN_VERSION, PLUGIN_NAME, FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_SPONLY|FCVAR_DONTRECORD);
-	g_hCvarEnabled = CreateConVar("tf_dodgeball_enabled", "1", "Enable Dodgeball on TFDB maps?", _, true, 0.0, true, 1.0);
-	g_hCvarEnableCfgFile = CreateConVar("tf_dodgeball_enablecfg", "sourcemod/dodgeball_enable.cfg", "Config file to execute when enabling the Dodgeball game mode.");
-	g_hCvarDisableCfgFile = CreateConVar("tf_dodgeball_disablecfg", "sourcemod/dodgeball_disable.cfg", "Config file to execute when disabling the Dodgeball game mode.");
-	g_hCvarStealPreventionNumber = CreateConVar("tf_dodgeball_sp_number", "3", "How many steals before you get slayed?", _, true, 0.0, false);
-	g_hCvarStealPreventionDamage = CreateConVar("tf_dodgeball_sp_damage", "0", "Reduce all damage on stolen rockets?", _, true, 0.0, true, 1.0);
-	g_hCvarStealDistance = CreateConVar("tf_dodgeball_sp_distance", "48.0", "The distance between players for a steal to register.", _, true, 0.0, false);
-	g_hCvarDelayPrevention = CreateConVar("tf_dodgeball_delay_prevention", "1", "Enable delay prevention?", _, true, 0.0, true, 1.0);
-	g_hCvarDelayPreventionTime = CreateConVar("tf_dodgeball_dp_time", "5", "How much time (in seconds) before delay prevention activates?", _, true, 0.0, false);
-	g_hCvarDelayPreventionSpeedup = CreateConVar("tf_dodgeball_dp_speedup", "100", "How much speed (in hammer units per second) should the rocket gain when delayed?", _, true, 0.0, false);
-	g_hCvarNoTargetRedirectDamage = CreateConVar("tf_dodgeball_redirect_damage", "1", "Reduce all damage when a rocket has an invalid target?", _, true, 0.0, true, 1.0);
-	g_hCvarStealMessage = CreateConVar("tf_dodgeball_sp_message", "1", "Display the steal message(s)?", _, true, 0.0, true, 1.0);
-	g_hCvarDelayMessage = CreateConVar("tf_dodgeball_dp_message", "1", "Display the delay message(s)?", _, true, 0.0, true, 1.0);
-    g_hCvarBounceForceAngle = CreateConVar("tf_dodgeball_bounce_force_angle", "45.0", "Minimum downward angle (pitch) for a player to trigger a forced bounce.", _, true, 0.0, true, 90.0);
-    g_hCvarBounceForceScale = CreateConVar("tf_dodgeball_bounce_force_scale", "1.5", "How much stronger a player-forced bounce is. (Multiplier)", _, true, 1.0);
+	CvarEnabled = CreateConVar("tf_dodgeball_enabled", "1", "Enable Dodgeball on TFDB maps?", _, true, 0.0, true, 1.0);
+	CvarEnableCfgFile = CreateConVar("tf_dodgeball_enablecfg", "sourcemod/dodgeball_enable.cfg", "Config file to execute when enabling the Dodgeball game mode.");
+	CvarDisableCfgFile = CreateConVar("tf_dodgeball_disablecfg", "sourcemod/dodgeball_disable.cfg", "Config file to execute when disabling the Dodgeball game mode.");
+	CvarStealPreventionNumber = CreateConVar("tf_dodgeball_sp_number", "3", "How many steals before you get slayed?", _, true, 0.0, false);
+	CvarStealPreventionDamage = CreateConVar("tf_dodgeball_sp_damage", "0", "Reduce all damage on stolen rockets?", _, true, 0.0, true, 1.0);
+	CvarStealDistance = CreateConVar("tf_dodgeball_sp_distance", "48.0", "The distance between players for a steal to register.", _, true, 0.0, false);
+	CvarDelayPrevention = CreateConVar("tf_dodgeball_delay_prevention", "1", "Enable delay prevention?", _, true, 0.0, true, 1.0);
+	CvarDelayPreventionTime = CreateConVar("tf_dodgeball_dp_time", "5", "How much time (in seconds) before delay prevention activates?", _, true, 0.0, false);
+	CvarDelayPreventionSpeedup = CreateConVar("tf_dodgeball_dp_speedup", "100", "How much speed (in hammer units per second) should the rocket gain when delayed?", _, true, 0.0, false);
+	CvarNoTargetRedirectDamage = CreateConVar("tf_dodgeball_redirect_damage", "1", "Reduce all damage when a rocket has an invalid target?", _, true, 0.0, true, 1.0);
+	CvarStealMessage = CreateConVar("tf_dodgeball_sp_message", "1", "Display the steal message(s)?", _, true, 0.0, true, 1.0);
+	CvarDelayMessage = CreateConVar("tf_dodgeball_dp_message", "1", "Display the delay message(s)?", _, true, 0.0, true, 1.0);
+	CvarBounceForceAngle = CreateConVar("tf_dodgeball_bounce_force_angle", "45.0", "Minimum downward angle (pitch) for a player to trigger a forced bounce.", _, true, 0.0, true, 90.0);
+	CvarBounceForceScale = CreateConVar("tf_dodgeball_bounce_force_scale", "1.5", "How much stronger a player-forced bounce is. (Multiplier)", _, true, 1.0);
 
 
-	g_hSpawnersTrie = new StringMap();
-	g_fTickModifier = 0.1 / GetTickInterval();
+	SpawnersTrie = new StringMap();
+	TickModifier = 0.1 / GetTickInterval();
 
 	AddTempEntHook("TFExplosion", OnTFExplosion);
 
@@ -374,22 +374,22 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] strError, int iE
 
 void SetupForwards()
 {
-	g_hForwardOnRocketCreated = CreateGlobalForward("TFDB_OnRocketCreated", ET_Ignore, Param_Cell, Param_Cell);
-	g_hForwardOnRocketCreatedPre = CreateGlobalForward("TFDB_OnRocketCreatedPre", ET_Event, Param_Cell, Param_CellByRef, Param_CellByRef);
-	g_hForwardOnRocketDeflect = CreateGlobalForward("TFDB_OnRocketDeflect", ET_Ignore, Param_Cell, Param_Cell, Param_Cell);
-	g_hForwardOnRocketDeflectPre = CreateGlobalForward("TFDB_OnRocketDeflectPre", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_CellByRef);
-	g_hForwardOnRocketSteal = CreateGlobalForward("TFDB_OnRocketSteal", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell);
-	g_hForwardOnRocketNoTarget = CreateGlobalForward("TFDB_OnRocketNoTarget", ET_Ignore, Param_Cell, Param_Cell, Param_Cell);
-	g_hForwardOnRocketDelay = CreateGlobalForward("TFDB_OnRocketDelay", ET_Ignore, Param_Cell, Param_Cell);
-	g_hForwardOnRocketBounce = CreateGlobalForward("TFDB_OnRocketBounce", ET_Ignore, Param_Cell, Param_Cell);
-	g_hForwardOnRocketBouncePre = CreateGlobalForward("TFDB_OnRocketBouncePre", ET_Event, Param_Cell, Param_Cell, Param_Array, Param_Array);
-	g_hForwardOnRocketsConfigExecuted = CreateGlobalForward("TFDB_OnRocketsConfigExecuted", ET_Ignore, Param_String);
-	g_hForwardOnRocketStateChanged = CreateGlobalForward("TFDB_OnRocketStateChanged", ET_Ignore, Param_Cell, Param_Cell, Param_Cell);
+	ForwardOnRocketCreated = CreateGlobalForward("TFDB_OnRocketCreated", ET_Ignore, Param_Cell, Param_Cell);
+	ForwardOnRocketCreatedPre = CreateGlobalForward("TFDB_OnRocketCreatedPre", ET_Event, Param_Cell, Param_CellByRef, Param_CellByRef);
+	ForwardOnRocketDeflect = CreateGlobalForward("TFDB_OnRocketDeflect", ET_Ignore, Param_Cell, Param_Cell, Param_Cell);
+	ForwardOnRocketDeflectPre = CreateGlobalForward("TFDB_OnRocketDeflectPre", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_CellByRef);
+	ForwardOnRocketSteal = CreateGlobalForward("TFDB_OnRocketSteal", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell);
+	ForwardOnRocketNoTarget = CreateGlobalForward("TFDB_OnRocketNoTarget", ET_Ignore, Param_Cell, Param_Cell, Param_Cell);
+	ForwardOnRocketDelay = CreateGlobalForward("TFDB_OnRocketDelay", ET_Ignore, Param_Cell, Param_Cell);
+	ForwardOnRocketBounce = CreateGlobalForward("TFDB_OnRocketBounce", ET_Ignore, Param_Cell, Param_Cell);
+	ForwardOnRocketBouncePre = CreateGlobalForward("TFDB_OnRocketBouncePre", ET_Event, Param_Cell, Param_Cell, Param_Array, Param_Array);
+	ForwardOnRocketsConfigExecuted = CreateGlobalForward("TFDB_OnRocketsConfigExecuted", ET_Ignore, Param_String);
+	ForwardOnRocketStateChanged = CreateGlobalForward("TFDB_OnRocketStateChanged", ET_Ignore, Param_Cell, Param_Cell, Param_Cell);
 }
 
 public void OnConfigsExecuted()
 {
-	if (!(g_hCvarEnabled.BoolValue && IsDodgeBallMap())) return;
+	if (!(CvarEnabled.BoolValue && IsDodgeBallMap())) return;
 
 	EnableDodgeBall();
 }
@@ -399,160 +399,160 @@ public void OnMapEnd()
 	DisableDodgeBall();
 }
 
-void Forward_OnRocketCreated(int iIndex, int iEntity)
+void Forward_OnRocketCreated(int index, int entity)
 {
-	Call_StartForward(g_hForwardOnRocketCreated);
-	Call_PushCell(iIndex);
-	Call_PushCell(iEntity);
+	Call_StartForward(ForwardOnRocketCreated);
+	Call_PushCell(index);
+	Call_PushCell(entity);
 	Call_Finish();
 }
 
-Action Forward_OnRocketCreatedPre(int iIndex, int &iClass, RocketFlags &iFlags)
+Action Forward_OnRocketCreatedPre(int index, int &rocketClass, RocketFlags &flags)
 {
-	Action aResult;
+	Action result;
 
-	Call_StartForward(g_hForwardOnRocketCreatedPre);
-	Call_PushCell(iIndex);
-	Call_PushCellRef(iClass);
-	Call_PushCellRef(iFlags);
-	Call_Finish(aResult);
+	Call_StartForward(ForwardOnRocketCreatedPre);
+	Call_PushCell(index);
+	Call_PushCellRef(rocketClass);
+	Call_PushCellRef(flags);
+	Call_Finish(result);
 
-	return aResult;
+	return result;
 }
 
-void Forward_OnRocketDeflect(int iIndex, int iEntity, int iOwner)
+void Forward_OnRocketDeflect(int index, int entity, int owner)
 {
-	Call_StartForward(g_hForwardOnRocketDeflect);
-	Call_PushCell(iIndex);
-	Call_PushCell(iEntity);
-	Call_PushCell(iOwner);
+	Call_StartForward(ForwardOnRocketDeflect);
+	Call_PushCell(index);
+	Call_PushCell(entity);
+	Call_PushCell(owner);
 	Call_Finish();
 }
 
-Action Forward_OnRocketDeflectPre(int iIndex, int iEntity, int iOwner, int &iTarget)
+Action Forward_OnRocketDeflectPre(int index, int entity, int owner, int &target)
 {
-	Action aResult;
+	Action result;
 
-	Call_StartForward(g_hForwardOnRocketDeflectPre);
-	Call_PushCell(iIndex);
-	Call_PushCell(iEntity);
-	Call_PushCell(iOwner);
-	Call_PushCellRef(iTarget);
-	Call_Finish(aResult);
+	Call_StartForward(ForwardOnRocketDeflectPre);
+	Call_PushCell(index);
+	Call_PushCell(entity);
+	Call_PushCell(owner);
+	Call_PushCellRef(target);
+	Call_Finish(result);
 
-	return aResult;
+	return result;
 }
 
-void Forward_OnRocketSteal(int iIndex, int iOwner, int iTarget, int iStealCount)
+void Forward_OnRocketSteal(int index, int owner, int target, int stealCount)
 {
-	Call_StartForward(g_hForwardOnRocketSteal);
-	Call_PushCell(iIndex);
-	Call_PushCell(iOwner);
-	Call_PushCell(iTarget);
-	Call_PushCell(iStealCount);
+	Call_StartForward(ForwardOnRocketSteal);
+	Call_PushCell(index);
+	Call_PushCell(owner);
+	Call_PushCell(target);
+	Call_PushCell(stealCount);
 	Call_Finish();
 }
 
-void Forward_OnRocketNoTarget(int iIndex, int iTarget, int iOwner)
+void Forward_OnRocketNoTarget(int index, int target, int owner)
 {
-	Call_StartForward(g_hForwardOnRocketNoTarget);
-	Call_PushCell(iIndex);
-	Call_PushCell(iTarget);
-	Call_PushCell(iOwner);
+	Call_StartForward(ForwardOnRocketNoTarget);
+	Call_PushCell(index);
+	Call_PushCell(target);
+	Call_PushCell(owner);
 	Call_Finish();
 }
 
-void Forward_OnRocketDelay(int iIndex, int iTarget)
+void Forward_OnRocketDelay(int index, int target)
 {
-	Call_StartForward(g_hForwardOnRocketDelay);
-	Call_PushCell(iIndex);
-	Call_PushCell(iTarget);
+	Call_StartForward(ForwardOnRocketDelay);
+	Call_PushCell(index);
+	Call_PushCell(target);
 	Call_Finish();
 }
 
-void Forward_OnRocketBounce(int iIndex, int iEntity)
+void Forward_OnRocketBounce(int index, int entity)
 {
-	Call_StartForward(g_hForwardOnRocketBounce);
-	Call_PushCell(iIndex);
-	Call_PushCell(iEntity);
+	Call_StartForward(ForwardOnRocketBounce);
+	Call_PushCell(index);
+	Call_PushCell(entity);
 	Call_Finish();
 }
 
-Action Forward_OnRocketBouncePre(int iIndex, int iEntity, float fAngles[3], float fVelocity[3])
+Action Forward_OnRocketBouncePre(int index, int entity, float angles[3], float velocity[3])
 {
-	Action aResult;
+	Action result;
 
-	Call_StartForward(g_hForwardOnRocketBouncePre);
-	Call_PushCell(iIndex);
-	Call_PushCell(iEntity);
-	Call_PushArrayEx(fAngles, sizeof(fAngles), SM_PARAM_COPYBACK);
-	Call_PushArrayEx(fVelocity, sizeof(fVelocity), SM_PARAM_COPYBACK);
-	Call_Finish(aResult);
+	Call_StartForward(ForwardOnRocketBouncePre);
+	Call_PushCell(index);
+	Call_PushCell(entity);
+	Call_PushArrayEx(angles, sizeof(angles), SM_PARAM_COPYBACK);
+	Call_PushArrayEx(velocity, sizeof(velocity), SM_PARAM_COPYBACK);
+	Call_Finish(result);
 
-	return aResult;
+	return result;
 }
 
-void Forward_OnRocketsConfigExecuted(const char[] strConfigFile)
+void Forward_OnRocketsConfigExecuted(const char[] configFile)
 {
-	Call_StartForward(g_hForwardOnRocketsConfigExecuted);
-	Call_PushString(strConfigFile);
+	Call_StartForward(ForwardOnRocketsConfigExecuted);
+	Call_PushString(configFile);
 	Call_Finish();
 }
 
-void Forward_OnRocketStateChanged(int iIndex, RocketState iState, RocketState iNewState)
+void Forward_OnRocketStateChanged(int index, RocketState state, RocketState newState)
 {
-	Call_StartForward(g_hForwardOnRocketStateChanged);
-	Call_PushCell(iIndex);
-	Call_PushCell(iState);
-	Call_PushCell(iNewState);
+	Call_StartForward(ForwardOnRocketStateChanged);
+	Call_PushCell(index);
+	Call_PushCell(state);
+	Call_PushCell(newState);
 	Call_Finish();
 }
 
-void Internal_SetRocketState(int iIndex, RocketState iNewState)
+void Internal_SetRocketState(int index, RocketState newState)
 {
-	RocketState iState = g_iRocketState[iIndex];
-	if (iState == iNewState)
+	RocketState state = RocketInstanceState[index];
+	if (state == newState)
 	{
 		return;
 	}
 
-	g_iRocketState[iIndex] = iNewState;
-	Forward_OnRocketStateChanged(iIndex, iState, iNewState);
+	RocketInstanceState[index] = newState;
+	Forward_OnRocketStateChanged(index, state, newState);
 }
 
-public bool MLTargetFilterStealer(const char[] strPattern, ArrayList hClients)
+public bool MLTargetFilterStealer(const char[] pattern, ArrayList clients)
 {
-	bool bReverse = (StrContains(strPattern, "!", false) == 1);
-	for (int iClient = 1; iClient <= MaxClients; iClient++)
+	bool reverse = (StrContains(pattern, "!", false) == 1);
+	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!(IsClientInGame(iClient) && (hClients.FindValue(iClient) == -1))) continue;
+		if (!(IsClientInGame(client) && (clients.FindValue(client) == -1))) continue;
 
-		if (iClient == g_iLastStealer)
+		if (client == LastStealer)
 		{
-			if (!bReverse)
+			if (!reverse)
 			{
-				hClients.Push(iClient);
+				clients.Push(client);
 			}
 		}
-		else if (bReverse)
+		else if (reverse)
 		{
-			hClients.Push(iClient);
+			clients.Push(client);
 		}
 	}
 
-	return !!hClients.Length;
+	return !!clients.Length;
 }
 
 #if defined _multicolors_included && defined _more_colors_included && defined _colors_included
-stock void CSkipNextClient(int iClient)
+stock void CSkipNextClient(int client)
 {
 	if (!IsSource2009())
 	{
-		C_SkipNextClient(iClient);
+		C_SkipNextClient(client);
 	}
 	else
 	{
-		MC_SkipNextClient(iClient);
+		MC_SkipNextClient(client);
 	}
 }
 

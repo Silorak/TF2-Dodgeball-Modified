@@ -7,13 +7,21 @@
  * All logic directly related to creating, managing, and controlling rockets.
  */
 
+/**
+ * Creates and spawns a new rocket from a spawner.
+ *
+ * @param iSpawnerEntity    The spawner entity to spawn from.
+ * @param iSpawnerClass     The spawner class index (determines spawn chances).
+ * @param iTeam             The team the rocket belongs to (TFTeam_Red or TFTeam_Blue).
+ * @param iClass            Optional rocket class (-1 for random from spawner chances).
+ */
 void CreateRocket(int iSpawnerEntity, int iSpawnerClass, int iTeam, int iClass = -1)
 {
 	int iIndex = FindFreeRocketSlot();
 	if (iIndex == -1) return;
 
 	iClass = iClass == -1 ? GetRandomRocketClass(iSpawnerClass) : iClass;
-	RocketFlags iFlags = g_iRocketClassFlags[iClass];
+	RocketFlags iFlags = RocketClassFlags[iClass];
 
 	int iClassRef = iClass;
 	RocketFlags iFlagsRef = iFlags;
@@ -39,7 +47,7 @@ void CreateRocket(int iSpawnerEntity, int iSpawnerClass, int iTeam, int iClass =
 	GetEntPropVector(iSpawnerEntity, Prop_Send, "m_angRotation", fAngles);
 	GetAngleVectors(fAngles, fDirection, NULL_VECTOR, NULL_VECTOR);
 
-	SetEntProp(iEntity,    Prop_Send, "m_bCritical",    (GetURandomFloatRange(0.0, 100.0) <= g_fRocketClassCritChance[iClass]) ? 1 : 0, 1);
+	SetEntProp(iEntity,    Prop_Send, "m_bCritical",    (GetURandomFloatRange(0.0, 100.0) <= RocketClassCritChance[iClass]) ? 1 : 0, 1);
 	SetEntProp(iEntity,    Prop_Send, "m_iTeamNum",     (TestFlags(iFlags, RocketFlag_IsNeutral)) ? 1 : iTeam, 1);
 	SetEntProp(iEntity,    Prop_Send, "m_iDeflected",   0);
 	TeleportEntity(iEntity, fPosition, fAngles, view_as<float>({0.0, 0.0, 0.0}));
@@ -54,77 +62,97 @@ void CreateRocket(int iSpawnerEntity, int iSpawnerClass, int iTeam, int iClass =
 	SetEntPropEnt(iEntity, Prop_Send, "m_hLauncher", iWeapon == -1 ? iEntity : iWeapon);
 
 	float fModifier = CalculateModifier(iClass, 0);
-	g_bRocketIsValid[iIndex]            = true;
-	g_iRocketFlags[iIndex]              = iFlags;
-	g_iRocketEntity[iIndex]             = EntIndexToEntRef(iEntity);
-	g_iRocketTarget[iIndex]             = EntIndexToEntRef(iTarget);
-	g_iRocketClass[iIndex]              = iClass;
-	g_iRocketDeflections[iIndex]        = 0;
-	g_iRocketEventDeflections[iIndex]   = 0;
-	g_iRocketBounces[iIndex]            = 0;
-	g_fRocketLastDeflectionTime[iIndex] = GetGameTime();
-	g_fRocketLastBeepTime[iIndex]       = GetGameTime();
-	g_fRocketSpeed[iIndex]              = CalculateRocketSpeed(iClass, fModifier);
-	g_fRocketMphSpeed[iIndex]           = CalculateRocketSpeed(iClass, fModifier) * 0.042614;
+	RocketIsValid[iIndex]            = true;
+	RocketInstanceFlags[iIndex]              = iFlags;
+	RocketEntity[iIndex]             = EntIndexToEntRef(iEntity);
+	RocketTarget[iIndex]             = EntIndexToEntRef(iTarget);
+	RocketClass[iIndex]              = iClass;
+	RocketDeflections[iIndex]        = 0;
+	RocketEventDeflections[iIndex]   = 0;
+	RocketBounces[iIndex]            = 0;
+	RocketLastDeflectionTime[iIndex] = GetGameTime();
+	RocketLastBeepTime[iIndex]       = GetGameTime();
+	RocketSpeed[iIndex]              = CalculateRocketSpeed(iClass, fModifier);
+	RocketMphSpeed[iIndex]           = CalculateRocketSpeed(iClass, fModifier) * HAMMER_TO_MPH;
 	Internal_SetRocketState(iIndex, RocketState_None);
 
-	CopyVectors(fDirection, g_fRocketDirection[iIndex]);
+	CopyVectors(fDirection, RocketDirection[iIndex]);
 	SetEntDataFloat(iEntity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4, CalculateRocketDamage(iClass, fModifier), true);
 	DispatchSpawn(iEntity);
 
 	if (TestFlags(iFlags, RocketFlag_CustomModel))
 	{
-		SetEntityModel(iEntity, g_strRocketClassModel[iClass]);
+		SetEntityModel(iEntity, RocketClassModel[iClass]);
 		UpdateRocketSkin(iEntity, iTeam, TestFlags(iFlags, RocketFlag_IsNeutral));
 	}
 
 	if (TestFlags(iFlags, RocketFlag_OnSpawnCmd))
 	{
-		ExecuteCommands(g_hRocketClassCmdsOnSpawn[iClass], iClass, iEntity, 0, iTarget, g_iLastDeadClient, g_fRocketSpeed[iIndex], 0, g_fRocketMphSpeed[iIndex]);
+		ExecuteCommands(RocketClassCmdsOnSpawn[iClass], iClass, iEntity, 0, iTarget, LastDeadClient, RocketSpeed[iIndex], 0, RocketMphSpeed[iIndex]);
 	}
 
 	EmitRocketSound(RocketSound_Spawn, iClass, iEntity, iTarget, iFlags);
 	EmitRocketSound(RocketSound_Alert, iClass, iEntity, iTarget, iFlags);
 
-	g_iRocketCount++;
-	g_iRocketsFired++;
-	g_fLastSpawnTime[iIndex] = GetGameTime();
-	g_fNextSpawnTime = GetGameTime() + g_fSpawnersInterval[iSpawnerClass];
+	RocketCount++;
+	RocketsFired++;
+	LastSpawnTime[iIndex] = GetGameTime();
+	NextSpawnTime = GetGameTime() + SpawnersInterval[iSpawnerClass];
 
 	SDKHook(iEntity, SDKHook_StartTouch, OnStartTouch);
 	Forward_OnRocketCreated(iIndex, iEntity);
 }
 
+/**
+ * Destroys a rocket by its internal index.
+ *
+ * @param iIndex    The rocket's internal index.
+ */
 void DestroyRocket(int iIndex)
 {
 	if (!IsValidRocket(iIndex)) return;
 
-	RemoveEdict(EntRefToEntIndex(g_iRocketEntity[iIndex]));
-	g_bRocketIsValid[iIndex] = false;
-	g_iRocketCount--;
+	RemoveEdict(EntRefToEntIndex(RocketEntity[iIndex]));
+	RocketIsValid[iIndex] = false;
+	RocketCount--;
 }
 
+/**
+ * Destroys all active rockets.
+ */
 void DestroyRockets()
 {
 	for (int iIndex = 0; iIndex < MAX_ROCKETS; iIndex++)
 	{
 		DestroyRocket(iIndex);
 	}
-	g_iRocketCount = 0;
+	RocketCount = 0;
 }
 
+/**
+ * Checks if a rocket index is valid and the rocket exists.
+ *
+ * @param iIndex    The rocket's internal index.
+ * @return          True if valid, false otherwise.
+ */
 bool IsValidRocket(int iIndex)
 {
-	if (!((iIndex >= 0) && g_bRocketIsValid[iIndex])) return false;
+	if (!((iIndex >= 0) && RocketIsValid[iIndex])) return false;
 	
-	if (EntRefToEntIndex(g_iRocketEntity[iIndex]) != -1) return true;
+	if (EntRefToEntIndex(RocketEntity[iIndex]) != -1) return true;
 
-	g_bRocketIsValid[iIndex] = false;
-	g_iRocketCount--;
+	RocketIsValid[iIndex] = false;
+	RocketCount--;
 
 	return false;
 }
 
+/**
+ * Finds the next valid rocket after the given index.
+ *
+ * @param iIndex    Starting index to search from.
+ * @return          Next valid rocket index, or -1 if none found.
+ */
 int FindNextValidRocket(int iIndex)
 {
 	for (int iCurrent = iIndex + 1; iCurrent < MAX_ROCKETS; iCurrent++)
@@ -134,6 +162,11 @@ int FindNextValidRocket(int iIndex)
 	return -1;
 }
 
+/**
+ * Finds a free slot in the rocket array.
+ *
+ * @return          Free rocket index, or -1 if array is full.
+ */
 int FindFreeRocketSlot()
 {
 	int iCurrent = 0;
@@ -147,46 +180,59 @@ int FindFreeRocketSlot()
 	return -1;
 }
 
+/**
+ * Finds a rocket's internal index by its entity index.
+ *
+ * @param iEntity   The rocket's entity index.
+ * @return          Internal rocket index, or -1 if not found.
+ */
 int FindRocketByEntity(int iEntity)
 {
 	int iIndex = -1;
 	while ((iIndex = FindNextValidRocket(iIndex)) != -1)
 	{
-		if (EntRefToEntIndex(g_iRocketEntity[iIndex]) == iEntity) return iIndex;
+		if (EntRefToEntIndex(RocketEntity[iIndex]) == iEntity) return iIndex;
 	}
 	return -1;
 }
 
+/**
+ * Main think function for homing rockets. Handles tracking, dragging,
+ * deflection, target switching, and all per-frame rocket behaviour.
+ * Called from the 20Hz timer in dodgeball_core.inc.
+ *
+ * @param iIndex    The rocket's internal index.
+ */
 void HomingRocketThink(int iIndex)
 {
-	int iEntity          = EntRefToEntIndex(g_iRocketEntity[iIndex]);
-	int iClass           = g_iRocketClass[iIndex];
-	RocketFlags iFlags   = g_iRocketFlags[iIndex];
-	int iTarget          = EntRefToEntIndex(g_iRocketTarget[iIndex]);
+	int iEntity          = EntRefToEntIndex(RocketEntity[iIndex]);
+	int iClass           = RocketClass[iIndex];
+	RocketFlags iFlags   = RocketInstanceFlags[iIndex];
+	int iTarget          = EntRefToEntIndex(RocketTarget[iIndex]);
 	int iTeam            = GetEntProp(iEntity, Prop_Send, "m_iTeamNum", 1);
 	int iTargetTeam      = (TestFlags(iFlags, RocketFlag_IsNeutral)) ? 0 : GetAnalogueTeam(iTeam);
-	int iDeflectionCount = g_iRocketEventDeflections[iIndex];
+	int iDeflectionCount = RocketEventDeflections[iIndex];
 	float fModifier      = CalculateModifier(iClass, iDeflectionCount);
 	
-	if ((iDeflectionCount > g_iRocketDeflections[iIndex]) && !(g_iRocketState[iIndex] & RocketState_Dragging))
+	if ((iDeflectionCount > RocketDeflections[iIndex]) && !(RocketInstanceState[iIndex] & RocketState_Dragging))
 	{
 		int iClient = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
-		Internal_SetRocketState(iIndex, (g_iRocketState[iIndex] | (RocketState_CanDrag | RocketState_Dragging)));
+		Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] | (RocketState_CanDrag | RocketState_Dragging)));
 		if (iClient >= 1)
 		{
 			float fViewAngles[3], fDirection[3];
 			GetClientEyeAngles(iClient, fViewAngles);
 			GetAngleVectors(fViewAngles, fDirection, NULL_VECTOR, NULL_VECTOR);
-			CopyVectors(fDirection, g_fRocketDirection[iIndex]);
+			CopyVectors(fDirection, RocketDirection[iIndex]);
 			UpdateRocketSkin(iEntity, iTeam, TestFlags(iFlags, RocketFlag_IsNeutral));
 		}
-		g_fRocketLastDeflectionTime[iIndex] = GetGameTime();
+		RocketLastDeflectionTime[iIndex] = GetGameTime();
 	}
 	else
 	{
-		if ((GetGameTime() - g_fRocketLastDeflectionTime[iIndex]) <= g_fRocketClassDragTimeMax[iClass] + GetTickInterval())
+		if ((GetGameTime() - RocketLastDeflectionTime[iIndex]) <= RocketClassDragTimeMax[iClass] + GetTickInterval())
 		{
-			if ((g_fRocketClassDragTimeMin[iClass] <= (GetGameTime() - g_fRocketLastDeflectionTime[iIndex])) && (g_iRocketState[iIndex] & RocketState_CanDrag))
+			if ((RocketClassDragTimeMin[iClass] <= (GetGameTime() - RocketLastDeflectionTime[iIndex])) && (RocketInstanceState[iIndex] & RocketState_CanDrag))
 			{
 				int iClient = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
 				if (iClient >= 1)
@@ -194,7 +240,7 @@ void HomingRocketThink(int iIndex)
 					float fViewAngles[3], fDirection[3];
 					GetClientEyeAngles(iClient, fViewAngles);
 					GetAngleVectors(fViewAngles, fDirection, NULL_VECTOR, NULL_VECTOR);
-					CopyVectors(fDirection, g_fRocketDirection[iIndex]);
+					CopyVectors(fDirection, RocketDirection[iIndex]);
 				}
 			}
 		}
@@ -206,24 +252,24 @@ void HomingRocketThink(int iIndex)
 				iTarget = SelectTarget(iTargetTeam, iIndex);
 
 				if (!IsValidClient(iTarget, true)) return;
-				g_iRocketTarget[iIndex] = EntIndexToEntRef(iTarget);
+				RocketTarget[iIndex] = EntIndexToEntRef(iTarget);
 				EmitRocketSound(RocketSound_Alert, iClass, iEntity, iTarget, iFlags);
 
 				if (TestFlags(iFlags, RocketFlag_OnNoTargetCmd))
 				{
-					ExecuteCommands(g_hRocketClassCmdsOnNoTarget[iClass], iClass, iEntity, iOwner, iTarget, g_iLastDeadClient, g_fRocketSpeed[iIndex], iDeflectionCount, g_fRocketMphSpeed[iIndex]);
+					ExecuteCommands(RocketClassCmdsOnNoTarget[iClass], iClass, iEntity, iOwner, iTarget, LastDeadClient, RocketSpeed[iIndex], iDeflectionCount, RocketMphSpeed[iIndex]);
 				}
 
-				if (g_hCvarNoTargetRedirectDamage.BoolValue)
+				if (CvarNoTargetRedirectDamage.BoolValue)
 				{
 					SetEntDataFloat(iEntity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4, 0.0, true);
 				}
 				Forward_OnRocketNoTarget(iIndex, iTarget, iOwner);
 			}
-			else if ((iDeflectionCount > g_iRocketDeflections[iIndex]))
+			else if ((iDeflectionCount > RocketDeflections[iIndex]))
 			{
 				int iClient = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
-				Internal_SetRocketState(iIndex, (g_iRocketState[iIndex] & ~(RocketState_Dragging | RocketState_Stolen)));
+				Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] & ~(RocketState_Dragging | RocketState_Stolen)));
 
 				if ((iClient >= 1) && !(iFlags & RocketFlag_CanBeStolen))
 				{
@@ -231,20 +277,20 @@ void HomingRocketThink(int iIndex)
 				}
 
 				iTarget = SelectTarget(iTargetTeam, iIndex);
-				g_iRocketTarget[iIndex]      = EntIndexToEntRef(iTarget);
-				g_iRocketDeflections[iIndex] = iDeflectionCount;
-				g_fRocketSpeed[iIndex]       = CalculateRocketSpeed(iClass, fModifier);
-				g_fRocketMphSpeed[iIndex]    = CalculateRocketSpeed(iClass, fModifier) * 0.042614;
+				RocketTarget[iIndex]      = EntIndexToEntRef(iTarget);
+				RocketDeflections[iIndex] = iDeflectionCount;
+				RocketSpeed[iIndex]       = CalculateRocketSpeed(iClass, fModifier);
+				RocketMphSpeed[iIndex]    = CalculateRocketSpeed(iClass, fModifier) * HAMMER_TO_MPH;
 				SetEntDataFloat(iEntity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4, CalculateRocketDamage(iClass, fModifier), true);
 				
-				if (TestFlags(iFlags, RocketFlag_ElevateOnDeflect)) g_iRocketFlags[iIndex] |= RocketFlag_Elevating;
+				if (TestFlags(iFlags, RocketFlag_ElevateOnDeflect)) RocketInstanceFlags[iIndex] |= RocketFlag_Elevating;
 
-				if ((iFlags & RocketFlag_IsSpeedLimited) && (g_fRocketSpeed[iIndex] >= g_fRocketClassSpeedLimit[iClass]))
+				if ((iFlags & RocketFlag_IsSpeedLimited) && (RocketSpeed[iIndex] >= RocketClassSpeedLimit[iClass]))
 				{
-					g_fRocketSpeed[iIndex] = g_fRocketClassSpeedLimit[iClass];
+					RocketSpeed[iIndex] = RocketClassSpeedLimit[iClass];
 				}
 
-				if (g_hCvarStealPreventionDamage.BoolValue && (g_iRocketState[iIndex] & RocketState_Stolen))
+				if (CvarStealPreventionDamage.BoolValue && (RocketInstanceState[iIndex] & RocketState_Stolen))
 				{
 					SetEntDataFloat(iEntity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4, 0.0, true);
 				}
@@ -264,39 +310,39 @@ void HomingRocketThink(int iIndex)
 				else if (aResult == Plugin_Changed)
 				{
 					iTarget = iTargetRef;
-					g_iRocketTarget[iIndex] = EntIndexToEntRef(iTarget);
+					RocketTarget[iIndex] = EntIndexToEntRef(iTarget);
 				}
 
 				EmitRocketSound(RocketSound_Alert, iClass, iEntity, iTarget, iFlags);
 				if (TestFlags(iFlags, RocketFlag_OnDeflectCmd))
 				{
-					ExecuteCommands(g_hRocketClassCmdsOnDeflect[iClass], iClass, iEntity, iClient, iTarget, g_iLastDeadClient, g_fRocketSpeed[iIndex], iDeflectionCount, g_fRocketMphSpeed[iIndex]);
+					ExecuteCommands(RocketClassCmdsOnDeflect[iClass], iClass, iEntity, iClient, iTarget, LastDeadClient, RocketSpeed[iIndex], iDeflectionCount, RocketMphSpeed[iIndex]);
 				}
 				Forward_OnRocketDeflect(iIndex, iEntity, iClient);
 			}
 			else
 			{
-				if ((GetGameTime() - g_fRocketLastDeflectionTime[iIndex]) >= g_fRocketClassControlDelay[iClass])
+				if ((GetGameTime() - RocketLastDeflectionTime[iIndex]) >= RocketClassControlDelay[iClass])
 				{
-					float fTurnrate = CalculateRocketTurnRate(iClass, fModifier) / g_fTickModifier;
+					float fTurnrate = CalculateRocketTurnRate(iClass, fModifier) / TickModifier;
 					float fDirectionToTarget[3]; CalculateDirectionToClient(iEntity, iTarget, fDirectionToTarget);
 
-					if (g_iRocketFlags[iIndex] & RocketFlag_Elevating)
+					if (RocketInstanceFlags[iIndex] & RocketFlag_Elevating)
 					{
-						fDirectionToTarget[2] = g_fRocketDirection[iIndex][2];
+						fDirectionToTarget[2] = RocketDirection[iIndex][2];
 					}
 
-					if ((g_iRocketFlags[iIndex] & RocketFlag_IsTRLimited) && (fTurnrate >= g_fRocketClassTurnRateLimit[iClass] / g_fTickModifier))
+					if ((RocketInstanceFlags[iIndex] & RocketFlag_IsTRLimited) && (fTurnrate >= RocketClassTurnRateLimit[iClass] / TickModifier))
 					{
-						fTurnrate = g_fRocketClassTurnRateLimit[iClass] / g_fTickModifier;
+						fTurnrate = RocketClassTurnRateLimit[iClass] / TickModifier;
 					}
-					LerpVectors(g_fRocketDirection[iIndex], fDirectionToTarget, g_fRocketDirection[iIndex], fTurnrate);
+					LerpVectors(RocketDirection[iIndex], fDirectionToTarget, RocketDirection[iIndex], fTurnrate);
 				}
 			}
 		}
 	}
 
-	if (!(g_iRocketState[iIndex] & RocketState_Bouncing))
+	if (!(RocketInstanceState[iIndex] & RocketState_Bouncing))
 	{
 		ApplyRocketParameters(iIndex);
 	}
@@ -308,51 +354,57 @@ void HomingRocketThink(int iIndex)
  */
 void SharedRocketThink(int iIndex)
 {
-	int iEntity          = EntRefToEntIndex(g_iRocketEntity[iIndex]);
-	int iClass           = g_iRocketClass[iIndex];
-	RocketFlags iFlags   = g_iRocketFlags[iIndex];
-	int iTarget          = EntRefToEntIndex(g_iRocketTarget[iIndex]);
-	int iDeflectionCount = g_iRocketEventDeflections[iIndex];
+	int iEntity          = EntRefToEntIndex(RocketEntity[iIndex]);
+	int iClass           = RocketClass[iIndex];
+	RocketFlags iFlags   = RocketInstanceFlags[iIndex];
+	int iTarget          = EntRefToEntIndex(RocketTarget[iIndex]);
+	int iDeflectionCount = RocketEventDeflections[iIndex];
 	
-	if (!(iDeflectionCount > g_iRocketDeflections[iIndex]))
+	if (!(iDeflectionCount > RocketDeflections[iIndex]))
 	{
-		if (((GetGameTime() - g_fRocketLastDeflectionTime[iIndex]) >= g_fRocketClassControlDelay[iClass]) &&
-		    (g_iRocketFlags[iIndex] & RocketFlag_Elevating))
+		if (((GetGameTime() - RocketLastDeflectionTime[iIndex]) >= RocketClassControlDelay[iClass]) &&
+		    (RocketInstanceFlags[iIndex] & RocketFlag_Elevating))
 		{
-			if (g_fRocketDirection[iIndex][2] < g_fRocketClassElevationLimit[iClass])
+			if (RocketDirection[iIndex][2] < RocketClassElevationLimit[iClass])
 			{
-				g_fRocketDirection[iIndex][2] = FMin(g_fRocketDirection[iIndex][2] + g_fRocketClassElevationRate[iClass], g_fRocketClassElevationLimit[iClass]);
+				RocketDirection[iIndex][2] = FMin(RocketDirection[iIndex][2] + RocketClassElevationRate[iClass], RocketClassElevationLimit[iClass]);
 			}
 			else
 			{
-				g_iRocketFlags[iIndex] &= ~RocketFlag_Elevating;
+				RocketInstanceFlags[iIndex] &= ~RocketFlag_Elevating;
 			}
 		}
 
-		if ((GetGameTime() - g_fRocketLastBeepTime[iIndex]) >= g_fRocketClassBeepInterval[iClass])
+		if ((GetGameTime() - RocketLastBeepTime[iIndex]) >= RocketClassBeepInterval[iClass])
 		{
 			EmitRocketSound(RocketSound_Beep, iClass, iEntity, iTarget, iFlags);
-			g_fRocketLastBeepTime[iIndex] = GetGameTime();
+			RocketLastBeepTime[iIndex] = GetGameTime();
 		}
 
-		if (g_hCvarDelayPrevention.BoolValue)
+		if (CvarDelayPrevention.BoolValue)
 		{
 			CheckRoundDelays(iIndex);
 		}
 	}
 
-	Internal_SetRocketState(iIndex, (g_iRocketState[iIndex] & ~RocketState_Bouncing));
+	Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] & ~RocketState_Bouncing));
 }
 
+/**
+ * Think function for legacy homing rockets. Uses instant direction changes
+ * instead of smooth tracking. Called from the 20Hz timer.
+ *
+ * @param iIndex    The rocket's internal index.
+ */
 void RocketLegacyThink(int iIndex)
 {
-	int iEntity          = EntRefToEntIndex(g_iRocketEntity[iIndex]);
-	int iClass           = g_iRocketClass[iIndex];
-	RocketFlags iFlags   = g_iRocketFlags[iIndex];
-	int iTarget          = EntRefToEntIndex(g_iRocketTarget[iIndex]);
+	int iEntity          = EntRefToEntIndex(RocketEntity[iIndex]);
+	int iClass           = RocketClass[iIndex];
+	RocketFlags iFlags   = RocketInstanceFlags[iIndex];
+	int iTarget          = EntRefToEntIndex(RocketTarget[iIndex]);
 	int iTeam            = GetEntProp(iEntity, Prop_Send, "m_iTeamNum", 1);
 	int iTargetTeam      = (TestFlags(iFlags, RocketFlag_IsNeutral)) ? 0 : GetAnalogueTeam(iTeam);
-	int iDeflectionCount = g_iRocketEventDeflections[iIndex];
+	int iDeflectionCount = RocketEventDeflections[iIndex];
 	float fModifier      = CalculateModifier(iClass, iDeflectionCount);
 
 	if (!IsValidClient(iTarget, true))
@@ -362,31 +414,31 @@ void RocketLegacyThink(int iIndex)
 
 		if (!IsValidClient(iTarget, true)) return;
 		
-		g_iRocketTarget[iIndex] = EntIndexToEntRef(iTarget);
+		RocketTarget[iIndex] = EntIndexToEntRef(iTarget);
 		EmitRocketSound(RocketSound_Alert, iClass, iEntity, iTarget, iFlags);
 
 		if (TestFlags(iFlags, RocketFlag_OnNoTargetCmd))
 		{
-			ExecuteCommands(g_hRocketClassCmdsOnNoTarget[iClass], iClass, iEntity, iOwner, iTarget, g_iLastDeadClient, g_fRocketSpeed[iIndex], iDeflectionCount, g_fRocketMphSpeed[iIndex]);
+			ExecuteCommands(RocketClassCmdsOnNoTarget[iClass], iClass, iEntity, iOwner, iTarget, LastDeadClient, RocketSpeed[iIndex], iDeflectionCount, RocketMphSpeed[iIndex]);
 		}
 
-		if (g_hCvarNoTargetRedirectDamage.BoolValue)
+		if (CvarNoTargetRedirectDamage.BoolValue)
 		{
 			SetEntDataFloat(iEntity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4, 0.0, true);
 		}
 		Forward_OnRocketNoTarget(iIndex, iTarget, iOwner);
 	}
-	else if ((iDeflectionCount > g_iRocketDeflections[iIndex]))
+	else if ((iDeflectionCount > RocketDeflections[iIndex]))
 	{
 		int iClient = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
-		Internal_SetRocketState(iIndex, (g_iRocketState[iIndex] & ~RocketState_Stolen));
+		Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] & ~RocketState_Stolen));
 
 		if (iClient >= 1)
 		{
 			float fViewAngles[3], fDirection[3];
 			GetClientEyeAngles(iClient, fViewAngles);
 			GetAngleVectors(fViewAngles, fDirection, NULL_VECTOR, NULL_VECTOR);
-			CopyVectors(fDirection, g_fRocketDirection[iIndex]);
+			CopyVectors(fDirection, RocketDirection[iIndex]);
 			UpdateRocketSkin(iEntity, iTeam, TestFlags(iFlags, RocketFlag_IsNeutral));
 
 			if (!(iFlags & RocketFlag_CanBeStolen))
@@ -396,21 +448,21 @@ void RocketLegacyThink(int iIndex)
 		}
 
 		iTarget = SelectTarget(iTargetTeam, iIndex);
-		g_iRocketTarget[iIndex]             = EntIndexToEntRef(iTarget);
-		g_iRocketDeflections[iIndex]        = iDeflectionCount;
-		g_fRocketLastDeflectionTime[iIndex] = GetGameTime();
-		g_fRocketSpeed[iIndex]              = CalculateRocketSpeed(iClass, fModifier);
-		g_fRocketMphSpeed[iIndex]           = CalculateRocketSpeed(iClass, fModifier) * 0.042614;
+		RocketTarget[iIndex]             = EntIndexToEntRef(iTarget);
+		RocketDeflections[iIndex]        = iDeflectionCount;
+		RocketLastDeflectionTime[iIndex] = GetGameTime();
+		RocketSpeed[iIndex]              = CalculateRocketSpeed(iClass, fModifier);
+		RocketMphSpeed[iIndex]           = CalculateRocketSpeed(iClass, fModifier) * HAMMER_TO_MPH;
 		SetEntDataFloat(iEntity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4, CalculateRocketDamage(iClass, fModifier), true);
 
-		if (TestFlags(iFlags, RocketFlag_ElevateOnDeflect)) g_iRocketFlags[iIndex] |= RocketFlag_Elevating;
+		if (TestFlags(iFlags, RocketFlag_ElevateOnDeflect)) RocketInstanceFlags[iIndex] |= RocketFlag_Elevating;
 		
-		if ((iFlags & RocketFlag_IsSpeedLimited) && (g_fRocketSpeed[iIndex] >= g_fRocketClassSpeedLimit[iClass]))
+		if ((iFlags & RocketFlag_IsSpeedLimited) && (RocketSpeed[iIndex] >= RocketClassSpeedLimit[iClass]))
 		{
-			g_fRocketSpeed[iIndex] = g_fRocketClassSpeedLimit[iClass];
+			RocketSpeed[iIndex] = RocketClassSpeedLimit[iClass];
 		}
 
-		if (g_hCvarStealPreventionDamage.BoolValue && (g_iRocketState[iIndex] & RocketState_Stolen))
+		if (CvarStealPreventionDamage.BoolValue && (RocketInstanceState[iIndex] & RocketState_Stolen))
 		{
 			SetEntDataFloat(iEntity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4, 0.0, true);
 		}
@@ -430,69 +482,74 @@ void RocketLegacyThink(int iIndex)
 		else if (aResult == Plugin_Changed)
 		{
 			iTarget = iTargetRef;
-			g_iRocketTarget[iIndex] = EntIndexToEntRef(iTarget);
+			RocketTarget[iIndex] = EntIndexToEntRef(iTarget);
 		}
 
 		EmitRocketSound(RocketSound_Alert, iClass, iEntity, iTarget, iFlags);
 		if (TestFlags(iFlags, RocketFlag_OnDeflectCmd))
 		{
-			ExecuteCommands(g_hRocketClassCmdsOnDeflect[iClass], iClass, iEntity, iClient, iTarget, g_iLastDeadClient, g_fRocketSpeed[iIndex], iDeflectionCount, g_fRocketMphSpeed[iIndex]);
+			ExecuteCommands(RocketClassCmdsOnDeflect[iClass], iClass, iEntity, iClient, iTarget, LastDeadClient, RocketSpeed[iIndex], iDeflectionCount, RocketMphSpeed[iIndex]);
 		}
 		Forward_OnRocketDeflect(iIndex, iEntity, iClient);
 	}
 	else
 	{
-		if ((GetGameTime() - g_fRocketLastDeflectionTime[iIndex]) >= g_fRocketClassControlDelay[iClass])
+		if ((GetGameTime() - RocketLastDeflectionTime[iIndex]) >= RocketClassControlDelay[iClass])
 		{
 			float fTurnrate = CalculateRocketTurnRate(iClass, fModifier);
 			float fDirectionToTarget[3];
 			CalculateDirectionToClient(iEntity, iTarget, fDirectionToTarget);
 
-			if (g_iRocketFlags[iIndex] & RocketFlag_Elevating)
+			if (RocketInstanceFlags[iIndex] & RocketFlag_Elevating)
 			{
-				if (g_fRocketDirection[iIndex][2] < g_fRocketClassElevationLimit[iClass])
+				if (RocketDirection[iIndex][2] < RocketClassElevationLimit[iClass])
 				{
-					g_fRocketDirection[iIndex][2] = FMin(g_fRocketDirection[iIndex][2] + g_fRocketClassElevationRate[iClass], g_fRocketClassElevationLimit[iClass]);
-					fDirectionToTarget[2] = g_fRocketDirection[iIndex][2];
+					RocketDirection[iIndex][2] = FMin(RocketDirection[iIndex][2] + RocketClassElevationRate[iClass], RocketClassElevationLimit[iClass]);
+					fDirectionToTarget[2] = RocketDirection[iIndex][2];
 				}
 				else
 				{
-					g_iRocketFlags[iIndex] &= ~RocketFlag_Elevating;
+					RocketInstanceFlags[iIndex] &= ~RocketFlag_Elevating;
 				}
 			}
 
-			if ((g_iRocketFlags[iIndex] & RocketFlag_IsTRLimited) && (fTurnrate >= g_fRocketClassTurnRateLimit[iClass]))
+			if ((RocketInstanceFlags[iIndex] & RocketFlag_IsTRLimited) && (fTurnrate >= RocketClassTurnRateLimit[iClass]))
 			{
-				fTurnrate = g_fRocketClassTurnRateLimit[iClass];
+				fTurnrate = RocketClassTurnRateLimit[iClass];
 			}
-			LerpVectors(g_fRocketDirection[iIndex], fDirectionToTarget, g_fRocketDirection[iIndex], fTurnrate);
+			LerpVectors(RocketDirection[iIndex], fDirectionToTarget, RocketDirection[iIndex], fTurnrate);
 		}
 	}
 	ApplyRocketParameters(iIndex);
 }
 
+/** Calculates the modifier based on deflections, rockets fired, and player count. */
 float CalculateModifier(int iClass, int iDeflections)
 {
 	return iDeflections +
-	       (g_iRocketsFired * g_fRocketClassRocketsModifier[iClass]) +
-	       (g_iPlayerCount * g_fRocketClassPlayerModifier[iClass]);
+	       (RocketsFired * RocketClassRocketsModifier[iClass]) +
+	       (PlayerCount * RocketClassPlayerModifier[iClass]);
 }
 
+/** Calculates rocket damage based on class settings and modifier. */
 float CalculateRocketDamage(int iClass, float fModifier)
 {
-	return g_fRocketClassDamage[iClass] + g_fRocketClassDamageIncrement[iClass] * fModifier;
+	return RocketClassDamage[iClass] + RocketClassDamageIncrement[iClass] * fModifier;
 }
 
+/** Calculates rocket speed based on class settings and modifier. */
 float CalculateRocketSpeed(int iClass, float fModifier)
 {
-	return g_fRocketClassSpeed[iClass] + g_fRocketClassSpeedIncrement[iClass] * fModifier;
+	return RocketClassSpeed[iClass] + RocketClassSpeedIncrement[iClass] * fModifier;
 }
 
+/** Calculates turn rate based on class settings and modifier. */
 float CalculateRocketTurnRate(int iClass, float fModifier)
 {
-	return g_fRocketClassTurnRate[iClass] + g_fRocketClassTurnRateIncrement[iClass] * fModifier;
+	return RocketClassTurnRate[iClass] + RocketClassTurnRateIncrement[iClass] * fModifier;
 }
 
+/** Calculates the normalized direction vector from rocket to client. */
 void CalculateDirectionToClient(int iEntity, int iClient, float fOut[3])
 {
 	float fRocketPosition[3]; GetEntPropVector(iEntity, Prop_Send, "m_vecOrigin", fRocketPosition);
@@ -501,27 +558,30 @@ void CalculateDirectionToClient(int iEntity, int iClient, float fOut[3])
 	NormalizeVector(fOut, fOut);
 }
 
+/** Applies rocket direction and speed to the entity's velocity. */
 void ApplyRocketParameters(int iIndex)
 {
-	int iEntity = EntRefToEntIndex(g_iRocketEntity[iIndex]);
-	float fAngles[3]; GetVectorAngles(g_fRocketDirection[iIndex], fAngles);
-	float fVelocity[3]; CopyVectors(g_fRocketDirection[iIndex], fVelocity);
+	int iEntity = EntRefToEntIndex(RocketEntity[iIndex]);
+	float fAngles[3]; GetVectorAngles(RocketDirection[iIndex], fAngles);
+	float fVelocity[3]; CopyVectors(RocketDirection[iIndex], fVelocity);
 
-	ScaleVector(fVelocity, g_fRocketSpeed[iIndex]);
+	ScaleVector(fVelocity, RocketSpeed[iIndex]);
 	SetEntPropVector(iEntity, Prop_Data, "m_vecAbsVelocity", fVelocity);
 	SetEntPropVector(iEntity, Prop_Send, "m_angRotation", fAngles);
 }
 
+/** Updates the rocket's skin based on team and neutral status. */
 void UpdateRocketSkin(int iEntity, int iTeam, bool bNeutral)
 {
 	if (bNeutral) SetEntProp(iEntity, Prop_Send, "m_nSkin", 2);
 	else          SetEntProp(iEntity, Prop_Send, "m_nSkin", (iTeam == view_as<int>(TFTeam_Blue)) ? 0 : 1);
 }
 
+/** Gets a random rocket class based on spawner spawn chances. */
 int GetRandomRocketClass(int iSpawnerClass)
 {
 	int iRandom = GetURandomIntRange(1, 100);
-	ArrayList hTable = g_hSpawnersChancesTable[iSpawnerClass];
+	ArrayList hTable = SpawnersChancesTable[iSpawnerClass];
 	int iTableSize = hTable.Length;
 	int iChancesLower = 0;
 	int iChancesUpper = 0;
@@ -539,6 +599,7 @@ int GetRandomRocketClass(int iSpawnerClass)
 	return 0;
 }
 
+/** Emits a rocket sound (spawn, beep, or alert) based on class settings. */
 void EmitRocketSound(RocketSound iSound, int iClass, int iEntity, int iTarget, RocketFlags iFlags)
 {
 	switch (iSound)
@@ -547,27 +608,27 @@ void EmitRocketSound(RocketSound iSound, int iClass, int iEntity, int iTarget, R
 		{
 			if (TestFlags(iFlags, RocketFlag_PlaySpawnSound))
 			{
-				if (TestFlags(iFlags, RocketFlag_CustomSpawnSound)) EmitSoundToAll(g_strRocketClassSpawnSound[iClass], iEntity);
+				if (TestFlags(iFlags, RocketFlag_CustomSpawnSound)) EmitSoundToAll(RocketClassSpawnSound[iClass], iEntity);
 				else                                                EmitSoundToAll(SOUND_DEFAULT_SPAWN, iEntity);
 			}
 		}
 		case RocketSound_Beep:
 		{
-			if (GetGameTime() - g_fRocketLastBeepTime[FindRocketByEntity(iEntity)] >= g_fRocketClassBeepInterval[iClass])
+			if (GetGameTime() - RocketLastBeepTime[FindRocketByEntity(iEntity)] >= RocketClassBeepInterval[iClass])
 			{
 				if (TestFlags(iFlags, RocketFlag_PlayBeepSound))
 				{
-					if (TestFlags(iFlags, RocketFlag_CustomBeepSound)) EmitSoundToAll(g_strRocketClassBeepSound[iClass], iEntity);
+					if (TestFlags(iFlags, RocketFlag_CustomBeepSound)) EmitSoundToAll(RocketClassBeepSound[iClass], iEntity);
 					else                                               EmitSoundToAll(SOUND_DEFAULT_BEEP, iEntity);
 				}
-				g_fRocketLastBeepTime[FindRocketByEntity(iEntity)] = GetGameTime();
+				RocketLastBeepTime[FindRocketByEntity(iEntity)] = GetGameTime();
 			}
 		}
 		case RocketSound_Alert:
 		{
 			if (TestFlags(iFlags, RocketFlag_PlayAlertSound))
 			{
-				if (TestFlags(iFlags, RocketFlag_CustomAlertSound)) EmitSoundToClient(iTarget, g_strRocketClassAlertSound[iClass]);
+				if (TestFlags(iFlags, RocketFlag_CustomAlertSound)) EmitSoundToClient(iTarget, RocketClassAlertSound[iClass]);
 				else                                                EmitSoundToClient(iTarget, SOUND_DEFAULT_ALERT, _, _, _, _, 0.5);
 			}
 		}
@@ -576,68 +637,68 @@ void EmitRocketSound(RocketSound iSound, int iClass, int iEntity, int iTarget, R
 
 void CheckStolenRocket(int iClient, int iIndex)
 {
-    int iTarget = EntRefToEntIndex(g_iRocketTarget[iIndex]);
+    int iTarget = EntRefToEntIndex(RocketTarget[iIndex]);
 
     if (!(iTarget != iClient &&
-        !g_eStealInfo[iClient].stoleRocket &&
-        (GetEntitiesDistance(iTarget, iClient) > g_hCvarStealDistance.FloatValue) &&
-        (!(g_iRocketFlags[iIndex] & RocketFlag_StealTeamCheck) || (GetClientTeam(iTarget) == GetClientTeam(iClient))) &&
-        !(g_iRocketState[iIndex] & RocketState_Delayed)))
+        !StealInfo[iClient].stoleRocket &&
+        (GetEntitiesDistance(iTarget, iClient) > CvarStealDistance.FloatValue) &&
+        (!(RocketInstanceFlags[iIndex] & RocketFlag_StealTeamCheck) || (GetClientTeam(iTarget) == GetClientTeam(iClient))) &&
+        !(RocketInstanceState[iIndex] & RocketState_Delayed)))
     {
         return;
     }
 
-    g_eStealInfo[iClient].stoleRocket = true;
+    StealInfo[iClient].stoleRocket = true;
 
-    if (g_eStealInfo[iClient].rocketsStolen < g_hCvarStealPreventionNumber.IntValue)
+    if (StealInfo[iClient].rocketsStolen < CvarStealPreventionNumber.IntValue)
     {
-        g_eStealInfo[iClient].rocketsStolen++;
+        StealInfo[iClient].rocketsStolen++;
         SlapPlayer(iClient, 0, true);
-        CPrintToChat(iClient, "%t", "DBSteal_Warning_Client", g_eStealInfo[iClient].rocketsStolen, g_hCvarStealPreventionNumber.IntValue);
+        CPrintToChat(iClient, "%t", "DBSteal_Warning_Client", StealInfo[iClient].rocketsStolen, CvarStealPreventionNumber.IntValue);
 
-        if (g_hCvarStealMessage.BoolValue)
+        if (CvarStealMessage.BoolValue)
         {
             CSkipNextClient(iClient);
             CPrintToChatAll("%t", "DBSteal_Announce_All", iClient, iTarget);
         }
-        g_eStealInfo[iClient].stoleRocket = false;
+        StealInfo[iClient].stoleRocket = false;
     }
     else
     {
         ForcePlayerSuicide(iClient);
         CPrintToChat(iClient, "%t", "DBSteal_Slay_Client");
-        if (g_hCvarStealMessage.BoolValue)
+        if (CvarStealMessage.BoolValue)
         {
             CSkipNextClient(iClient);
             CPrintToChatAll("%t", "DBSteal_Announce_Slay_All", iClient);
         }
     }
 
-    Internal_SetRocketState(iIndex, (g_iRocketState[iIndex] | RocketState_Stolen));
-    g_iLastStealer = iClient;
-    Forward_OnRocketSteal(iIndex, iClient, iTarget, g_eStealInfo[iClient].rocketsStolen);
+    Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] | RocketState_Stolen));
+    LastStealer = iClient;
+    Forward_OnRocketSteal(iIndex, iClient, iTarget, StealInfo[iClient].rocketsStolen);
 }
 
 void CheckRoundDelays(int iIndex)
 {
-	int iEntity = EntRefToEntIndex(g_iRocketEntity[iIndex]);
-	int iTarget = EntRefToEntIndex(g_iRocketTarget[iIndex]);
-	float fTimeToCheck = g_iRocketDeflections[iIndex] == 0 ? g_fLastSpawnTime[iIndex] : g_fRocketLastDeflectionTime[iIndex];
+	int iEntity = EntRefToEntIndex(RocketEntity[iIndex]);
+	int iTarget = EntRefToEntIndex(RocketTarget[iIndex]);
+	float fTimeToCheck = RocketDeflections[iIndex] == 0 ? LastSpawnTime[iIndex] : RocketLastDeflectionTime[iIndex];
 	
-	if (iTarget == -1 || (GetGameTime() - fTimeToCheck) < g_hCvarDelayPreventionTime.FloatValue) return;
+	if (iTarget == -1 || (GetGameTime() - fTimeToCheck) < CvarDelayPreventionTime.FloatValue) return;
 
-	if (!(g_iRocketState[iIndex] & RocketState_Delayed))
+	if (!(RocketInstanceState[iIndex] & RocketState_Delayed))
 	{
-		if (g_hCvarDelayMessage.BoolValue)
+		if (CvarDelayMessage.BoolValue)
 		{
 			CPrintToChatAll("%t", "DBDelay_Announce_All", iTarget);
 		}
 		EmitSoundToAll(SOUND_DEFAULT_SPEEDUP, iEntity, SNDCHAN_AUTO, SNDLEVEL_GUNFIRE);
-		Internal_SetRocketState(iIndex, (g_iRocketState[iIndex] | RocketState_Delayed));
+		Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] | RocketState_Delayed));
 		Forward_OnRocketDelay(iIndex, iTarget);
 	}
 	else
 	{
-		g_fRocketSpeed[iIndex] += g_hCvarDelayPreventionSpeedup.FloatValue;
+		RocketSpeed[iIndex] += CvarDelayPreventionSpeedup.FloatValue;
 	}
 }

@@ -4,8 +4,8 @@
 #define _dodgeball_natives_included
 
 /**
- * [cite_start]Implements the native functions exposed by the TF2 Dodgeball plugin. [cite: 49, 50]
- * [cite_start]These natives allow other plugins to interact with and control the gamemode. [cite: 50]
+ * Implements the native functions exposed by the TF2 Dodgeball plugin.
+ * These natives allow other plugins to interact with and control the gamemode.
  */
 
 // *********************************************************************************
@@ -21,7 +21,7 @@ public any Native_FindRocketByEntity(Handle hPlugin, int iNumParams) {
 }
 
 public any Native_IsDodgeballEnabled(Handle hPlugin, int iNumParams) {
-	return g_bEnabled;
+	return Enabled;
 }
 
 // *********************************************************************************
@@ -29,126 +29,126 @@ public any Native_IsDodgeballEnabled(Handle hPlugin, int iNumParams) {
 // *********************************************************************************
 
 public any Native_GetRocketEntity(Handle hPlugin, int iNumParams) {
-	return EntRefToEntIndex(g_iRocketEntity[GetNativeCell(1)]);
+	return EntRefToEntIndex(RocketEntity[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketEntity(Handle hPlugin, int iNumParams) {
-	g_iRocketEntity[GetNativeCell(1)] = EntIndexToEntRef(GetNativeCell(2));
+	RocketEntity[GetNativeCell(1)] = EntIndexToEntRef(GetNativeCell(2));
 	return 0;
 }
 
 public any Native_GetRocketFlags(Handle hPlugin, int iNumParams) {
-	return g_iRocketFlags[GetNativeCell(1)];
+	return RocketInstanceFlags[GetNativeCell(1)];
 }
 
 public any Native_SetRocketFlags(Handle hPlugin, int iNumParams) {
-	g_iRocketFlags[GetNativeCell(1)] = view_as<RocketFlags>(GetNativeCell(2));
+	RocketInstanceFlags[GetNativeCell(1)] = view_as<RocketFlags>(GetNativeCell(2));
 	return 0;
 }
 
 public any Native_GetRocketTarget(Handle hPlugin, int iNumParams) {
-	return EntRefToEntIndex(g_iRocketTarget[GetNativeCell(1)]);
+	return EntRefToEntIndex(RocketTarget[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketTarget(Handle hPlugin, int iNumParams) {
-	g_iRocketTarget[GetNativeCell(1)] = EntIndexToEntRef(GetNativeCell(2));
+	RocketTarget[GetNativeCell(1)] = EntIndexToEntRef(GetNativeCell(2));
 	return 0;
 }
 
 public any Native_GetRocketEventDeflections(Handle hPlugin, int iNumParams) {
-	return g_iRocketEventDeflections[GetNativeCell(1)];
+	return RocketEventDeflections[GetNativeCell(1)];
 }
 
 public any Native_SetRocketEventDeflections(Handle hPlugin, int iNumParams) {
-	g_iRocketEventDeflections[GetNativeCell(1)] = GetNativeCell(2);
+	RocketEventDeflections[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketDeflections(Handle hPlugin, int iNumParams) {
-	return g_iRocketDeflections[GetNativeCell(1)];
+	return RocketDeflections[GetNativeCell(1)];
 }
 
 public any Native_SetRocketDeflections(Handle hPlugin, int iNumParams) {
-	g_iRocketDeflections[GetNativeCell(1)] = GetNativeCell(2);
+	RocketDeflections[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClass(Handle hPlugin, int iNumParams) {
-	return g_iRocketClass[GetNativeCell(1)];
+	return RocketClass[GetNativeCell(1)];
 }
 
 public any Native_SetRocketClass(Handle hPlugin, int iNumParams) {
-	g_iRocketClass[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClass[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketSpeed(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketSpeed[GetNativeCell(1)]);
+	return view_as<any>(RocketSpeed[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketSpeed(Handle hPlugin, int iNumParams) {
-	g_fRocketSpeed[GetNativeCell(1)] = GetNativeCell(2);
+	RocketSpeed[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketMphSpeed(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketMphSpeed[GetNativeCell(1)]);
+	return view_as<any>(RocketMphSpeed[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketMphSpeed(Handle hPlugin, int iNumParams) {
-	g_fRocketMphSpeed[GetNativeCell(1)] = GetNativeCell(2);
+	RocketMphSpeed[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketDirection(Handle hPlugin, int iNumParams) {
-	SetNativeArray(2, g_fRocketDirection[GetNativeCell(1)], 3);
+	SetNativeArray(2, RocketDirection[GetNativeCell(1)], 3);
 	return 0;
 }
 
 public any Native_SetRocketDirection(Handle hPlugin, int iNumParams) {
 	float fDirection[3];
 	GetNativeArray(2, fDirection, sizeof(fDirection));
-	CopyVectors(fDirection, g_fRocketDirection[GetNativeCell(1)]);
+	CopyVectors(fDirection, RocketDirection[GetNativeCell(1)]);
 	return 0;
 }
 
 public any Native_GetRocketLastDeflectionTime(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketLastDeflectionTime[GetNativeCell(1)]);
+	return view_as<any>(RocketLastDeflectionTime[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketLastDeflectionTime(Handle hPlugin, int iNumParams) {
-	g_fRocketLastDeflectionTime[GetNativeCell(1)] = GetNativeCell(2);
+	RocketLastDeflectionTime[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketLastBeepTime(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketLastBeepTime[GetNativeCell(1)]);
+	return view_as<any>(RocketLastBeepTime[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketLastBeepTime(Handle hPlugin, int iNumParams) {
-	g_fRocketLastBeepTime[GetNativeCell(1)] = GetNativeCell(2);
+	RocketLastBeepTime[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketCount(Handle hPlugin, int iNumParams) {
-	return g_iRocketCount;
+	return RocketCount;
 }
 
 public any Native_GetLastSpawnTime(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fLastSpawnTime[GetNativeCell(1)]);
+	return view_as<any>(LastSpawnTime[GetNativeCell(1)]);
 }
 
 public any Native_GetRocketBounces(Handle hPlugin, int iNumParams) {
-	return g_iRocketBounces[GetNativeCell(1)];
+	return RocketBounces[GetNativeCell(1)];
 }
 
 public any Native_SetRocketBounces(Handle hPlugin, int iNumParams) {
-	g_iRocketBounces[GetNativeCell(1)] = GetNativeCell(2);
+	RocketBounces[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketState(Handle hPlugin, int iNumParams) {
-	return g_iRocketState[GetNativeCell(1)];
+	return RocketInstanceState[GetNativeCell(1)];
 }
 
 public any Native_SetRocketState(Handle hPlugin, int iNumParams) {
@@ -161,178 +161,178 @@ public any Native_SetRocketState(Handle hPlugin, int iNumParams) {
 // *********************************************************************************
 
 public any Native_GetRocketClassCount(Handle hPlugin, int iNumParams) {
-	return g_iRocketClassCount;
+	return RocketClassCount;
 }
 
 public any Native_SetRocketClassCount(Handle hPlugin, int iNumParams) {
-	g_iRocketClassCount = GetNativeCell(1);
+	RocketClassCount = GetNativeCell(1);
 	return 0;
 }
 
 public any Native_GetRocketClassBehaviour(Handle hPlugin, int iNumParams) {
-	return g_iRocketClassBehaviour[GetNativeCell(1)];
+	return RocketClassBehaviour[GetNativeCell(1)];
 }
 
 public any Native_SetRocketClassBehaviour(Handle hPlugin, int iNumParams) {
-	g_iRocketClassBehaviour[GetNativeCell(1)] = view_as<BehaviourTypes>(GetNativeCell(2));
+	RocketClassBehaviour[GetNativeCell(1)] = view_as<BehaviourTypes>(GetNativeCell(2));
 	return 0;
 }
 
 public any Native_GetRocketClassFlags(Handle hPlugin, int iNumParams) {
-	return g_iRocketClassFlags[GetNativeCell(1)];
+	return RocketClassFlags[GetNativeCell(1)];
 }
 
 public any Native_SetRocketClassFlags(Handle hPlugin, int iNumParams) {
-	g_iRocketClassFlags[GetNativeCell(1)] = view_as<RocketFlags>(GetNativeCell(2));
+	RocketClassFlags[GetNativeCell(1)] = view_as<RocketFlags>(GetNativeCell(2));
 	return 0;
 }
 
 public any Native_GetRocketClassDamage(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassDamage[GetNativeCell(1)]);
+	return view_as<any>(RocketClassDamage[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassDamage(Handle hPlugin, int iNumParams) {
-	g_fRocketClassDamage[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassDamage[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassDamageIncrement(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassDamageIncrement[GetNativeCell(1)]);
+	return view_as<any>(RocketClassDamageIncrement[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassDamageIncrement(Handle hPlugin, int iNumParams) {
-	g_fRocketClassDamageIncrement[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassDamageIncrement[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassSpeed(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassSpeed[GetNativeCell(1)]);
+	return view_as<any>(RocketClassSpeed[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassSpeed(Handle hPlugin, int iNumParams) {
-	g_fRocketClassSpeed[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassSpeed[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassSpeedIncrement(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassSpeedIncrement[GetNativeCell(1)]);
+	return view_as<any>(RocketClassSpeedIncrement[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassSpeedIncrement(Handle hPlugin, int iNumParams) {
-	g_fRocketClassSpeedIncrement[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassSpeedIncrement[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassSpeedLimit(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassSpeedLimit[GetNativeCell(1)]);
+	return view_as<any>(RocketClassSpeedLimit[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassSpeedLimit(Handle hPlugin, int iNumParams) {
-	g_fRocketClassSpeedLimit[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassSpeedLimit[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassTurnRate(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassTurnRate[GetNativeCell(1)]);
+	return view_as<any>(RocketClassTurnRate[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassTurnRate(Handle hPlugin, int iNumParams) {
-	g_fRocketClassTurnRate[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassTurnRate[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassTurnRateIncrement(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassTurnRateIncrement[GetNativeCell(1)]);
+	return view_as<any>(RocketClassTurnRateIncrement[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassTurnRateIncrement(Handle hPlugin, int iNumParams) {
-	g_fRocketClassTurnRateIncrement[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassTurnRateIncrement[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassTurnRateLimit(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassTurnRateLimit[GetNativeCell(1)]);
+	return view_as<any>(RocketClassTurnRateLimit[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassTurnRateLimit(Handle hPlugin, int iNumParams) {
-	g_fRocketClassTurnRateLimit[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassTurnRateLimit[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassElevationRate(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassElevationRate[GetNativeCell(1)]);
+	return view_as<any>(RocketClassElevationRate[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassElevationRate(Handle hPlugin, int iNumParams) {
-	g_fRocketClassElevationRate[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassElevationRate[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassElevationLimit(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassElevationLimit[GetNativeCell(1)]);
+	return view_as<any>(RocketClassElevationLimit[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassElevationLimit(Handle hPlugin, int iNumParams) {
-	g_fRocketClassElevationLimit[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassElevationLimit[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassRocketsModifier(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassRocketsModifier[GetNativeCell(1)]);
+	return view_as<any>(RocketClassRocketsModifier[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassRocketsModifier(Handle hPlugin, int iNumParams) {
-	g_fRocketClassRocketsModifier[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassRocketsModifier[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassPlayerModifier(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassPlayerModifier[GetNativeCell(1)]);
+	return view_as<any>(RocketClassPlayerModifier[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassPlayerModifier(Handle hPlugin, int iNumParams) {
-	g_fRocketClassPlayerModifier[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassPlayerModifier[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassControlDelay(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassControlDelay[GetNativeCell(1)]);
+	return view_as<any>(RocketClassControlDelay[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassControlDelay(Handle hPlugin, int iNumParams) {
-	g_fRocketClassControlDelay[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassControlDelay[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassDragTimeMin(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassDragTimeMin[GetNativeCell(1)]);
+	return view_as<any>(RocketClassDragTimeMin[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassDragTimeMin(Handle hPlugin, int iNumParams) {
-	g_fRocketClassDragTimeMin[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassDragTimeMin[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassDragTimeMax(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassDragTimeMax[GetNativeCell(1)]);
+	return view_as<any>(RocketClassDragTimeMax[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassDragTimeMax(Handle hPlugin, int iNumParams) {
-	g_fRocketClassDragTimeMax[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassDragTimeMax[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassMaxBounces(Handle hPlugin, int iNumParams) {
-	return g_iRocketClassMaxBounces[GetNativeCell(1)];
+	return RocketClassMaxBounces[GetNativeCell(1)];
 }
 
 public any Native_SetRocketClassMaxBounces(Handle hPlugin, int iNumParams) {
-	g_iRocketClassMaxBounces[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassMaxBounces[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassName(Handle hPlugin, int iNumParams) {
-	SetNativeString(2, g_strRocketClassName[GetNativeCell(1)], GetNativeCell(3));
+	SetNativeString(2, RocketClassName[GetNativeCell(1)], GetNativeCell(3));
 	return 0;
 }
 
@@ -342,12 +342,12 @@ public any Native_SetRocketClassName(Handle hPlugin, int iNumParams) {
 	GetNativeStringLength(2, iMaxLen);
 	char[] strBuffer = new char[iMaxLen + 1];
 	GetNativeString(2, strBuffer, iMaxLen + 1);
-	strcopy(g_strRocketClassName[iClass], sizeof(g_strRocketClassName[]), strBuffer);
+	strcopy(RocketClassName[iClass], sizeof(RocketClassName[]), strBuffer);
 	return 0;
 }
 
 public any Native_GetRocketClassLongName(Handle hPlugin, int iNumParams) {
-	SetNativeString(2, g_strRocketClassLongName[GetNativeCell(1)], GetNativeCell(3));
+	SetNativeString(2, RocketClassLongName[GetNativeCell(1)], GetNativeCell(3));
 	return 0;
 }
 
@@ -357,12 +357,12 @@ public any Native_SetRocketClassLongName(Handle hPlugin, int iNumParams) {
 	GetNativeStringLength(2, iMaxLen);
 	char[] strBuffer = new char[iMaxLen + 1];
 	GetNativeString(2, strBuffer, iMaxLen + 1);
-	strcopy(g_strRocketClassLongName[iClass], sizeof(g_strRocketClassLongName[]), strBuffer);
+	strcopy(RocketClassLongName[iClass], sizeof(RocketClassLongName[]), strBuffer);
 	return 0;
 }
 
 public any Native_GetRocketClassModel(Handle hPlugin, int iNumParams) {
-	SetNativeString(2, g_strRocketClassModel[GetNativeCell(1)], GetNativeCell(3));
+	SetNativeString(2, RocketClassModel[GetNativeCell(1)], GetNativeCell(3));
 	return 0;
 }
 
@@ -372,21 +372,21 @@ public any Native_SetRocketClassModel(Handle hPlugin, int iNumParams) {
 	GetNativeStringLength(2, iMaxLen);
 	char[] strBuffer = new char[iMaxLen + 1];
 	GetNativeString(2, strBuffer, iMaxLen + 1);
-	strcopy(g_strRocketClassModel[iClass], sizeof(g_strRocketClassModel[]), strBuffer);
+	strcopy(RocketClassModel[iClass], sizeof(RocketClassModel[]), strBuffer);
 	return 0;
 }
 
 public any Native_GetRocketClassBeepInterval(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassBeepInterval[GetNativeCell(1)]);
+	return view_as<any>(RocketClassBeepInterval[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassBeepInterval(Handle hPlugin, int iNumParams) {
-	g_fRocketClassBeepInterval[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassBeepInterval[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassSpawnSound(Handle hPlugin, int iNumParams) {
-	SetNativeString(2, g_strRocketClassSpawnSound[GetNativeCell(1)], GetNativeCell(3));
+	SetNativeString(2, RocketClassSpawnSound[GetNativeCell(1)], GetNativeCell(3));
 	return 0;
 }
 
@@ -396,12 +396,12 @@ public any Native_SetRocketClassSpawnSound(Handle hPlugin, int iNumParams) {
 	GetNativeStringLength(2, iMaxLen);
 	char[] strBuffer = new char[iMaxLen + 1];
 	GetNativeString(2, strBuffer, iMaxLen + 1);
-	strcopy(g_strRocketClassSpawnSound[iClass], sizeof(g_strRocketClassSpawnSound[]), strBuffer);
+	strcopy(RocketClassSpawnSound[iClass], sizeof(RocketClassSpawnSound[]), strBuffer);
 	return 0;
 }
 
 public any Native_GetRocketClassBeepSound(Handle hPlugin, int iNumParams) {
-	SetNativeString(2, g_strRocketClassBeepSound[GetNativeCell(1)], GetNativeCell(3));
+	SetNativeString(2, RocketClassBeepSound[GetNativeCell(1)], GetNativeCell(3));
 	return 0;
 }
 
@@ -411,12 +411,12 @@ public any Native_SetRocketClassBeepSound(Handle hPlugin, int iNumParams) {
 	GetNativeStringLength(2, iMaxLen);
 	char[] strBuffer = new char[iMaxLen + 1];
 	GetNativeString(2, strBuffer, iMaxLen + 1);
-	strcopy(g_strRocketClassBeepSound[iClass], sizeof(g_strRocketClassBeepSound[]), strBuffer);
+	strcopy(RocketClassBeepSound[iClass], sizeof(RocketClassBeepSound[]), strBuffer);
 	return 0;
 }
 
 public any Native_GetRocketClassAlertSound(Handle hPlugin, int iNumParams) {
-	SetNativeString(2, g_strRocketClassAlertSound[GetNativeCell(1)], GetNativeCell(3));
+	SetNativeString(2, RocketClassAlertSound[GetNativeCell(1)], GetNativeCell(3));
 	return 0;
 }
 
@@ -426,34 +426,34 @@ public any Native_SetRocketClassAlertSound(Handle hPlugin, int iNumParams) {
 	GetNativeStringLength(2, iMaxLen);
 	char[] strBuffer = new char[iMaxLen + 1];
 	GetNativeString(2, strBuffer, iMaxLen + 1);
-	strcopy(g_strRocketClassAlertSound[iClass], sizeof(g_strRocketClassAlertSound[]), strBuffer);
+	strcopy(RocketClassAlertSound[iClass], sizeof(RocketClassAlertSound[]), strBuffer);
 	return 0;
 }
 
 public any Native_GetRocketClassCritChance(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassCritChance[GetNativeCell(1)]);
+	return view_as<any>(RocketClassCritChance[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassCritChance(Handle hPlugin, int iNumParams) {
-	g_fRocketClassCritChance[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassCritChance[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassTargetWeight(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassTargetWeight[GetNativeCell(1)]);
+	return view_as<any>(RocketClassTargetWeight[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassTargetWeight(Handle hPlugin, int iNumParams) {
-	g_fRocketClassTargetWeight[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassTargetWeight[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketClassBounceScale(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fRocketClassBounceScale[GetNativeCell(1)]);
+	return view_as<any>(RocketClassBounceScale[GetNativeCell(1)]);
 }
 
 public any Native_SetRocketClassBounceScale(Handle hPlugin, int iNumParams) {
-	g_fRocketClassBounceScale[GetNativeCell(1)] = GetNativeCell(2);
+	RocketClassBounceScale[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
@@ -462,7 +462,7 @@ public any Native_SetRocketClassBounceScale(Handle hPlugin, int iNumParams) {
 // *********************************************************************************
 
 public any Native_GetSpawnersName(Handle hPlugin, int iNumParams) {
-	SetNativeString(2, g_strSpawnersName[GetNativeCell(1)], GetNativeCell(3));
+	SetNativeString(2, SpawnersName[GetNativeCell(1)], GetNativeCell(3));
 	return 0;
 }
 
@@ -472,47 +472,47 @@ public any Native_SetSpawnersName(Handle hPlugin, int iNumParams) {
 	GetNativeStringLength(2, iMaxLen);
 	char[] strBuffer = new char[iMaxLen + 1];
 	GetNativeString(2, strBuffer, iMaxLen + 1);
-	strcopy(g_strSpawnersName[iSpawnerClass], sizeof(g_strSpawnersName[]), strBuffer);
+	strcopy(SpawnersName[iSpawnerClass], sizeof(SpawnersName[]), strBuffer);
 	return 0;
 }
 
 public any Native_GetSpawnersMaxRockets(Handle hPlugin, int iNumParams) {
-	return g_iSpawnersMaxRockets[GetNativeCell(1)];
+	return SpawnersMaxRockets[GetNativeCell(1)];
 }
 
 public any Native_SetSpawnersMaxRockets(Handle hPlugin, int iNumParams) {
-	g_iSpawnersMaxRockets[GetNativeCell(1)] = GetNativeCell(2);
+	SpawnersMaxRockets[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetSpawnersInterval(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fSpawnersInterval[GetNativeCell(1)]);
+	return view_as<any>(SpawnersInterval[GetNativeCell(1)]);
 }
 
 public any Native_SetSpawnersInterval(Handle hPlugin, int iNumParams) {
-	g_fSpawnersInterval[GetNativeCell(1)] = GetNativeCell(2);
+	SpawnersInterval[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetSpawnersChancesTable(Handle hPlugin, int iNumParams) {
-	return CloneHandle(g_hSpawnersChancesTable[GetNativeCell(1)], hPlugin);
+	return CloneHandle(SpawnersChancesTable[GetNativeCell(1)], hPlugin);
 }
 
 public any Native_SetSpawnersChancesTable(Handle hPlugin, int iNumParams) {
 	int iSpawnerClass = GetNativeCell(1);
 	ArrayList hTable = view_as<ArrayList>(GetNativeCell(2));
 	ArrayList hClonedTable = view_as<ArrayList>(CloneHandle(hTable, GetMyHandle()));
-	delete g_hSpawnersChancesTable[iSpawnerClass];
-	g_hSpawnersChancesTable[iSpawnerClass] = hClonedTable;
+	delete SpawnersChancesTable[iSpawnerClass];
+	SpawnersChancesTable[iSpawnerClass] = hClonedTable;
 	return 0;
 }
 
 public any Native_GetSpawnersCount(Handle hPlugin, int iNumParams) {
-	return g_iSpawnersCount;
+	return SpawnersCount;
 }
 
 public any Native_SetSpawnersCount(Handle hPlugin, int iNumParams) {
-	g_iSpawnersCount = GetNativeCell(1);
+	SpawnersCount = GetNativeCell(1);
 	return 0;
 }
 
@@ -521,74 +521,74 @@ public any Native_SetSpawnersCount(Handle hPlugin, int iNumParams) {
 // *********************************************************************************
 
 public any Native_GetCurrentRedSpawn(Handle hPlugin, int iNumParams) {
-	return g_iCurrentRedSpawn;
+	return CurrentRedSpawn;
 }
 
 public any Native_SetCurrentRedSpawn(Handle hPlugin, int iNumParams) {
-	g_iCurrentRedSpawn = GetNativeCell(1);
+	CurrentRedSpawn = GetNativeCell(1);
 	return 0;
 }
 
 public any Native_GetSpawnPointsRedCount(Handle hPlugin, int iNumParams) {
-	return g_iSpawnPointsRedCount;
+	return SpawnPointsRedCount;
 }
 
 public any Native_SetSpawnPointsRedCount(Handle hPlugin, int iNumParams) {
-	g_iSpawnPointsRedCount = GetNativeCell(1);
+	SpawnPointsRedCount = GetNativeCell(1);
 	return 0;
 }
 
 public any Native_GetSpawnPointsRedClass(Handle hPlugin, int iNumParams) {
-	return g_iSpawnPointsRedClass[GetNativeCell(1)];
+	return SpawnPointsRedClass[GetNativeCell(1)];
 }
 
 public any Native_SetSpawnPointsRedClass(Handle hPlugin, int iNumParams) {
-	g_iSpawnPointsRedClass[GetNativeCell(1)] = GetNativeCell(2);
+	SpawnPointsRedClass[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetSpawnPointsRedEntity(Handle hPlugin, int iNumParams) {
-	return g_iSpawnPointsRedEntity[GetNativeCell(1)];
+	return SpawnPointsRedEntity[GetNativeCell(1)];
 }
 
 public any Native_SetSpawnPointsRedEntity(Handle hPlugin, int iNumParams) {
-	g_iSpawnPointsRedEntity[GetNativeCell(1)] = GetNativeCell(2);
+	SpawnPointsRedEntity[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetCurrentBluSpawn(Handle hPlugin, int iNumParams) {
-	return g_iCurrentBluSpawn;
+	return CurrentBluSpawn;
 }
 
 public any Native_SetCurrentBluSpawn(Handle hPlugin, int iNumParams) {
-	g_iCurrentBluSpawn = GetNativeCell(1);
+	CurrentBluSpawn = GetNativeCell(1);
 	return 0;
 }
 
 public any Native_GetSpawnPointsBluCount(Handle hPlugin, int iNumParams) {
-	return g_iSpawnPointsBluCount;
+	return SpawnPointsBluCount;
 }
 
 public any Native_SetSpawnPointsBluCount(Handle hPlugin, int iNumParams) {
-	g_iSpawnPointsBluCount = GetNativeCell(1);
+	SpawnPointsBluCount = GetNativeCell(1);
 	return 0;
 }
 
 public any Native_GetSpawnPointsBluClass(Handle hPlugin, int iNumParams) {
-	return g_iSpawnPointsBluClass[GetNativeCell(1)];
+	return SpawnPointsBluClass[GetNativeCell(1)];
 }
 
 public any Native_SetSpawnPointsBluClass(Handle hPlugin, int iNumParams) {
-	g_iSpawnPointsBluClass[GetNativeCell(1)] = GetNativeCell(2);
+	SpawnPointsBluClass[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetSpawnPointsBluEntity(Handle hPlugin, int iNumParams) {
-	return g_iSpawnPointsBluEntity[GetNativeCell(1)];
+	return SpawnPointsBluEntity[GetNativeCell(1)];
 }
 
 public any Native_SetSpawnPointsBluEntity(Handle hPlugin, int iNumParams) {
-	g_iSpawnPointsBluEntity[GetNativeCell(1)] = GetNativeCell(2);
+	SpawnPointsBluEntity[GetNativeCell(1)] = GetNativeCell(2);
 	return 0;
 }
 
@@ -597,36 +597,36 @@ public any Native_SetSpawnPointsBluEntity(Handle hPlugin, int iNumParams) {
 // *********************************************************************************
 
 public any Native_GetRoundStarted(Handle hPlugin, int iNumParams) {
-	return g_bRoundStarted;
+	return RoundStarted;
 }
 
 public any Native_GetRoundCount(Handle hPlugin, int iNumParams) {
-	return g_iRoundCount;
+	return RoundCount;
 }
 
 public any Native_GetRocketsFired(Handle hPlugin, int iNumParams) {
-	return g_iRocketsFired;
+	return RocketsFired;
 }
 
 public any Native_GetNextSpawnTime(Handle hPlugin, int iNumParams) {
-	return view_as<any>(g_fNextSpawnTime);
+	return view_as<any>(NextSpawnTime);
 }
 
 public any Native_SetNextSpawnTime(Handle hPlugin, int iNumParams) {
-	g_fNextSpawnTime = GetNativeCell(1);
+	NextSpawnTime = GetNativeCell(1);
 	return 0;
 }
 
 public any Native_GetLastDeadTeam(Handle hPlugin, int iNumParams) {
-	return g_iLastDeadTeam;
+	return LastDeadTeam;
 }
 
 public any Native_GetLastDeadClient(Handle hPlugin, int iNumParams) {
-	return g_iLastDeadClient;
+	return LastDeadClient;
 }
 
 public any Native_GetLastStealer(Handle hPlugin, int iNumParams) {
-	return g_iLastStealer;
+	return LastStealer;
 }
 
 public any Native_GetStealInfo(Handle hPlugin, int iNumParams) {
@@ -635,8 +635,8 @@ public any Native_GetStealInfo(Handle hPlugin, int iNumParams) {
 		return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d", iClient);
 	}
 	DataPack hPack = new DataPack();
-	hPack.WriteCell(g_eStealInfo[iClient].stoleRocket ? 1 : 0);
-	hPack.WriteCell(g_eStealInfo[iClient].rocketsStolen);
+	hPack.WriteCell(StealInfo[iClient].stoleRocket ? 1 : 0);
+	hPack.WriteCell(StealInfo[iClient].rocketsStolen);
 	return hPack;
 }
 
@@ -650,8 +650,8 @@ public any Native_SetStealInfo(Handle hPlugin, int iNumParams) {
 		return ThrowNativeError(SP_ERROR_NATIVE, "Invalid DataPack handle provided");
 	}
 	hPack.Reset(false);
-	g_eStealInfo[iClient].stoleRocket = (hPack.ReadCell() != 0);
-	g_eStealInfo[iClient].rocketsStolen = hPack.ReadCell();
+	StealInfo[iClient].stoleRocket = (hPack.ReadCell() != 0);
+	StealInfo[iClient].rocketsStolen = hPack.ReadCell();
 	return 0;
 }
 
@@ -660,67 +660,67 @@ public any Native_SetStealInfo(Handle hPlugin, int iNumParams) {
 // *********************************************************************************
 
 public any Native_GetRocketClassCmdsOnSpawn(Handle hPlugin, int iNumParams) {
-	return CloneHandle(g_hRocketClassCmdsOnSpawn[GetNativeCell(1)], hPlugin);
+	return CloneHandle(RocketClassCmdsOnSpawn[GetNativeCell(1)], hPlugin);
 }
 
 public any Native_SetRocketClassCmdsOnSpawn(Handle hPlugin, int iNumParams) {
 	int iClass = GetNativeCell(1);
 	DataPack hCmds = view_as<DataPack>(GetNativeCell(2));
 	DataPack hClonedPack = view_as<DataPack>(CloneHandle(hCmds, GetMyHandle()));
-	delete g_hRocketClassCmdsOnSpawn[iClass];
-	g_hRocketClassCmdsOnSpawn[iClass] = hClonedPack;
+	delete RocketClassCmdsOnSpawn[iClass];
+	RocketClassCmdsOnSpawn[iClass] = hClonedPack;
 	return 0;
 }
 
 public any Native_GetRocketClassCmdsOnDeflect(Handle hPlugin, int iNumParams) {
-	return CloneHandle(g_hRocketClassCmdsOnDeflect[GetNativeCell(1)], hPlugin);
+	return CloneHandle(RocketClassCmdsOnDeflect[GetNativeCell(1)], hPlugin);
 }
 
 public any Native_SetRocketClassCmdsOnDeflect(Handle hPlugin, int iNumParams) {
 	int iClass = GetNativeCell(1);
 	DataPack hCmds = view_as<DataPack>(GetNativeCell(2));
 	DataPack hClonedPack = view_as<DataPack>(CloneHandle(hCmds, GetMyHandle()));
-	delete g_hRocketClassCmdsOnDeflect[iClass];
-	g_hRocketClassCmdsOnDeflect[iClass] = hClonedPack;
+	delete RocketClassCmdsOnDeflect[iClass];
+	RocketClassCmdsOnDeflect[iClass] = hClonedPack;
 	return 0;
 }
 
 public any Native_GetRocketClassCmdsOnKill(Handle hPlugin, int iNumParams) {
-	return CloneHandle(g_hRocketClassCmdsOnKill[GetNativeCell(1)], hPlugin);
+	return CloneHandle(RocketClassCmdsOnKill[GetNativeCell(1)], hPlugin);
 }
 
 public any Native_SetRocketClassCmdsOnKill(Handle hPlugin, int iNumParams) {
 	int iClass = GetNativeCell(1);
 	DataPack hCmds = view_as<DataPack>(GetNativeCell(2));
 	DataPack hClonedPack = view_as<DataPack>(CloneHandle(hCmds, GetMyHandle()));
-	delete g_hRocketClassCmdsOnKill[iClass];
-	g_hRocketClassCmdsOnKill[iClass] = hClonedPack;
+	delete RocketClassCmdsOnKill[iClass];
+	RocketClassCmdsOnKill[iClass] = hClonedPack;
 	return 0;
 }
 
 public any Native_GetRocketClassCmdsOnExplode(Handle hPlugin, int iNumParams) {
-	return CloneHandle(g_hRocketClassCmdsOnExplode[GetNativeCell(1)], hPlugin);
+	return CloneHandle(RocketClassCmdsOnExplode[GetNativeCell(1)], hPlugin);
 }
 
 public any Native_SetRocketClassCmdsOnExplode(Handle hPlugin, int iNumParams) {
 	int iClass = GetNativeCell(1);
 	DataPack hCmds = view_as<DataPack>(GetNativeCell(2));
 	DataPack hClonedPack = view_as<DataPack>(CloneHandle(hCmds, GetMyHandle()));
-	delete g_hRocketClassCmdsOnExplode[iClass];
-	g_hRocketClassCmdsOnExplode[iClass] = hClonedPack;
+	delete RocketClassCmdsOnExplode[iClass];
+	RocketClassCmdsOnExplode[iClass] = hClonedPack;
 	return 0;
 }
 
 public any Native_GetRocketClassCmdsOnNoTarget(Handle hPlugin, int iNumParams) {
-	return CloneHandle(g_hRocketClassCmdsOnNoTarget[GetNativeCell(1)], hPlugin);
+	return CloneHandle(RocketClassCmdsOnNoTarget[GetNativeCell(1)], hPlugin);
 }
 
 public any Native_SetRocketClassCmdsOnNoTarget(Handle hPlugin, int iNumParams) {
 	int iClass = GetNativeCell(1);
 	DataPack hCmds = view_as<DataPack>(GetNativeCell(2));
 	DataPack hClonedPack = view_as<DataPack>(CloneHandle(hCmds, GetMyHandle()));
-	delete g_hRocketClassCmdsOnNoTarget[iClass];
-	g_hRocketClassCmdsOnNoTarget[iClass] = hClonedPack;
+	delete RocketClassCmdsOnNoTarget[iClass];
+	RocketClassCmdsOnNoTarget[iClass] = hClonedPack;
 	return 0;
 }
 

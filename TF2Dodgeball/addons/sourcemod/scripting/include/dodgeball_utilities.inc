@@ -51,10 +51,10 @@ stock void LerpVectors(float fA[3], float fB[3], float fC[3], float t)
  */
 stock float GetEntitiesDistance(int iEnt1, int iEnt2)
 {
-	static float fOrig1[3];
+	float fOrig1[3];
 	GetEntPropVector(iEnt1, Prop_Send, "m_vecOrigin", fOrig1);
 	
-	static float fOrig2[3];
+	float fOrig2[3];
 	GetEntPropVector(iEnt2, Prop_Send, "m_vecOrigin", fOrig2);
 	
 	return GetVectorDistance(fOrig1, fOrig2);
@@ -175,13 +175,13 @@ stock int SelectTarget(int iTeam, int iRocket = -1)
 	
 	if (iRocket != -1)
 	{
-		int iClass = g_iRocketClass[iRocket];
-		int iEntity = EntRefToEntIndex(g_iRocketEntity[iRocket]);
+		int iClass = RocketClass[iRocket];
+		int iEntity = EntRefToEntIndex(RocketEntity[iRocket]);
 		iOwner = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
 		
 		GetEntPropVector(iEntity, Prop_Send, "m_vecOrigin", fRocketPosition);
-		CopyVectors(g_fRocketDirection[iRocket], fRocketDirection);
-		fWeight = g_fRocketClassTargetWeight[iClass];
+		CopyVectors(RocketDirection[iRocket], fRocketDirection);
+		fWeight = RocketClassTargetWeight[iClass];
 		
 		bUseRocket = true;
 	}

@@ -7,26 +7,31 @@
  * Contains core gamemode logic: enabling/disabling the mod and the main game timer.
  */
 
+/** Checks if the current map is a dodgeball map (starts with "tfdb_"). */
 bool IsDodgeBallMap()
 {
-	char strMap[64]; GetCurrentMap(strMap, sizeof(strMap));
-	return StrContains(strMap, "tfdb_", false) == 0;
+	char map[64]; GetCurrentMap(map, sizeof(map));
+	return StrContains(map, "tfdb_", false) == 0;
 }
 
+/**
+ * Enables the dodgeball gamemode. Loads configuration, hooks events,
+ * precaches sounds/models, and starts the game timer.
+ */
 void EnableDodgeBall()
 {
-	if (g_bEnabled) return;
+	if (Enabled) return;
 
-	char strMapName[64]; GetCurrentMap(strMapName, sizeof(strMapName));
-	char strMapFile[PLATFORM_MAX_PATH]; FormatEx(strMapFile, sizeof(strMapFile), "%s.cfg", strMapName);
+	char mapName[64]; GetCurrentMap(mapName, sizeof(mapName));
+	char mapFile[PLATFORM_MAX_PATH]; FormatEx(mapFile, sizeof(mapFile), "%s.cfg", mapName);
 
 	ParseConfigurations();
-	ParseConfigurations(strMapFile);
+	ParseConfigurations(mapFile);
 
-	if (g_iRocketClassCount == 0)   SetFailState("No rocket class defined.");
-	if (g_iSpawnersCount == 0)      SetFailState("No spawner class defined.");
-	if (g_iDefaultRedSpawner == -1) SetFailState("No spawner class definition for the Red spawners exists in the config file.");
-	if (g_iDefaultBluSpawner == -1) SetFailState("No spawner class definition for the Blu spawners exists in the config file.");
+	if (RocketClassCount == 0)   SetFailState("No rocket class defined.");
+	if (SpawnersCount == 0)      SetFailState("No spawner class defined.");
+	if (DefaultRedSpawner == -1) SetFailState("No spawner class definition for the Red spawners exists in the config file.");
+	if (DefaultBluSpawner == -1) SetFailState("No spawner class definition for the Blu spawners exists in the config file.");
 
 	HookEvent("teamplay_round_start", OnRoundStart, EventHookMode_PostNoCopy);
 	HookEvent("arena_round_start", OnSetupFinished, EventHookMode_PostNoCopy);
@@ -46,12 +51,12 @@ void EnableDodgeBall()
 	PrecacheSound(SOUND_DEFAULT_ALERT, true);
 	PrecacheSound(SOUND_DEFAULT_SPEEDUP, true);
 
-	if (g_bMusicEnabled)
+	if (MusicEnabled)
 	{
-		if (g_bMusic[Music_RoundStart]) PrecacheSoundEx(g_strMusic[Music_RoundStart], true, true);
-		if (g_bMusic[Music_RoundWin])   PrecacheSoundEx(g_strMusic[Music_RoundWin], true, true);
-		if (g_bMusic[Music_RoundLose])  PrecacheSoundEx(g_strMusic[Music_RoundLose], true, true);
-		if (g_bMusic[Music_Gameplay])   PrecacheSoundEx(g_strMusic[Music_Gameplay], true, true);
+		if (Music[Music_RoundStart]) PrecacheSoundEx(MusicPath[Music_RoundStart], true, true);
+		if (Music[Music_RoundWin])   PrecacheSoundEx(MusicPath[Music_RoundWin], true, true);
+		if (Music[Music_RoundLose])  PrecacheSoundEx(MusicPath[Music_RoundLose], true, true);
+		if (Music[Music_Gameplay])   PrecacheSoundEx(MusicPath[Music_Gameplay], true, true);
 	}
 
 	PrecacheParticle(PARTICLE_NUKE_1);
@@ -61,39 +66,43 @@ void EnableDodgeBall()
 	PrecacheParticle(PARTICLE_NUKE_5);
 	PrecacheParticle(PARTICLE_NUKE_COLLUMN);
 
-	for (int i = 0; i < g_iRocketClassCount; i++)
+	for (int i = 0; i < RocketClassCount; i++)
 	{
-		RocketFlags iFlags = g_iRocketClassFlags[i];
-		if (TestFlags(iFlags, RocketFlag_CustomModel))      PrecacheModelEx(g_strRocketClassModel[i], true, true);
-		if (TestFlags(iFlags, RocketFlag_CustomSpawnSound)) PrecacheSoundEx(g_strRocketClassSpawnSound[i], true, true);
-		if (TestFlags(iFlags, RocketFlag_CustomBeepSound))  PrecacheSoundEx(g_strRocketClassBeepSound[i], true, true);
-		if (TestFlags(iFlags, RocketFlag_CustomAlertSound)) PrecacheSoundEx(g_strRocketClassAlertSound[i], true, true);
+		RocketFlags flags = RocketClassFlags[i];
+		if (TestFlags(flags, RocketFlag_CustomModel))      PrecacheModelEx(RocketClassModel[i], true, true);
+		if (TestFlags(flags, RocketFlag_CustomSpawnSound)) PrecacheSoundEx(RocketClassSpawnSound[i], true, true);
+		if (TestFlags(flags, RocketFlag_CustomBeepSound))  PrecacheSoundEx(RocketClassBeepSound[i], true, true);
+		if (TestFlags(flags, RocketFlag_CustomAlertSound)) PrecacheSoundEx(RocketClassAlertSound[i], true, true);
 	}
 
-	char strCfgFile[64];
-	g_hCvarEnableCfgFile.GetString(strCfgFile, sizeof(strCfgFile));
-	ServerCommand("exec \"%s\"", strCfgFile);
+	char cfgFile[64];
+	CvarEnableCfgFile.GetString(cfgFile, sizeof(cfgFile));
+	ServerCommand("exec \"%s\"", cfgFile);
 
-	g_bEnabled      = true;
-	g_bRoundStarted = false;
-	g_iRoundCount   = 0;
+	Enabled      = true;
+	RoundStarted = false;
+	RoundCount   = 0;
 }
 
+/**
+ * Disables the dodgeball gamemode. Cleans up rockets, unhooks events,
+ * and resets state.
+ */
 void DisableDodgeBall()
 {
-	if (!g_bEnabled) return;
+	if (!Enabled) return;
 
 	DestroyRockets();
 	DestroyRocketClasses();
 	DestroySpawners();
 
-	if (g_hLogicTimer != null) KillTimer(g_hLogicTimer);
-	g_hLogicTimer = null;
+	if (LogicTimer != null) KillTimer(LogicTimer);
+	LogicTimer = null;
 
-	g_bMusic[Music_RoundStart] =
-	g_bMusic[Music_RoundWin]   =
-	g_bMusic[Music_RoundLose]  =
-	g_bMusic[Music_Gameplay]   = false;
+	Music[Music_RoundStart] =
+	Music[Music_RoundWin]   =
+	Music[Music_RoundLose]  =
+	Music[Music_Gameplay]   = false;
 
 	UnhookEvent("teamplay_round_start", OnRoundStart, EventHookMode_PostNoCopy);
 	UnhookEvent("arena_round_start", OnSetupFinished, EventHookMode_PostNoCopy);
@@ -108,12 +117,12 @@ void DisableDodgeBall()
 	RemoveMultiTargetFilter("@stealer", MLTargetFilterStealer);
 	RemoveMultiTargetFilter("@!stealer", MLTargetFilterStealer);
 
-	char strCfgFile[64]; g_hCvarDisableCfgFile.GetString(strCfgFile, sizeof(strCfgFile));
-	ServerCommand("exec \"%s\"", strCfgFile);
+	char cfgFile[64]; CvarDisableCfgFile.GetString(cfgFile, sizeof(cfgFile));
+	ServerCommand("exec \"%s\"", cfgFile);
 
-	g_bEnabled      = false;
-	g_bRoundStarted = false;
-	g_iRoundCount   = 0;
+	Enabled      = false;
+	RoundStarted = false;
+	RoundCount   = 0;
 }
 
 /**
@@ -121,51 +130,51 @@ void DisableDodgeBall()
  * It handles rocket spawning and the logic for "legacy homing" rockets.
  * It also calls shared logic functions like sound updates.
  */
-public Action OnDodgeBallGameFrame(Handle hTimer, any Data)
+public Action OnDodgeBallGameFrame(Handle timer, any data)
 {
 	if (!BothTeamsPlaying()) return Plugin_Continue;
 
 	// Rocket Spawning Logic
-	if (GetGameTime() >= g_fNextSpawnTime)
+	if (GetGameTime() >= NextSpawnTime)
 	{
-		if (g_iLastDeadTeam == view_as<int>(TFTeam_Red))
+		if (LastDeadTeam == view_as<int>(TFTeam_Red))
 		{
-			int iSpawnerEntity = g_iSpawnPointsRedEntity[g_iCurrentRedSpawn];
-			int iSpawnerClass  = g_iSpawnPointsRedClass[g_iCurrentRedSpawn];
+			int spawnerEntity = SpawnPointsRedEntity[CurrentRedSpawn];
+			int spawnerClass  = SpawnPointsRedClass[CurrentRedSpawn];
 
-			if (g_iRocketCount < g_iSpawnersMaxRockets[iSpawnerClass])
+			if (RocketCount < SpawnersMaxRockets[spawnerClass])
 			{
-				CreateRocket(iSpawnerEntity, iSpawnerClass, view_as<int>(TFTeam_Red));
-				g_iCurrentRedSpawn = (g_iCurrentRedSpawn + 1) % g_iSpawnPointsRedCount;
+				CreateRocket(spawnerEntity, spawnerClass, view_as<int>(TFTeam_Red));
+				CurrentRedSpawn = (CurrentRedSpawn + 1) % SpawnPointsRedCount;
 			}
 		}
 		else
 		{
-			int iSpawnerEntity = g_iSpawnPointsBluEntity[g_iCurrentBluSpawn];
-			int iSpawnerClass  = g_iSpawnPointsBluClass[g_iCurrentBluSpawn];
+			int spawnerEntity = SpawnPointsBluEntity[CurrentBluSpawn];
+			int spawnerClass  = SpawnPointsBluClass[CurrentBluSpawn];
 
-			if (g_iRocketCount < g_iSpawnersMaxRockets[iSpawnerClass])
+			if (RocketCount < SpawnersMaxRockets[spawnerClass])
 			{
-				CreateRocket(iSpawnerEntity, iSpawnerClass, view_as<int>(TFTeam_Blue));
-				g_iCurrentBluSpawn = (g_iCurrentBluSpawn + 1) % g_iSpawnPointsBluCount;
+				CreateRocket(spawnerEntity, spawnerClass, view_as<int>(TFTeam_Blue));
+				CurrentBluSpawn = (CurrentBluSpawn + 1) % SpawnPointsBluCount;
 			}
 		}
 	}
 
 	// Rocket Think Logic
-	int iIndex = -1;
-	while ((iIndex = FindNextValidRocket(iIndex)) != -1)
+	int index = -1;
+	while ((index = FindNextValidRocket(index)) != -1)
 	{
-        // This timer handles legacy homing rockets and shared logic for all rockets.
-		switch (g_iRocketClassBehaviour[g_iRocketClass[iIndex]])
+		// This timer handles legacy homing rockets and shared logic for all rockets.
+		switch (RocketClassBehaviour[RocketClass[index]])
 		{
 			case Behaviour_LegacyHoming:
 			{
-				RocketLegacyThink(iIndex);
+				RocketLegacyThink(index);
 			}
 		}
-        // Shared logic (sounds, delays) is called for all rockets from here.
-        SharedRocketThink(iIndex);
+		// Shared logic (sounds, delays) is called for all rockets from here.
+		SharedRocketThink(index);
 	}
 
 	return Plugin_Continue;

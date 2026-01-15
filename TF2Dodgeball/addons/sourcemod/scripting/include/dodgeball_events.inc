@@ -7,49 +7,52 @@
  * Handles all game events hooked by the plugin.
  */
 
+/** Called when a new round starts. Resets steal info and plays round start music. */
 public void OnRoundStart(Event hEvent, char[] strEventName, bool bDontBroadcast)
 {
-	if (g_bMusic[Music_RoundStart])
+	if (Music[Music_RoundStart])
 	{
-		EmitSoundToAll(g_strMusic[Music_RoundStart]);
+		EmitSoundToAll(MusicPath[Music_RoundStart]);
 	}
 
 	for (int iClient = 1; iClient <= MaxClients; iClient++)
 	{
-		g_eStealInfo[iClient].stoleRocket = false;
-		g_eStealInfo[iClient].rocketsStolen = 0;
+		StealInfo[iClient].stoleRocket = false;
+		StealInfo[iClient].rocketsStolen = 0;
 	}
 }
 
+/** Called when setup phase ends. Initializes spawn points and starts the game timer. */
 public void OnSetupFinished(Event hEvent, char[] strEventName, bool bDontBroadcast)
 {
 	if (!BothTeamsPlaying()) return;
 
 	PopulateSpawnPoints();
-	if (g_iLastDeadTeam == 0) g_iLastDeadTeam = GetURandomIntRange(view_as<int>(TFTeam_Red), view_as<int>(TFTeam_Blue));
-	if (!IsValidClient(g_iLastDeadClient)) g_iLastDeadClient = 0;
+	if (LastDeadTeam == 0) LastDeadTeam = GetURandomIntRange(view_as<int>(TFTeam_Red), view_as<int>(TFTeam_Blue));
+	if (!IsValidClient(LastDeadClient)) LastDeadClient = 0;
 	
-	g_hLogicTimer      = CreateTimer(FPS_LOGIC_INTERVAL, OnDodgeBallGameFrame, _, TIMER_REPEAT);
-	g_iPlayerCount     = CountAlivePlayers();
-	g_iRocketsFired    = 0;
-	g_iCurrentRedSpawn = 0;
-	g_iCurrentBluSpawn = 0;
-	g_fNextSpawnTime   = GetGameTime();
-	g_bRoundStarted    = true;
-	g_iRoundCount++;
+	LogicTimer      = CreateTimer(FPS_LOGIC_INTERVAL, OnDodgeBallGameFrame, _, TIMER_REPEAT);
+	PlayerCount     = CountAlivePlayers();
+	RocketsFired    = 0;
+	CurrentRedSpawn = 0;
+	CurrentBluSpawn = 0;
+	NextSpawnTime   = GetGameTime();
+	RoundStarted    = true;
+	RoundCount++;
 }
 
+/** Called when round ends. Stops timer, music, and destroys all rockets. */
 public void OnRoundEnd(Event hEvent, char[] strEventName, bool bDontBroadcast)
 {
-	if (g_hLogicTimer != null)
+	if (LogicTimer != null)
 	{
-		KillTimer(g_hLogicTimer);
-		g_hLogicTimer = null;
+		KillTimer(LogicTimer);
+		LogicTimer = null;
 	}
 
-	if (g_bMusicEnabled)
+	if (MusicEnabled)
 	{
-		if (g_bUseWebPlayer)
+		if (UseWebPlayer)
 		{
 			for (int iClient = 1; iClient <= MaxClients; iClient++)
 			{
@@ -57,16 +60,17 @@ public void OnRoundEnd(Event hEvent, char[] strEventName, bool bDontBroadcast)
 				ShowHiddenMOTDPanel(iClient, "MusicPlayerStop", "http://0.0.0.0/");
 			}
 		}
-		else if (g_bMusic[Music_Gameplay])
+		else if (Music[Music_Gameplay])
 		{
-			StopSoundToAll(SNDCHAN_MUSIC, g_strMusic[Music_Gameplay]);
+			StopSoundToAll(SNDCHAN_MUSIC, MusicPath[Music_Gameplay]);
 		}
 	}
 
 	DestroyRockets();
-	g_bRoundStarted = false;
+	RoundStarted = false;
 }
 
+/** Called when player spawns. Forces Pyro class for dodgeball. */
 public void OnPlayerSpawn(Event hEvent, char[] strEventName, bool bDontBroadcast)
 {
 	int iClient = GetClientOfUserId(hEvent.GetInt("userid"));
@@ -79,9 +83,10 @@ public void OnPlayerSpawn(Event hEvent, char[] strEventName, bool bDontBroadcast
 	TF2_RespawnPlayer(iClient);
 }
 
+/** Called when player dies. Updates game state and executes kill commands. */
 public void OnPlayerDeath(Event hEvent, char[] strEventName, bool bDontBroadcast)
 {
-	if (!g_bRoundStarted) return;
+	if (!RoundStarted) return;
 
 	SetRandomSeed(view_as<int>(GetGameTime()));
 
@@ -90,35 +95,36 @@ public void OnPlayerDeath(Event hEvent, char[] strEventName, bool bDontBroadcast
 
 	if (!IsValidClient(iVictim)) return;
 
-	g_eStealInfo[iVictim].stoleRocket = false;
-	g_eStealInfo[iVictim].rocketsStolen = 0;
+	StealInfo[iVictim].stoleRocket = false;
+	StealInfo[iVictim].rocketsStolen = 0;
 
-	g_iLastDeadClient = iVictim;
-	g_iLastDeadTeam = GetClientTeam(iVictim);
+	LastDeadClient = iVictim;
+	LastDeadTeam = GetClientTeam(iVictim);
 	
 	int iInflictor = hEvent.GetInt("inflictor_entindex");
 	int iIndex = FindRocketByEntity(iInflictor);
 
 	if (iIndex == -1) return;
 
-	int iClass = g_iRocketClass[iIndex];
-	int iTarget = EntRefToEntIndex(g_iRocketTarget[iIndex]);
-	float fSpeed = g_fRocketSpeed[iIndex];
-	float fMphSpeed = g_fRocketMphSpeed[iIndex];
-	int iDeflections = g_iRocketDeflections[iIndex];
+	int iClass = RocketClass[iIndex];
+	int iTarget = EntRefToEntIndex(RocketTarget[iIndex]);
+	float fSpeed = RocketSpeed[iIndex];
+	float fMphSpeed = RocketMphSpeed[iIndex];
+	int iDeflections = RocketDeflections[iIndex];
 
-	if ((g_iRocketFlags[iIndex] & RocketFlag_OnExplodeCmd) && !(g_iRocketFlags[iIndex] & RocketFlag_Exploded))
+	if ((RocketInstanceFlags[iIndex] & RocketFlag_OnExplodeCmd) && !(RocketInstanceFlags[iIndex] & RocketFlag_Exploded))
 	{
-		ExecuteCommands(g_hRocketClassCmdsOnExplode[iClass], iClass, iInflictor, iAttacker, iTarget, g_iLastDeadClient, fSpeed, iDeflections, fMphSpeed);
-		g_iRocketFlags[iIndex] |= RocketFlag_Exploded;
+		ExecuteCommands(RocketClassCmdsOnExplode[iClass], iClass, iInflictor, iAttacker, iTarget, LastDeadClient, fSpeed, iDeflections, fMphSpeed);
+		RocketInstanceFlags[iIndex] |= RocketFlag_Exploded;
 	}
 
-	if (TestFlags(g_iRocketFlags[iIndex], RocketFlag_OnKillCmd))
+	if (TestFlags(RocketInstanceFlags[iIndex], RocketFlag_OnKillCmd))
 	{
-		ExecuteCommands(g_hRocketClassCmdsOnKill[iClass], iClass, iInflictor, iAttacker, iTarget, g_iLastDeadClient, fSpeed, iDeflections, fMphSpeed);
+		ExecuteCommands(RocketClassCmdsOnKill[iClass], iClass, iInflictor, iAttacker, iTarget, LastDeadClient, fSpeed, iDeflections, fMphSpeed);
 	}
 }
 
+/** Called when player receives inventory. Removes non-flamethrower weapons. */
 public void OnPlayerInventory(Event hEvent, char[] strEventName, bool bDontBroadcast)
 {
 	int iClient = GetClientOfUserId(hEvent.GetInt("userid"));
@@ -131,15 +137,17 @@ public void OnPlayerInventory(Event hEvent, char[] strEventName, bool bDontBroad
 	}
 }
 
+/** Blocks primary attack when dodgeball is enabled. */
 public Action OnPlayerRunCmd(int iClient, int &iButtons, int &iImpulse, float fVelocity[3], float fAngles[3], int &iWeapon)
 {
-	if (g_bEnabled) iButtons &= ~IN_ATTACK;
+	if (Enabled) iButtons &= ~IN_ATTACK;
 	return Plugin_Continue;
 }
 
+/** Handles custom music for round start, win, and lose events. */
 public Action OnBroadcastAudio(Event hEvent, char[] strEventName, bool bDontBroadcast)
 {
-	if (!g_bMusicEnabled) return Plugin_Continue;
+	if (!MusicEnabled) return Plugin_Continue;
 
 	char strSound[PLATFORM_MAX_PATH];
 	hEvent.GetString("sound", strSound, sizeof(strSound));
@@ -147,10 +155,10 @@ public Action OnBroadcastAudio(Event hEvent, char[] strEventName, bool bDontBroa
 
 	if (StrEqual(strSound, "Announcer.AM_RoundStartRandom"))
 	{
-		if (!g_bUseWebPlayer)
+		if (!UseWebPlayer)
 		{
-			if (!g_bMusic[Music_Gameplay]) return Plugin_Continue;
-			EmitSoundToAll(g_strMusic[Music_Gameplay], SOUND_FROM_PLAYER, SNDCHAN_MUSIC);
+			if (!Music[Music_Gameplay]) return Plugin_Continue;
+			EmitSoundToAll(MusicPath[Music_Gameplay], SOUND_FROM_PLAYER, SNDCHAN_MUSIC);
 			return Plugin_Handled;
 		}
 		else
@@ -158,29 +166,29 @@ public Action OnBroadcastAudio(Event hEvent, char[] strEventName, bool bDontBroa
 			for (int iClient = 1; iClient <= MaxClients; iClient++)
 			{
 				if (!IsValidClientEx(iClient)) continue;
-				ShowHiddenMOTDPanel(iClient, "MusicPlayerStart", g_strWebPlayerUrl);
+				ShowHiddenMOTDPanel(iClient, "MusicPlayerStart", WebPlayerUrl);
 			}
 			return Plugin_Handled;
 		}
 	}
 	else if (StrEqual(strSound, "Game.YourTeamWon"))
 	{
-		if (!g_bMusic[Music_RoundWin]) return Plugin_Continue;
+		if (!Music[Music_RoundWin]) return Plugin_Continue;
 
 		for (int iClient = 1; iClient <= MaxClients; iClient++)
 		{
 			if (!(IsValidClientEx(iClient) && (iTeam == GetClientTeam(iClient)))) continue;
-			EmitSoundToClient(iClient, g_strMusic[Music_RoundWin]);
+			EmitSoundToClient(iClient, MusicPath[Music_RoundWin]);
 		}
 		return Plugin_Handled;
 	}
 	else if (StrEqual(strSound, "Game.YourTeamLost"))
 	{
-		if (!g_bMusic[Music_RoundLose]) return Plugin_Continue;
+		if (!Music[Music_RoundLose]) return Plugin_Continue;
 		for (int iClient = 1; iClient <= MaxClients; iClient++)
 		{
 			if (!(IsValidClientEx(iClient) && (iTeam == GetClientTeam(iClient)))) continue;
-			EmitSoundToClient(iClient, g_strMusic[Music_RoundLose]);
+			EmitSoundToClient(iClient, MusicPath[Music_RoundLose]);
 		}
 		return Plugin_Handled;
 	}
@@ -188,13 +196,14 @@ public Action OnBroadcastAudio(Event hEvent, char[] strEventName, bool bDontBroa
 	return Plugin_Continue;
 }
 
+/** Called when a projectile is deflected. Updates deflection count and drag state. */
 public void OnObjectDeflected(Event hEvent, char[] strEventName, bool bDontBroadcast)
 {
 	int iEntity = hEvent.GetInt("object_entindex");
 	int iIndex  = FindRocketByEntity(iEntity);
 	if (iIndex == -1) return;
 
-	g_iRocketEventDeflections[iIndex]++;
+	RocketEventDeflections[iIndex]++;
 
 	int iLauncher = GetEntPropEnt(iEntity, Prop_Send, "m_hLauncher");
 	if (iLauncher != -1)
@@ -202,18 +211,18 @@ public void OnObjectDeflected(Event hEvent, char[] strEventName, bool bDontBroad
 		SetEntPropEnt(iEntity, Prop_Send, "m_hOriginalLauncher", iLauncher);
 	}
 
-	if (g_iRocketState[iIndex] & RocketState_Delayed)
+	if (RocketInstanceState[iIndex] & RocketState_Delayed)
 	{
-		Internal_SetRocketState(iIndex, (g_iRocketState[iIndex] & ~RocketState_Delayed));
-		g_fRocketSpeed[iIndex] = CalculateRocketSpeed(g_iRocketClass[iIndex], CalculateModifier(g_iRocketClass[iIndex], g_iRocketDeflections[iIndex]));
+		Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] & ~RocketState_Delayed));
+		RocketSpeed[iIndex] = CalculateRocketSpeed(RocketClass[iIndex], CalculateModifier(RocketClass[iIndex], RocketDeflections[iIndex]));
 	}
 
-	if (g_iRocketFlags[iIndex] & RocketFlag_ResetBounces)
+	if (RocketInstanceFlags[iIndex] & RocketFlag_ResetBounces)
 	{
-		g_iRocketBounces[iIndex] = 0;
+		RocketBounces[iIndex] = 0;
 	}
 
-	if (g_iRocketFlags[iIndex] & RocketFlag_IsNeutral)
+	if (RocketInstanceFlags[iIndex] & RocketFlag_IsNeutral)
 	{
 		SetEntProp(iEntity, Prop_Send, "m_iTeamNum", 1, 1);
 	}
@@ -226,34 +235,47 @@ public void OnObjectDeflected(Event hEvent, char[] strEventName, bool bDontBroad
  */
 public void OnGameFrame()
 {
-	if (!g_bEnabled || !g_bRoundStarted) return;
+	if (!Enabled || !RoundStarted) return;
 
 	int iIndex = -1;
 	while ((iIndex = FindNextValidRocket(iIndex)) != -1)
 	{
-		if (g_iRocketClassBehaviour[g_iRocketClass[iIndex]] == Behaviour_Homing)
+		if (RocketClassBehaviour[RocketClass[iIndex]] == Behaviour_Homing)
 		{
 			HomingRocketThink(iIndex);
 		}
 	}
 }
 
+/**
+ * Cleans up client state when they disconnect.
+ *
+ * @param iClient   Client index that disconnected.
+ */
 public void OnClientDisconnect(int iClient)
 {
-	g_eStealInfo[iClient].stoleRocket = false;
-	g_eStealInfo[iClient].rocketsStolen = 0;
+	StealInfo[iClient].stoleRocket = false;
+	StealInfo[iClient].rocketsStolen = 0;
 
-	if (iClient == g_iLastDeadClient)
+	if (iClient == LastDeadClient)
 	{
-		g_iLastDeadClient = 0;
+		LastDeadClient = 0;
 	}
 
-	if (iClient == g_iLastStealer)
+	if (iClient == LastStealer)
 	{
-		g_iLastStealer = 0;
+		LastStealer = 0;
 	}
 }
 
+/**
+ * SDKHook callback for rocket collision detection.
+ * Handles initial checks before bouncing and player collision.
+ *
+ * @param iEntity   The rocket entity.
+ * @param iOther    The entity being touched.
+ * @return          Plugin_Handled to block touch, Plugin_Continue otherwise.
+ */
 public Action OnStartTouch(int iEntity, int iOther)
 {
 	int iIndex = FindRocketByEntity(iEntity);
@@ -261,7 +283,7 @@ public Action OnStartTouch(int iEntity, int iOther)
 	if (iIndex == -1) return Plugin_Continue;
 	if (iOther > 0 && iOther <= MaxClients)
 	{
-		if (g_iRocketDeflections[iIndex] == 0)
+		if (RocketDeflections[iIndex] == 0)
 		{
 			SetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity", 0);
 			SetEntPropEnt(iEntity, Prop_Send, "m_hOriginalLauncher", -1);
@@ -270,10 +292,10 @@ public Action OnStartTouch(int iEntity, int iOther)
 		return Plugin_Continue;
 	}
 
-	int iClass = g_iRocketClass[iIndex];
-	if (g_iRocketBounces[iIndex] >= g_iRocketClassMaxBounces[iClass])
+	int iClass = RocketClass[iIndex];
+	if (RocketBounces[iIndex] >= RocketClassMaxBounces[iClass])
 	{
-		if (g_iRocketDeflections[iIndex] == 0)
+		if (RocketDeflections[iIndex] == 0)
 		{
 			SetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity", 0);
 			SetEntPropEnt(iEntity, Prop_Send, "m_hOriginalLauncher", -1);
@@ -296,7 +318,7 @@ public Action OnTouch(int iEntity, int iOther)
 		return Plugin_Continue;
 	}
 
-	int iClass = g_iRocketClass[iIndex];
+	int iClass = RocketClass[iIndex];
 
 	float vOrigin[3];
 	GetEntPropVector(iEntity, Prop_Data, "m_vecOrigin", vOrigin);
@@ -326,31 +348,31 @@ public Action OnTouch(int iEntity, int iOther)
 	float vBounceVec[3];
 	SubtractVectors(vVelocity, vNormal, vBounceVec);
 	// --- New Bounce Mechanic ---
-    // Check if the owner is looking down to apply extra bounce force.
-    int iOwner = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
-    if (IsValidClient(iOwner, true))
-    {
-        float fOwnerAngles[3];
-        GetClientEyeAngles(iOwner, fOwnerAngles);
+	// Check if the owner is looking down to apply extra bounce force.
+	int iOwner = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
+	if (IsValidClient(iOwner, true))
+	{
+		float fOwnerAngles[3];
+		GetClientEyeAngles(iOwner, fOwnerAngles);
 
-        // Check if player's pitch is looking down enough
-        if (fOwnerAngles[0] >= g_hCvarBounceForceAngle.FloatValue)
-        {
-            // Apply the base bounce scale and the extra force multiplier
-            ScaleVector(vBounceVec, g_fRocketClassBounceScale[iClass] * g_hCvarBounceForceScale.FloatValue);
-        }
-        else
-        {
-             // Apply only the base bounce scale
-            ScaleVector(vBounceVec, g_fRocketClassBounceScale[iClass]);
-        }
-    }
-    else
-    {
-        // Apply only the base bounce scale if there's no valid owner
-        ScaleVector(vBounceVec, g_fRocketClassBounceScale[iClass]);
-    }
-    // --- End New Bounce Mechanic ---
+		// Check if player's pitch is looking down enough
+		if (fOwnerAngles[0] >= CvarBounceForceAngle.FloatValue)
+		{
+			// Apply the base bounce scale and the extra force multiplier
+			ScaleVector(vBounceVec, RocketClassBounceScale[iClass] * CvarBounceForceScale.FloatValue);
+		}
+		else
+		{
+			// Apply only the base bounce scale
+			ScaleVector(vBounceVec, RocketClassBounceScale[iClass]);
+		}
+	}
+	else
+	{
+		// Apply only the base bounce scale if there's no valid owner
+		ScaleVector(vBounceVec, RocketClassBounceScale[iClass]);
+	}
+	// --- End New Bounce Mechanic ---
 
 
 	float vNewAngles[3];
@@ -373,21 +395,21 @@ public Action OnTouch(int iEntity, int iOther)
 	}
 
 	TeleportEntity(iEntity, NULL_VECTOR, vNewAngles, vBounceVec);
-	g_iRocketBounces[iIndex]++;
-	if (g_iRocketFlags[iIndex] & RocketFlag_NoBounceDrags)
+	RocketBounces[iIndex]++;
+	if (RocketInstanceFlags[iIndex] & RocketFlag_NoBounceDrags)
 	{
-		Internal_SetRocketState(iIndex, (g_iRocketState[iIndex] & ~RocketState_CanDrag));
+		Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] & ~RocketState_CanDrag));
 	}
 
-	if ((g_iRocketState[iIndex] & RocketState_Delayed) || (g_iRocketFlags[iIndex] & RocketFlag_KeepDirection))
+	if ((RocketInstanceState[iIndex] & RocketState_Delayed) || (RocketInstanceFlags[iIndex] & RocketFlag_KeepDirection))
 	{
-		Internal_SetRocketState(iIndex, (g_iRocketState[iIndex] | RocketState_Bouncing));
+		Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] | RocketState_Bouncing));
 	}
 	else
 	{
 		float fDirection[3];
 		GetAngleVectors(vNewAngles,fDirection,NULL_VECTOR,NULL_VECTOR);
-		CopyVectors(fDirection, g_fRocketDirection[iIndex]);
+		CopyVectors(fDirection, RocketDirection[iIndex]);
 	}
 
 	Forward_OnRocketBounce(iIndex, iEntity);
@@ -399,7 +421,7 @@ public Action OnTouch(int iEntity, int iOther)
 public Action OnTFExplosion(const char[] strTEName, const int[] iClients, int iNumClients, float fDelay)
 {
 	static int bIgnoreHook;
-	if (!g_bEnabled)
+	if (!Enabled)
 	{
 		return Plugin_Continue;
 	}

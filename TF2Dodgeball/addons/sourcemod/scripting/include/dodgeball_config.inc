@@ -7,15 +7,16 @@
  * Handles parsing of configuration files and server commands.
  */
 
+/** Clears all rocket class definitions and frees associated command DataPacks. */
 void DestroyRocketClasses()
 {
-	for (int iIndex = 0; iIndex < g_iRocketClassCount; iIndex++)
+	for (int iIndex = 0; iIndex < RocketClassCount; iIndex++)
 	{
-		DataPack hCmdOnSpawn    = g_hRocketClassCmdsOnSpawn[iIndex];
-		DataPack hCmdOnKill     = g_hRocketClassCmdsOnKill[iIndex];
-		DataPack hCmdOnExplode  = g_hRocketClassCmdsOnExplode[iIndex];
-		DataPack hCmdOnDeflect  = g_hRocketClassCmdsOnDeflect[iIndex];
-		DataPack hCmdOnNoTarget = g_hRocketClassCmdsOnNoTarget[iIndex];
+		DataPack hCmdOnSpawn    = RocketClassCmdsOnSpawn[iIndex];
+		DataPack hCmdOnKill     = RocketClassCmdsOnKill[iIndex];
+		DataPack hCmdOnExplode  = RocketClassCmdsOnExplode[iIndex];
+		DataPack hCmdOnDeflect  = RocketClassCmdsOnDeflect[iIndex];
+		DataPack hCmdOnNoTarget = RocketClassCmdsOnNoTarget[iIndex];
 
 		if (hCmdOnSpawn   != null)  delete hCmdOnSpawn;
 		if (hCmdOnKill    != null)  delete hCmdOnKill;
@@ -23,34 +24,41 @@ void DestroyRocketClasses()
 		if (hCmdOnDeflect != null)  delete hCmdOnDeflect;
 		if (hCmdOnNoTarget != null) delete hCmdOnNoTarget;
 
-		g_hRocketClassCmdsOnSpawn[iIndex]    = null;
-		g_hRocketClassCmdsOnKill[iIndex]     = null;
-		g_hRocketClassCmdsOnExplode[iIndex]  = null;
-		g_hRocketClassCmdsOnDeflect[iIndex]  = null;
-		g_hRocketClassCmdsOnNoTarget[iIndex] = null;
+		RocketClassCmdsOnSpawn[iIndex]    = null;
+		RocketClassCmdsOnKill[iIndex]     = null;
+		RocketClassCmdsOnExplode[iIndex]  = null;
+		RocketClassCmdsOnDeflect[iIndex]  = null;
+		RocketClassCmdsOnNoTarget[iIndex] = null;
 	}
-	g_iRocketClassCount = 0;
+	RocketClassCount = 0;
 }
 
+/** Clears all spawner class definitions and spawn point data. */
 void DestroySpawners()
 {
-	for (int iIndex = 0; iIndex < g_iSpawnersCount; iIndex++)
+	for (int iIndex = 0; iIndex < SpawnersCount; iIndex++)
 	{
-		delete g_hSpawnersChancesTable[iIndex];
+		delete SpawnersChancesTable[iIndex];
 	}
 
-	g_iSpawnersCount  = 0;
-	g_iSpawnPointsRedCount = 0;
-	g_iSpawnPointsBluCount = 0;
-	g_iDefaultRedSpawner = -1;
-	g_iDefaultBluSpawner = -1;
-	g_hSpawnersTrie.Clear();
+	SpawnersCount  = 0;
+	SpawnPointsRedCount = 0;
+	SpawnPointsBluCount = 0;
+	DefaultRedSpawner = -1;
+	DefaultBluSpawner = -1;
+	SpawnersTrie.Clear();
 }
 
+/**
+ * Scans the map for info_target entities and populates spawn point arrays.
+ * Looks for entities named "rocket_spawn_red", "tf_dodgeball_red",
+ * "rocket_spawn_blu", or "tf_dodgeball_blu".
+ * Calls SetFailState if no spawn points are found.
+ */
 void PopulateSpawnPoints()
 {
-	g_iSpawnPointsRedCount = 0;
-	g_iSpawnPointsBluCount = 0;
+	SpawnPointsRedCount = 0;
+	SpawnPointsBluCount = 0;
 	int iEntity = -1;
 	while ((iEntity = FindEntityByClassname(iEntity, "info_target")) != -1)
 	{
@@ -58,51 +66,65 @@ void PopulateSpawnPoints()
 		if ((StrContains(strName, "rocket_spawn_red") != -1) || (StrContains(strName, "tf_dodgeball_red") != -1))
 		{
 			int iIndex = FindSpawnerByName(strName);
-			if (iIndex == -1) iIndex = g_iDefaultRedSpawner;
-			g_iSpawnPointsRedClass [g_iSpawnPointsRedCount] = iIndex;
-			g_iSpawnPointsRedEntity[g_iSpawnPointsRedCount] = iEntity;
-			g_iSpawnPointsRedCount++;
+			if (iIndex == -1) iIndex = DefaultRedSpawner;
+			SpawnPointsRedClass [SpawnPointsRedCount] = iIndex;
+			SpawnPointsRedEntity[SpawnPointsRedCount] = iEntity;
+			SpawnPointsRedCount++;
 		}
 
 		if ((StrContains(strName, "rocket_spawn_blu") != -1) || (StrContains(strName, "tf_dodgeball_blu") != -1))
 		{
 			int iIndex = FindSpawnerByName(strName);
-			if (iIndex == -1) iIndex = g_iDefaultBluSpawner;
+			if (iIndex == -1) iIndex = DefaultBluSpawner;
 
-			g_iSpawnPointsBluClass [g_iSpawnPointsBluCount] = iIndex;
-			g_iSpawnPointsBluEntity[g_iSpawnPointsBluCount] = iEntity;
-			g_iSpawnPointsBluCount++;
+			SpawnPointsBluClass [SpawnPointsBluCount] = iIndex;
+			SpawnPointsBluEntity[SpawnPointsBluCount] = iEntity;
+			SpawnPointsBluCount++;
 		}
 	}
 
 	// New code block starts here
-	if (g_iSpawnPointsRedCount == 0 && g_iSpawnPointsBluCount == 0)
+	if (SpawnPointsRedCount == 0 && SpawnPointsBluCount == 0)
 	{
 		SetFailState("No 'info_target' entities found on this map.");
 		return;
 	}
 	// New code block ends here
 
-	if (g_iSpawnPointsRedCount == 0) SetFailState("No RED spawn points found on this map.");
-	if (g_iSpawnPointsBluCount == 0) SetFailState("No BLU spawn points found on this map.");
+	if (SpawnPointsRedCount == 0) SetFailState("No RED spawn points found on this map.");
+	if (SpawnPointsBluCount == 0) SetFailState("No BLU spawn points found on this map.");
 }
 
+/**
+ * Finds a spawner class index by name using the spawners trie.
+ *
+ * @param strName   The spawner name to search for.
+ * @return          The spawner class index, or -1 if not found.
+ */
 int FindSpawnerByName(char strName[32])
 {
 	int iIndex = -1;
-	g_hSpawnersTrie.GetValue(strName, iIndex);
+	SpawnersTrie.GetValue(strName, iIndex);
 	return iIndex;
 }
 
+/** Registers server commands for explosion and shockwave effects. */
 void RegisterCommands()
 {
 	RegServerCmd("tf_dodgeball_explosion", CmdExplosion);
 	RegServerCmd("tf_dodgeball_shockwave", CmdShockwave);
 }
 
+/**
+ * Server command: Creates nuke particle effects at a client's position.
+ * Usage: tf_dodgeball_explosion <client>
+ *
+ * @param iArgs     Number of command arguments.
+ * @return          Plugin_Handled after processing.
+ */
 public Action CmdExplosion(int iArgs)
 {
-	if (!g_bEnabled)
+	if (!Enabled)
 	{
 		CPrintToServer("%t", "Command_Disabled");
 		return Plugin_Handled;
@@ -121,7 +143,8 @@ public Action CmdExplosion(int iArgs)
 
 	if (!IsValidEntity(iClient)) return Plugin_Handled;
 
-	static float fPosition[3]; GetClientAbsOrigin(iClient, fPosition);
+	float fPosition[3];
+	GetClientAbsOrigin(iClient, fPosition);
 	switch (GetURandomIntRange(0, 4))
 	{
 		case 0: PlayParticle(fPosition, PARTICLE_NUKE_1_ANGLES, PARTICLE_NUKE_1);
@@ -135,9 +158,16 @@ public Action CmdExplosion(int iArgs)
 	return Plugin_Handled;
 }
 
+/**
+ * Server command: Creates a shockwave that damages and pushes players.
+ * Usage: tf_dodgeball_shockwave <client> <damage> <push_strength> <radius> <falloff_radius>
+ *
+ * @param iArgs     Number of command arguments.
+ * @return          Plugin_Handled after processing.
+ */
 public Action CmdShockwave(int iArgs)
 {
-	if (!g_bEnabled)
+	if (!Enabled)
 	{
 		CPrintToServer("%t", "Command_Disabled");
 		return Plugin_Handled;
@@ -149,8 +179,11 @@ public Action CmdShockwave(int iArgs)
 		return Plugin_Handled;
 	}
 
-	static char strBuffer[8];
-	int iClient, iTeam; static float fPosition[3]; int iDamage; float fPushStrength, fRadius, fFalloffRadius;
+	char strBuffer[8];
+	int iClient, iTeam;
+	float fPosition[3];
+	int iDamage;
+	float fPushStrength, fRadius, fFalloffRadius;
 	
 	GetCmdArg(1, strBuffer, sizeof(strBuffer)); iClient        = StringToInt(strBuffer);
 	GetCmdArg(2, strBuffer, sizeof(strBuffer)); iDamage        = StringToInt(strBuffer);
@@ -167,12 +200,14 @@ public Action CmdShockwave(int iArgs)
 	{
 		if (!(IsValidClientEx(iClient, true) && (GetClientTeam(iClient) == iTeam))) continue;
 		
-		static float fPlayerPosition[3]; GetClientEyePosition(iClient, fPlayerPosition);
+		float fPlayerPosition[3];
+		GetClientEyePosition(iClient, fPlayerPosition);
 		float fDistanceToShockwave = GetVectorDistance(fPosition, fPlayerPosition);
 
 		if (!(fDistanceToShockwave < fRadius)) continue;
 
-		static float fImpulse[3], fFinalPush;
+		float fImpulse[3];
+		float fFinalPush;
 		int iFinalDamage;
 		fImpulse[0] = fPlayerPosition[0] - fPosition[0];
 		fImpulse[1] = fPlayerPosition[1] - fPosition[1];
@@ -201,6 +236,34 @@ public Action CmdShockwave(int iArgs)
 	return Plugin_Handled;
 }
 
+/**
+ * Executes stored commands from a DataPack, replacing placeholders with actual values.
+ * Used for on-spawn, on-deflect, on-kill, on-explode, and on-no-target commands.
+ *
+ * Supported placeholders:
+ *   @name        - Rocket class long name
+ *   @rocket      - Rocket entity index
+ *   @owner       - Owner client index
+ *   @target      - Target client index
+ *   @dead        - Last dead client index
+ *   @deflections - Number of deflections
+ *   @speed       - Current speed (Hammer units/s)
+ *   @mphspeed    - Current speed (MPH, rounded)
+ *   @capmphspeed - Capped MPH speed
+ *   @nocapspeed  - Uncapped speed
+ *   @2dspeed     - Speed with 2 decimal places
+ *   @2dnocapspeed - Uncapped speed with 2 decimal places
+ *
+ * @param hDataPack         DataPack containing commands to execute.
+ * @param iClass            Rocket class index.
+ * @param iRocket           Rocket entity index.
+ * @param iOwner            Owner client index.
+ * @param iTarget           Target client index.
+ * @param iLastDead         Last dead client index.
+ * @param fSpeed            Current rocket speed (Hammer units/s).
+ * @param iNumDeflections   Number of deflections.
+ * @param fMphSpeed         Current rocket speed (MPH).
+ */
 void ExecuteCommands(DataPack hDataPack, int iClass, int iRocket, int iOwner, int iTarget, int iLastDead, float fSpeed, int iNumDeflections, float fMphSpeed)
 {
 	hDataPack.Reset(false);
@@ -211,7 +274,7 @@ void ExecuteCommands(DataPack hDataPack, int iClass, int iRocket, int iOwner, in
 		char strCmd[256], strBuffer[32];
 
 		hDataPack.ReadString(strCmd, sizeof(strCmd));
-		ReplaceString(strCmd, sizeof(strCmd), "@name", g_strRocketClassLongName[iClass]);
+		ReplaceString(strCmd, sizeof(strCmd), "@name", RocketClassLongName[iClass]);
 		FormatEx(strBuffer, sizeof(strBuffer), "%i", iRocket);                           ReplaceString(strCmd, sizeof(strCmd), "@rocket", strBuffer);
 		FormatEx(strBuffer, sizeof(strBuffer), "%i", iOwner);                            ReplaceString(strCmd, sizeof(strCmd), "@owner", strBuffer);
 		FormatEx(strBuffer, sizeof(strBuffer), "%i", iTarget);                           ReplaceString(strCmd, sizeof(strCmd), "@target", strBuffer);
@@ -219,15 +282,19 @@ void ExecuteCommands(DataPack hDataPack, int iClass, int iRocket, int iOwner, in
 		FormatEx(strBuffer, sizeof(strBuffer), "%i", iNumDeflections);                   ReplaceString(strCmd, sizeof(strCmd), "@deflections", strBuffer);
 		FormatEx(strBuffer, sizeof(strBuffer), "%f", fSpeed);                            ReplaceString(strCmd, sizeof(strCmd), "@speed", strBuffer);
 		FormatEx(strBuffer, sizeof(strBuffer), "%i", RoundToNearest(fMphSpeed));         ReplaceString(strCmd, sizeof(strCmd), "@mphspeed", strBuffer);
-		FormatEx(strBuffer, sizeof(strBuffer), "%i", RoundToNearest(fSpeed * 0.042614)); ReplaceString(strCmd, sizeof(strCmd), "@capmphspeed", strBuffer);
-		FormatEx(strBuffer, sizeof(strBuffer), "%f", fMphSpeed / 0.042614);              ReplaceString(strCmd, sizeof(strCmd), "@nocapspeed", strBuffer);
+		FormatEx(strBuffer, sizeof(strBuffer), "%i", RoundToNearest(fSpeed * HAMMER_TO_MPH)); ReplaceString(strCmd, sizeof(strCmd), "@capmphspeed", strBuffer);
+		FormatEx(strBuffer, sizeof(strBuffer), "%f", fMphSpeed / HAMMER_TO_MPH);              ReplaceString(strCmd, sizeof(strCmd), "@nocapspeed", strBuffer);
 		FormatEx(strBuffer, sizeof(strBuffer), "%.2f", fSpeed);                          ReplaceString(strCmd, sizeof(strCmd), "@2dspeed", strBuffer);
-		FormatEx(strBuffer, sizeof(strBuffer), "%.2f", fMphSpeed / 0.042614);            ReplaceString(strCmd, sizeof(strCmd), "@2dnocapspeed", strBuffer);
+		FormatEx(strBuffer, sizeof(strBuffer), "%.2f", fMphSpeed / HAMMER_TO_MPH);            ReplaceString(strCmd, sizeof(strCmd), "@2dnocapspeed", strBuffer);
 
 		ServerCommand(strCmd);
 	}
 }
 
+/**
+ * Parses a dodgeball configuration file (KeyValues format).
+ * Loads general settings, rocket classes, and spawner classes.
+ */
 void ParseConfigurations(char[] strConfigFile = "general.cfg")
 {
 	char strPath[PLATFORM_MAX_PATH];
@@ -255,19 +322,21 @@ void ParseConfigurations(char[] strConfigFile = "general.cfg")
 	Forward_OnRocketsConfigExecuted(strConfigFile);
 }
 
+/** Parses the "general" section of the config (music settings). */
 void ParseGeneral(KeyValues kvConfig)
 {
-	g_bMusicEnabled = view_as<bool>(kvConfig.GetNum("music", 0));
-	if (!g_bMusicEnabled) return;
+	MusicEnabled = view_as<bool>(kvConfig.GetNum("music", 0));
+	if (!MusicEnabled) return;
 
-	g_bUseWebPlayer = view_as<bool>(kvConfig.GetNum("use web player", 0));
-	kvConfig.GetString("web player url", g_strWebPlayerUrl, sizeof(g_strWebPlayerUrl));
-	g_bMusic[Music_RoundStart] = kvConfig.GetString("round start",      g_strMusic[Music_RoundStart], PLATFORM_MAX_PATH) && g_strMusic[Music_RoundStart][0];
-	g_bMusic[Music_RoundWin]   = kvConfig.GetString("round end (win)",  g_strMusic[Music_RoundWin],   PLATFORM_MAX_PATH) && g_strMusic[Music_RoundWin][0];
-	g_bMusic[Music_RoundLose]  = kvConfig.GetString("round end (lose)", g_strMusic[Music_RoundLose],  PLATFORM_MAX_PATH) && g_strMusic[Music_RoundLose][0];
-	g_bMusic[Music_Gameplay]   = kvConfig.GetString("gameplay",         g_strMusic[Music_Gameplay],   PLATFORM_MAX_PATH) && g_strMusic[Music_Gameplay][0];
+	UseWebPlayer = view_as<bool>(kvConfig.GetNum("use web player", 0));
+	kvConfig.GetString("web player url", WebPlayerUrl, sizeof(WebPlayerUrl));
+	Music[Music_RoundStart] = kvConfig.GetString("round start",      MusicPath[Music_RoundStart], PLATFORM_MAX_PATH) && MusicPath[Music_RoundStart][0];
+	Music[Music_RoundWin]   = kvConfig.GetString("round end (win)",  MusicPath[Music_RoundWin],   PLATFORM_MAX_PATH) && MusicPath[Music_RoundWin][0];
+	Music[Music_RoundLose]  = kvConfig.GetString("round end (lose)", MusicPath[Music_RoundLose],  PLATFORM_MAX_PATH) && MusicPath[Music_RoundLose][0];
+	Music[Music_Gameplay]   = kvConfig.GetString("gameplay",         MusicPath[Music_Gameplay],   PLATFORM_MAX_PATH) && MusicPath[Music_Gameplay][0];
 }
 
+/** Parses the "classes" section of the config (rocket class definitions). */
 void ParseClasses(KeyValues kvConfig)
 {
 	char strName[64];
@@ -275,16 +344,16 @@ void ParseClasses(KeyValues kvConfig)
 	kvConfig.GotoFirstSubKey();
 	do
 	{
-		int iIndex = g_iRocketClassCount;
+		int iIndex = RocketClassCount;
 		RocketFlags iFlags;
 
-		kvConfig.GetSectionName(strName, sizeof(strName));        strcopy(g_strRocketClassName[iIndex], 16, strName);
-		kvConfig.GetString("name", strBuffer, sizeof(strBuffer)); strcopy(g_strRocketClassLongName[iIndex], 32, strBuffer);
+		kvConfig.GetSectionName(strName, sizeof(strName));        strcopy(RocketClassName[iIndex], 16, strName);
+		kvConfig.GetString("name", strBuffer, sizeof(strBuffer)); strcopy(RocketClassLongName[iIndex], 32, strBuffer);
 		
 		if (kvConfig.GetString("model", strBuffer, sizeof(strBuffer)))
 		{
-			strcopy(g_strRocketClassModel[iIndex], PLATFORM_MAX_PATH, strBuffer);
-			if (g_strRocketClassModel[iIndex][0])
+			strcopy(RocketClassModel[iIndex], PLATFORM_MAX_PATH, strBuffer);
+			if (RocketClassModel[iIndex][0])
 			{
 				iFlags |= RocketFlag_CustomModel;
 				if (kvConfig.GetNum("is animated", 0)) iFlags |= RocketFlag_IsAnimated;
@@ -292,14 +361,14 @@ void ParseClasses(KeyValues kvConfig)
 		}
 
 		kvConfig.GetString("behaviour", strBuffer, sizeof(strBuffer), "homing");
-		if (StrEqual(strBuffer, "homing")) g_iRocketClassBehaviour[iIndex] = Behaviour_Homing;
-		else if (StrEqual(strBuffer, "legacy homing")) g_iRocketClassBehaviour[iIndex] = Behaviour_LegacyHoming;
-		else g_iRocketClassBehaviour[iIndex] = Behaviour_Unknown;
+		if (StrEqual(strBuffer, "homing")) RocketClassBehaviour[iIndex] = Behaviour_Homing;
+		else if (StrEqual(strBuffer, "legacy homing")) RocketClassBehaviour[iIndex] = Behaviour_LegacyHoming;
+		else RocketClassBehaviour[iIndex] = Behaviour_Unknown;
 
 		if (kvConfig.GetNum("play spawn sound", 0) == 1)
 		{
 			iFlags |= RocketFlag_PlaySpawnSound;
-			if (kvConfig.GetString("spawn sound", g_strRocketClassSpawnSound[iIndex], PLATFORM_MAX_PATH) && g_strRocketClassSpawnSound[iIndex][0])
+			if (kvConfig.GetString("spawn sound", RocketClassSpawnSound[iIndex], PLATFORM_MAX_PATH) && RocketClassSpawnSound[iIndex][0])
 			{
 				iFlags |= RocketFlag_CustomSpawnSound;
 			}
@@ -308,8 +377,8 @@ void ParseClasses(KeyValues kvConfig)
 		if (kvConfig.GetNum("play beep sound", 0) == 1)
 		{
 			iFlags |= RocketFlag_PlayBeepSound;
-			g_fRocketClassBeepInterval[iIndex] = kvConfig.GetFloat("beep interval", 0.5);
-			if (kvConfig.GetString("beep sound", g_strRocketClassBeepSound[iIndex], PLATFORM_MAX_PATH) && g_strRocketClassBeepSound[iIndex][0])
+			RocketClassBeepInterval[iIndex] = kvConfig.GetFloat("beep interval", 0.5);
+			if (kvConfig.GetString("beep sound", RocketClassBeepSound[iIndex], PLATFORM_MAX_PATH) && RocketClassBeepSound[iIndex][0])
 			{
 				iFlags |= RocketFlag_CustomBeepSound;
 			}
@@ -318,7 +387,7 @@ void ParseClasses(KeyValues kvConfig)
 		if (kvConfig.GetNum("play alert sound", 0) == 1)
 		{
 			iFlags |= RocketFlag_PlayAlertSound;
-			if (kvConfig.GetString("alert sound", g_strRocketClassAlertSound[iIndex], PLATFORM_MAX_PATH) && g_strRocketClassAlertSound[iIndex][0])
+			if (kvConfig.GetString("alert sound", RocketClassAlertSound[iIndex], PLATFORM_MAX_PATH) && RocketClassAlertSound[iIndex][0])
 			{
 				iFlags |= RocketFlag_CustomAlertSound;
 			}
@@ -333,86 +402,94 @@ void ParseClasses(KeyValues kvConfig)
 		if (kvConfig.GetNum("can be stolen", 0) == 1)      iFlags |= RocketFlag_CanBeStolen;
 		if (kvConfig.GetNum("steal team check", 0) == 1)   iFlags |= RocketFlag_StealTeamCheck;
 
-		g_fRocketClassDamage[iIndex]            = kvConfig.GetFloat("damage");
-		g_fRocketClassDamageIncrement[iIndex]   = kvConfig.GetFloat("damage increment");
-		g_fRocketClassCritChance[iIndex]        = kvConfig.GetFloat("critical chance");
-		g_fRocketClassSpeed[iIndex]             = kvConfig.GetFloat("speed");
-		g_fRocketClassSpeedIncrement[iIndex]    = kvConfig.GetFloat("speed increment");
-		if ((g_fRocketClassSpeedLimit[iIndex] = kvConfig.GetFloat("speed limit")) != 0.0)
+		RocketClassDamage[iIndex]            = kvConfig.GetFloat("damage");
+		RocketClassDamageIncrement[iIndex]   = kvConfig.GetFloat("damage increment");
+		RocketClassCritChance[iIndex]        = kvConfig.GetFloat("critical chance");
+		RocketClassSpeed[iIndex]             = kvConfig.GetFloat("speed");
+		RocketClassSpeedIncrement[iIndex]    = kvConfig.GetFloat("speed increment");
+		if ((RocketClassSpeedLimit[iIndex] = kvConfig.GetFloat("speed limit")) != 0.0)
 		{
 			iFlags |= RocketFlag_IsSpeedLimited;
 		}
 
-		g_fRocketClassTurnRate[iIndex]          = kvConfig.GetFloat("turn rate");
-		g_fRocketClassTurnRateIncrement[iIndex] = kvConfig.GetFloat("turn rate increment");
-		if ((g_fRocketClassTurnRateLimit[iIndex] = kvConfig.GetFloat("turn rate limit")) != 0.0)
+		RocketClassTurnRate[iIndex]          = kvConfig.GetFloat("turn rate");
+		RocketClassTurnRateIncrement[iIndex] = kvConfig.GetFloat("turn rate increment");
+		if ((RocketClassTurnRateLimit[iIndex] = kvConfig.GetFloat("turn rate limit")) != 0.0)
 		{
 			iFlags |= RocketFlag_IsTRLimited;
 		}
 
-		g_fRocketClassElevationRate[iIndex]     = kvConfig.GetFloat("elevation rate");
-		g_fRocketClassElevationLimit[iIndex]    = kvConfig.GetFloat("elevation limit");
-		g_fRocketClassControlDelay[iIndex]      = kvConfig.GetFloat("control delay");
-		g_fRocketClassDragTimeMin[iIndex]       = kvConfig.GetFloat("drag time min");
-		g_fRocketClassDragTimeMax[iIndex]       = kvConfig.GetFloat("drag time max");
-		g_iRocketClassMaxBounces[iIndex]        = kvConfig.GetNum("max bounces");
-		g_fRocketClassBounceScale[iIndex]       = kvConfig.GetFloat("bounce scale", 1.0);
-		g_fRocketClassPlayerModifier[iIndex]    = kvConfig.GetFloat("no. players modifier");
-		g_fRocketClassRocketsModifier[iIndex]   = kvConfig.GetFloat("no. rockets modifier");
-		g_fRocketClassTargetWeight[iIndex]      = kvConfig.GetFloat("direction to target weight");
+		RocketClassElevationRate[iIndex]     = kvConfig.GetFloat("elevation rate");
+		RocketClassElevationLimit[iIndex]    = kvConfig.GetFloat("elevation limit");
+		RocketClassControlDelay[iIndex]      = kvConfig.GetFloat("control delay");
+		RocketClassDragTimeMin[iIndex]       = kvConfig.GetFloat("drag time min");
+		RocketClassDragTimeMax[iIndex]       = kvConfig.GetFloat("drag time max");
+		RocketClassMaxBounces[iIndex]        = kvConfig.GetNum("max bounces");
+		RocketClassBounceScale[iIndex]       = kvConfig.GetFloat("bounce scale", 1.0);
+		RocketClassPlayerModifier[iIndex]    = kvConfig.GetFloat("no. players modifier");
+		RocketClassRocketsModifier[iIndex]   = kvConfig.GetFloat("no. rockets modifier");
+		RocketClassTargetWeight[iIndex]      = kvConfig.GetFloat("direction to target weight");
 		
 		DataPack hCmds = null;
 		kvConfig.GetString("on spawn", strBuffer, sizeof(strBuffer));
-		if ((hCmds = ParseCommands(strBuffer)) != null) { iFlags |= RocketFlag_OnSpawnCmd; g_hRocketClassCmdsOnSpawn[iIndex] = hCmds; }
+		if ((hCmds = ParseCommands(strBuffer)) != null) { iFlags |= RocketFlag_OnSpawnCmd; RocketClassCmdsOnSpawn[iIndex] = hCmds; }
 		
 		kvConfig.GetString("on deflect", strBuffer, sizeof(strBuffer));
-		if ((hCmds = ParseCommands(strBuffer)) != null) { iFlags |= RocketFlag_OnDeflectCmd; g_hRocketClassCmdsOnDeflect[iIndex] = hCmds; }
+		if ((hCmds = ParseCommands(strBuffer)) != null) { iFlags |= RocketFlag_OnDeflectCmd; RocketClassCmdsOnDeflect[iIndex] = hCmds; }
 
 		kvConfig.GetString("on kill", strBuffer, sizeof(strBuffer));
-		if ((hCmds = ParseCommands(strBuffer)) != null) { iFlags |= RocketFlag_OnKillCmd; g_hRocketClassCmdsOnKill[iIndex] = hCmds; }
+		if ((hCmds = ParseCommands(strBuffer)) != null) { iFlags |= RocketFlag_OnKillCmd; RocketClassCmdsOnKill[iIndex] = hCmds; }
 
 		kvConfig.GetString("on explode", strBuffer, sizeof(strBuffer));
-		if ((hCmds = ParseCommands(strBuffer)) != null) { iFlags |= RocketFlag_OnExplodeCmd; g_hRocketClassCmdsOnExplode[iIndex] = hCmds; }
+		if ((hCmds = ParseCommands(strBuffer)) != null) { iFlags |= RocketFlag_OnExplodeCmd; RocketClassCmdsOnExplode[iIndex] = hCmds; }
 
 		kvConfig.GetString("on no target", strBuffer, sizeof(strBuffer));
-		if ((hCmds = ParseCommands(strBuffer)) != null) { iFlags |= RocketFlag_OnNoTargetCmd; g_hRocketClassCmdsOnNoTarget[iIndex] = hCmds; }
+		if ((hCmds = ParseCommands(strBuffer)) != null) { iFlags |= RocketFlag_OnNoTargetCmd; RocketClassCmdsOnNoTarget[iIndex] = hCmds; }
 
-		g_iRocketClassFlags[iIndex] = iFlags;
-		g_iRocketClassCount++;
+		RocketClassFlags[iIndex] = iFlags;
+		RocketClassCount++;
 	}
 	while (kvConfig.GotoNextKey());
 	kvConfig.GoBack();
 }
 
+/** Parses the "spawners" section of the config (spawner class definitions). */
 void ParseSpawners(KeyValues kvConfig)
 {
 	char strBuffer[256];
 	kvConfig.GotoFirstSubKey();
 	do
 	{
-		int iIndex = g_iSpawnersCount;
+		int iIndex = SpawnersCount;
 
-		kvConfig.GetSectionName(strBuffer, sizeof(strBuffer)); strcopy(g_strSpawnersName[iIndex], 32, strBuffer);
-		g_iSpawnersMaxRockets[iIndex] = kvConfig.GetNum("max rockets", 1);
-		g_fSpawnersInterval[iIndex]   = kvConfig.GetFloat("interval", 1.0);
+		kvConfig.GetSectionName(strBuffer, sizeof(strBuffer)); strcopy(SpawnersName[iIndex], 32, strBuffer);
+		SpawnersMaxRockets[iIndex] = kvConfig.GetNum("max rockets", 1);
+		SpawnersInterval[iIndex]   = kvConfig.GetFloat("interval", 1.0);
 
-		g_hSpawnersChancesTable[iIndex] = new ArrayList();
-		for (int iClassIndex = 0; iClassIndex < g_iRocketClassCount; iClassIndex++)
+		SpawnersChancesTable[iIndex] = new ArrayList();
+		for (int iClassIndex = 0; iClassIndex < RocketClassCount; iClassIndex++)
 		{
-			FormatEx(strBuffer, sizeof(strBuffer), "%s%%", g_strRocketClassName[iClassIndex]);
-			g_hSpawnersChancesTable[iIndex].Push(kvConfig.GetNum(strBuffer, 0));
+			FormatEx(strBuffer, sizeof(strBuffer), "%s%%", RocketClassName[iClassIndex]);
+			SpawnersChancesTable[iIndex].Push(kvConfig.GetNum(strBuffer, 0));
 		}
 
-		g_hSpawnersTrie.SetValue(g_strSpawnersName[iIndex], iIndex);
-		g_iSpawnersCount++;
+		SpawnersTrie.SetValue(SpawnersName[iIndex], iIndex);
+		SpawnersCount++;
 	}
 	while (kvConfig.GotoNextKey());
 
 	kvConfig.GoBack();
-	g_hSpawnersTrie.GetValue("red", g_iDefaultRedSpawner);
-	g_hSpawnersTrie.GetValue("blu", g_iDefaultBluSpawner);
+	SpawnersTrie.GetValue("red", DefaultRedSpawner);
+	SpawnersTrie.GetValue("blu", DefaultBluSpawner);
 }
 
+/**
+ * Parses a semicolon-separated command string into a DataPack.
+ * Each command between semicolons becomes a separate entry.
+ *
+ * @param strLine   The command string to parse (e.g., "sm_slay @target; sm_beacon @owner").
+ * @return          DataPack containing the commands, or null if empty.
+ */
 DataPack ParseCommands(char[] strLine)
 {
     TrimString(strLine);
