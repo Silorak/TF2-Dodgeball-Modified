@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set environment variables
+        run: echo SCRIPTS_PATH=$(pwd) >> $GITHUB_ENV
+
+      - name: Setup SourcePawn Compiler ${{ matrix.SM_VERSION }}
+        id: setup_sp
+        uses: rumblefrog/setup-sp@master
+        with:
+          version: "1.12.x"
+          version-file: ./TF2Dodgeball/addons/sourcemod/scripting/dodgeball.sp
+
+      - name: Compile plugins
+        run: |
+          mkdir ../plugins
+          spcomp -w234 -O2 -v2 -i"include" -o"../plugins/dodgeball.smx" dodgeball.sp
+          echo "===OUT FILES==="
+          ls ../plugins
+          echo "===VERSION==="
+          echo ${{ steps.setup_sp.outputs.plugin-version }}
+        working-directory: ${{ env.SCRIPTS_PATH }}/TF2Dodgeball/addons/sourcemod/scripting
+
+      - name: Install zip
+        uses: montudor/action-zip@v1
+
+      - name: Zip output
+        run: |
+          zip -qq -y -r ${{ github.event.repository.name }}-${{ steps.setup_sp.outputs.plugin-version }}.zip configs plugins scripting extensions gamedata translations data
+        working-directory: ${{ env.SCRIPTS_PATH }}/TF2Dodgeball/addons/sourcemod/scripting
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref_name }}
+          artifacts: "${{ github.event.repository.name }}-${{ steps.setup_sp.outputs.plugin-version }}.zip"
+          body: ${{ steps.changelog.outputs.changes }}
+          draft: false
+          allowUpdates: true
+          prerelease: false
+          replacesArtifacts: true
