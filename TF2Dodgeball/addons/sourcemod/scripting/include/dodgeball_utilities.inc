@@ -161,7 +161,8 @@ stock int GetAnalogueTeam(int iTeam)
 }
 
 /**
- * Selects a random target for a homing rocket.
+ * Selects a target for a homing rocket based on team and optional directional weighting.
+ * Falls back to random selection if rocket entity is invalid.
  */
 stock int SelectTarget(int iTeam, int iRocket = -1)
 {
@@ -170,20 +171,26 @@ stock int SelectTarget(int iTeam, int iRocket = -1)
 	float fRocketPosition[3];
 	float fRocketDirection[3];
 	float fWeight;
-	bool bUseRocket;
+	bool bUseRocket = false;
 	int iOwner = -1;
 	
 	if (iRocket != -1)
 	{
-		int iClass = RocketClass[iRocket];
 		int iEntity = EntRefToEntIndex(RocketEntity[iRocket]);
-		iOwner = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
 		
-		GetEntPropVector(iEntity, Prop_Send, "m_vecOrigin", fRocketPosition);
-		CopyVectors(RocketDirection[iRocket], fRocketDirection);
-		fWeight = RocketClassTargetWeight[iClass];
-		
-		bUseRocket = true;
+		// Validate entity before any property access to prevent crashes
+		if (iEntity != -1 && IsValidEntity(iEntity))
+		{
+			int iClass = RocketClass[iRocket];
+			iOwner = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
+			
+			GetEntPropVector(iEntity, Prop_Send, "m_vecOrigin", fRocketPosition);
+			CopyVectors(RocketDirection[iRocket], fRocketDirection);
+			fWeight = RocketClassTargetWeight[iClass];
+			
+			bUseRocket = true;
+		}
+		// If entity is invalid, bUseRocket stays false and we fall back to random selection
 	}
 	
 	for (int iClient = 1; iClient <= MaxClients; iClient++)

@@ -40,8 +40,6 @@ void CreateRocket(int iSpawnerEntity, int iSpawnerClass, int iTeam, int iClass =
 	int iEntity = CreateEntityByName(TestFlags(iFlags, RocketFlag_IsAnimated) ? "tf_projectile_sentryrocket" : "tf_projectile_rocket");
 	if (iEntity == -1) return;
 
-    // BUG FIX: Removed 'static' keyword. Each rocket needs its own unique variables on the stack
-    // to prevent data from one rocket creation call interfering with the next.
 	float fPosition[3], fAngles[3], fDirection[3];
 	GetEntPropVector(iSpawnerEntity, Prop_Send, "m_vecOrigin", fPosition);
 	GetEntPropVector(iSpawnerEntity, Prop_Send, "m_angRotation", fAngles);
@@ -599,7 +597,10 @@ int GetRandomRocketClass(int iSpawnerClass)
 	return 0;
 }
 
-/** Emits a rocket sound (spawn, beep, or alert) based on class settings. */
+/**
+ * Emits a rocket sound (spawn, beep, or alert) based on class settings.
+ * Note: Beep timing is managed by SharedRocketThink - this function only plays sounds.
+ */
 void EmitRocketSound(RocketSound iSound, int iClass, int iEntity, int iTarget, RocketFlags iFlags)
 {
 	switch (iSound)
@@ -614,14 +615,11 @@ void EmitRocketSound(RocketSound iSound, int iClass, int iEntity, int iTarget, R
 		}
 		case RocketSound_Beep:
 		{
-			if (GetGameTime() - RocketLastBeepTime[FindRocketByEntity(iEntity)] >= RocketClassBeepInterval[iClass])
+			// Beep interval timing is handled by SharedRocketThink before calling this function
+			if (TestFlags(iFlags, RocketFlag_PlayBeepSound))
 			{
-				if (TestFlags(iFlags, RocketFlag_PlayBeepSound))
-				{
-					if (TestFlags(iFlags, RocketFlag_CustomBeepSound)) EmitSoundToAll(RocketClassBeepSound[iClass], iEntity);
-					else                                               EmitSoundToAll(SOUND_DEFAULT_BEEP, iEntity);
-				}
-				RocketLastBeepTime[FindRocketByEntity(iEntity)] = GetGameTime();
+				if (TestFlags(iFlags, RocketFlag_CustomBeepSound)) EmitSoundToAll(RocketClassBeepSound[iClass], iEntity);
+				else                                               EmitSoundToAll(SOUND_DEFAULT_BEEP, iEntity);
 			}
 		}
 		case RocketSound_Alert:
@@ -635,48 +633,56 @@ void EmitRocketSound(RocketSound iSound, int iClass, int iEntity, int iTarget, R
 	}
 }
 
+/**
+ * Checks if a rocket deflection was a steal and applies penalties.
+ * Uses guard clauses for clarity and safety.
+ */
 void CheckStolenRocket(int iClient, int iIndex)
 {
-    int iTarget = EntRefToEntIndex(RocketTarget[iIndex]);
+	int iTarget = EntRefToEntIndex(RocketTarget[iIndex]);
 
-    if (!(iTarget != iClient &&
-        !StealInfo[iClient].stoleRocket &&
-        (GetEntitiesDistance(iTarget, iClient) > CvarStealDistance.FloatValue) &&
-        (!(RocketInstanceFlags[iIndex] & RocketFlag_StealTeamCheck) || (GetClientTeam(iTarget) == GetClientTeam(iClient))) &&
-        !(RocketInstanceState[iIndex] & RocketState_Delayed)))
-    {
-        return;
-    }
+	// Guard clauses - each condition is clear and prevents potential crashes
+	if (iTarget == -1) return;                                        // Invalid target entity
+	if (!IsValidClient(iTarget, true)) return;                        // Target not valid/alive
+	if (iTarget == iClient) return;                                   // Can't steal from yourself  
+	if (StealInfo[iClient].stoleRocket) return;                       // Already processed a steal this round
+	if (RocketInstanceState[iIndex] & RocketState_Delayed) return;    // Delayed rockets exempt from steal check
+	if (GetEntitiesDistance(iTarget, iClient) <= CvarStealDistance.FloatValue) return;  // Too close to target
+	
+	// Team check: if enabled, only count as steal if on same team as target
+	if ((RocketInstanceFlags[iIndex] & RocketFlag_StealTeamCheck) && 
+	    (GetClientTeam(iTarget) != GetClientTeam(iClient))) return;
 
-    StealInfo[iClient].stoleRocket = true;
+	// All conditions met - this is a steal
+	StealInfo[iClient].stoleRocket = true;
 
-    if (StealInfo[iClient].rocketsStolen < CvarStealPreventionNumber.IntValue)
-    {
-        StealInfo[iClient].rocketsStolen++;
-        SlapPlayer(iClient, 0, true);
-        CPrintToChat(iClient, "%t", "DBSteal_Warning_Client", StealInfo[iClient].rocketsStolen, CvarStealPreventionNumber.IntValue);
+	if (StealInfo[iClient].rocketsStolen < CvarStealPreventionNumber.IntValue)
+	{
+		StealInfo[iClient].rocketsStolen++;
+		SlapPlayer(iClient, 0, true);
+		CPrintToChat(iClient, "%t", "DBSteal_Warning_Client", StealInfo[iClient].rocketsStolen, CvarStealPreventionNumber.IntValue);
 
-        if (CvarStealMessage.BoolValue)
-        {
-            CSkipNextClient(iClient);
-            CPrintToChatAll("%t", "DBSteal_Announce_All", iClient, iTarget);
-        }
-        StealInfo[iClient].stoleRocket = false;
-    }
-    else
-    {
-        ForcePlayerSuicide(iClient);
-        CPrintToChat(iClient, "%t", "DBSteal_Slay_Client");
-        if (CvarStealMessage.BoolValue)
-        {
-            CSkipNextClient(iClient);
-            CPrintToChatAll("%t", "DBSteal_Announce_Slay_All", iClient);
-        }
-    }
+		if (CvarStealMessage.BoolValue)
+		{
+			CSkipNextClient(iClient);
+			CPrintToChatAll("%t", "DBSteal_Announce_All", iClient, iTarget);
+		}
+		StealInfo[iClient].stoleRocket = false;
+	}
+	else
+	{
+		ForcePlayerSuicide(iClient);
+		CPrintToChat(iClient, "%t", "DBSteal_Slay_Client");
+		if (CvarStealMessage.BoolValue)
+		{
+			CSkipNextClient(iClient);
+			CPrintToChatAll("%t", "DBSteal_Announce_Slay_All", iClient);
+		}
+	}
 
-    Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] | RocketState_Stolen));
-    LastStealer = iClient;
-    Forward_OnRocketSteal(iIndex, iClient, iTarget, StealInfo[iClient].rocketsStolen);
+	Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] | RocketState_Stolen));
+	LastStealer = iClient;
+	Forward_OnRocketSteal(iIndex, iClient, iTarget, StealInfo[iClient].rocketsStolen);
 }
 
 void CheckRoundDelays(int iIndex)
