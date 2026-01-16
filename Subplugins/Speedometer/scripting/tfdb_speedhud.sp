@@ -23,14 +23,14 @@ public Plugin myinfo =
 // Global Variables
 // ====================================================================================================
 
-ConVar g_hCvarHudEnabled;
-Handle g_hDisplayTimer;
-Handle g_hCookieHudPref; // Handle for the client's HUD preference cookie.
+ConVar CvarHudEnabled;
+Handle DisplayTimer;
+Handle CookieHudPref; // Handle for the client's HUD preference cookie.
 
 // Tracks if the HUD is currently being displayed for a client.
-bool g_bIsHudVisible[MAXPLAYERS + 1];
+bool IsHudVisible[MAXPLAYERS + 1];
 // Tracks a client's personal preference for seeing the HUD.
-bool g_bHudEnabledForClient[MAXPLAYERS + 1];
+bool HudEnabledForClient[MAXPLAYERS + 1];
 
 // ====================================================================================================
 // Plugin Lifecycle
@@ -39,7 +39,7 @@ bool g_bHudEnabledForClient[MAXPLAYERS + 1];
 public void OnPluginStart()
 {
 	CreateConVar("tfdb_speedhud_version", PLUGIN_VERSION, "Dodgeball Speed HUD Version", FCVAR_NOTIFY|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_DONTRECORD);
-	g_hCvarHudEnabled = CreateConVar("tfdb_speedhud_enabled", "1", "Enable the rocket speed HUD for all players.", _, true, 0.0, true, 1.0);
+	CvarHudEnabled = CreateConVar("tfdb_speedhud_enabled", "1", "Enable the rocket speed HUD for all players.", _, true, 0.0, true, 1.0);
 
 	// Register the command for players to toggle the HUD.
 	RegConsoleCmd("sm_speedhud", Command_ToggleHud, "Toggles the rocket speed HUD display.");
@@ -49,10 +49,10 @@ public void OnPluginStart()
 	LoadTranslations("tfdb.phrases.txt");
 
 	// Register the cookie. The second argument is the default value.
-	g_hCookieHudPref = RegClientCookie("tfdb_speedhud_pref", "Toggle for the Dodgeball Speed HUD", CookieAccess_Public);
+	CookieHudPref = RegClientCookie("tfdb_speedhud_pref", "Toggle for the Dodgeball Speed HUD", CookieAccess_Public);
 
 	// Hook the ConVar change to enable/disable the timer on the fly.
-	g_hCvarHudEnabled.AddChangeHook(OnConVarChanged);
+	CvarHudEnabled.AddChangeHook(OnConVarChanged);
 
 	// Hook client connection to load their preference from cookies.
 	for (int i = 1; i <= MaxClients; i++)
@@ -64,7 +64,7 @@ public void OnPluginStart()
 	}
 
 	// Start the timer if the plugin is loaded while the cvar is enabled.
-	if (g_hCvarHudEnabled.BoolValue)
+	if (CvarHudEnabled.BoolValue)
 	{
 		StartDisplayTimer();
 	}
@@ -79,7 +79,7 @@ public void OnPluginEnd()
 public void OnMapStart()
 {
     // Check if the Dodgeball plugin is running and if the HUD is enabled.
-    if (LibraryExists("tfdb") && g_hCvarHudEnabled.BoolValue)
+    if (LibraryExists("tfdb") && CvarHudEnabled.BoolValue)
     {
         StartDisplayTimer();
     }
@@ -95,16 +95,16 @@ public void OnClientPostAdminCheck(int client)
 {
 	// Load the client's preference when they fully connect.
 	char sCookie[8];
-	GetClientCookie(client, g_hCookieHudPref, sCookie, sizeof(sCookie));
+	GetClientCookie(client, CookieHudPref, sCookie, sizeof(sCookie));
 
 	// Default to ON if the cookie is not set or is set to "1".
 	if (sCookie[0] == '0')
 	{
-		g_bHudEnabledForClient[client] = false;
+		HudEnabledForClient[client] = false;
 	}
 	else
 	{
-		g_bHudEnabledForClient[client] = true;
+		HudEnabledForClient[client] = true;
 	}
 }
 
@@ -122,18 +122,18 @@ public Action Command_ToggleHud(int client, int args)
 	}
 
 	// Flip the player's preference.
-	g_bHudEnabledForClient[client] = !g_bHudEnabledForClient[client];
+	HudEnabledForClient[client] = !HudEnabledForClient[client];
 
-	if (g_bHudEnabledForClient[client])
+	if (HudEnabledForClient[client])
 	{
 		// Set cookie to "1" for ON.
-		SetClientCookie(client, g_hCookieHudPref, "1");
+		SetClientCookie(client, CookieHudPref, "1");
 		CPrintToChat(client, "%t", "Hud_Enabled");
 	}
 	else
 	{
 		// Set cookie to "0" for OFF.
-		SetClientCookie(client, g_hCookieHudPref, "0");
+		SetClientCookie(client, CookieHudPref, "0");
 		CPrintToChat(client, "%t", "Hud_Disabled");
 	}
 
@@ -142,7 +142,7 @@ public Action Command_ToggleHud(int client, int args)
 
 public void OnConVarChanged(ConVar convar, const char[] oldValue, const char[] newValue)
 {
-	if (convar == g_hCvarHudEnabled)
+	if (convar == CvarHudEnabled)
 	{
 		if (StringToInt(newValue) == 1)
 		{
@@ -161,12 +161,12 @@ public void OnConVarChanged(ConVar convar, const char[] oldValue, const char[] n
 void StartDisplayTimer()
 {
 	// Don't create a new timer if one already exists.
-	if (g_hDisplayTimer != null)
+	if (DisplayTimer != null)
 	{
 		return;
 	}
 	// Create a repeating timer that calls DisplayHud every 0.1 seconds.
-	g_hDisplayTimer = CreateTimer(0.1, DisplayHud, _, TIMER_REPEAT);
+	DisplayTimer = CreateTimer(0.1, DisplayHud, _, TIMER_REPEAT);
 }
 
 /**
@@ -174,21 +174,21 @@ void StartDisplayTimer()
  */
 void StopDisplayTimer()
 {
-	if (g_hDisplayTimer != null)
+	if (DisplayTimer != null)
 	{
-		KillTimer(g_hDisplayTimer);
-		g_hDisplayTimer = null;
+		KillTimer(DisplayTimer);
+		DisplayTimer = null;
 	}
 
 	// Clear the HUD for any player who might still have it open.
 	for (int i = 1; i <= MaxClients; i++)
 	{
-		if (IsClientInGame(i) && g_bIsHudVisible[i])
+		if (IsClientInGame(i) && IsHudVisible[i])
 		{
 			// Set an empty message to clear the HUD.
 			SetHudTextParams(0.0, 0.0, 0.1, 255, 255, 255, 0, 0, 0.0, 0.0, 0.0);
 			ShowHudText(i, 4, " ");
-			g_bIsHudVisible[i] = false;
+			IsHudVisible[i] = false;
 		}
 	}
 }
@@ -203,7 +203,7 @@ void StopDisplayTimer()
 public Action DisplayHud(Handle timer)
 {
 	// Only run if the main Dodgeball plugin is enabled and the cvar is on.
-	if (!g_hCvarHudEnabled.BoolValue || !TFDB_IsDodgeballEnabled())
+	if (!CvarHudEnabled.BoolValue || !TFDB_IsDodgeballEnabled())
 	{
 		// Ensure the HUD is cleared if the plugin is disabled globally.
 		StopDisplayTimer();
@@ -231,11 +231,11 @@ public Action DisplayHud(Handle timer)
 		// No rockets are active, clear the HUD for anyone who has it visible.
 		for (int i = 1; i <= MaxClients; i++)
 		{
-			if (g_bIsHudVisible[i])
+			if (IsHudVisible[i])
 			{
 				SetHudTextParams(0.0, 0.0, 0.1, 255, 255, 255, 0, 0, 0.0, 0.0, 0.0);
 				ShowHudText(i, 4, " ");
-				g_bIsHudVisible[i] = false;
+				IsHudVisible[i] = false;
 			}
 		}
 	}
@@ -251,17 +251,17 @@ public Action DisplayHud(Handle timer)
 		{
 			if (IsClientInGame(i))
 			{
-				if (g_bHudEnabledForClient[i])
+				if (HudEnabledForClient[i])
 				{
 					SetHudTextParams(-1.0, 0.85, 0.15, 100, 255, 100, 255, 0, 0.0, 0.0, 0.15);
 					ShowHudText(i, 4, hudMessage);
-					g_bIsHudVisible[i] = true;
+					IsHudVisible[i] = true;
 				}
-				else if (g_bIsHudVisible[i])
+				else if (IsHudVisible[i])
 				{
 					SetHudTextParams(0.0, 0.0, 0.1, 255, 255, 255, 0, 0, 0.0, 0.0, 0.0);
 					ShowHudText(i, 4, " ");
-					g_bIsHudVisible[i] = false;
+					IsHudVisible[i] = false;
 				}
 			}
 		}
@@ -317,17 +317,17 @@ public Action DisplayHud(Handle timer)
 		{
 			if (IsClientInGame(i))
 			{
-				if (g_bHudEnabledForClient[i])
+				if (HudEnabledForClient[i])
 				{
 					SetHudTextParams(0.05, 0.4, 0.15, 100, 255, 100, 255, 0, 0.0, 0.0, 0.15);
 					ShowHudText(i, 4, hudMessage);
-					g_bIsHudVisible[i] = true;
+					IsHudVisible[i] = true;
 				}
-				else if (g_bIsHudVisible[i])
+				else if (IsHudVisible[i])
 				{
 					SetHudTextParams(0.0, 0.0, 0.1, 255, 255, 255, 0, 0, 0.0, 0.0, 0.0);
 					ShowHudText(i, 4, " ");
-					g_bIsHudVisible[i] = false;
+					IsHudVisible[i] = false;
 				}
 			}
 		}

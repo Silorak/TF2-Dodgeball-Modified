@@ -12,9 +12,9 @@
 #define PLUGIN_VERSION     "1.0.1"
 #define PLUGIN_URL         "https://github.com/x07x08/TF2-Dodgeball-Modified"
 
-int g_iRocketClassCount;
+int RocketClassCount;
 
-DataPack g_hRocketClassCmdsOnDestroyed[MAX_ROCKET_CLASSES];
+DataPack RocketClassCmdsOnDestroyed[MAX_ROCKET_CLASSES];
 
 public Plugin myinfo =
 {
@@ -43,24 +43,24 @@ public void TFDB_OnRocketsConfigExecuted(const char[] strConfigFile)
 {
 	if (!(strcmp(strConfigFile, "general.cfg") == 0)) return;
 	
-	for (int iIndex = 0; iIndex < g_iRocketClassCount; iIndex++)
+	for (int iIndex = 0; iIndex < RocketClassCount; iIndex++)
 	{
-		delete g_hRocketClassCmdsOnDestroyed[iIndex];
+		delete RocketClassCmdsOnDestroyed[iIndex];
 	}
 	
-	g_iRocketClassCount = 0;
+	RocketClassCount = 0;
 	
 	ParseConfigurations(strConfigFile);
 }
 
 public void OnMapEnd()
 {
-	for (int iIndex = 0; iIndex < g_iRocketClassCount; iIndex++)
+	for (int iIndex = 0; iIndex < RocketClassCount; iIndex++)
 	{
-		delete g_hRocketClassCmdsOnDestroyed[iIndex];
+		delete RocketClassCmdsOnDestroyed[iIndex];
 	}
 	
-	g_iRocketClassCount = 0;
+	RocketClassCount = 0;
 }
 
 void ParseConfigurations(const char[] strConfigFile)
@@ -96,12 +96,12 @@ void ParseClasses(KeyValues kvConfig)
 	kvConfig.GotoFirstSubKey();
 	do
 	{
-		int iIndex = g_iRocketClassCount;
+		int iIndex = RocketClassCount;
 		
 		kvConfig.GetString("on destroyed", strBuffer, sizeof(strBuffer));
-		g_hRocketClassCmdsOnDestroyed[iIndex] = ParseCommands(strBuffer);
+		RocketClassCmdsOnDestroyed[iIndex] = ParseCommands(strBuffer);
 		
-		g_iRocketClassCount++;
+		RocketClassCount++;
 	}
 	while (kvConfig.GotoNextKey());
 	
@@ -179,7 +179,7 @@ public Action OnTouch(int iEntity, int iOther)
 	
 	int iClass = TFDB_GetRocketClass(iIndex);
 	
-	if (g_hRocketClassCmdsOnDestroyed[iClass] == null) return Plugin_Continue;
+	if (RocketClassCmdsOnDestroyed[iClass] == null) return Plugin_Continue;
 	
 	DataPack hTouchInfo = new DataPack();
 	
@@ -228,7 +228,7 @@ public void TouchRequestFrame(DataPack hTouchInfo)
 		iTarget = iOther;
 	}
 	
-	ExecuteCommands(g_hRocketClassCmdsOnDestroyed[iClass],
+	ExecuteCommands(RocketClassCmdsOnDestroyed[iClass],
 	                iClass,
 	                iRocket,
 	                iOwner,

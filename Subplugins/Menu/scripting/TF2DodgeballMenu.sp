@@ -141,15 +141,15 @@ enum struct SpawnerClass
 
 int              g_iRocketClassCount;
 int              g_iSpawnersCount;
-bool             g_bClientSayHook         [MAXPLAYERS + 1];
+bool             ClientSayHook         [MAXPLAYERS + 1];
 RocketClassMenu  g_iClientRocketClassMenu [MAXPLAYERS + 1] = {RocketClassMenu_None, ...};
 SpawnerClassMenu g_iClientSpawnerClassMenu[MAXPLAYERS + 1] = {SpawnerClassMenu_None, ...};
 int              g_iClientRocketClass     [MAXPLAYERS + 1] = {-1, ...};
-float            g_fClientMenuSelectTime  [MAXPLAYERS + 1];
+float            ClientMenuSelectTime  [MAXPLAYERS + 1];
 RocketClass      g_eSavedRocketClasses    [MAX_ROCKET_CLASSES];
 SpawnerClass     g_eSavedSpawnerClasses   [MAX_SPAWNER_CLASSES];
-bool             g_bTrailsLoaded;
-ConVar           g_hCvarSayHookTimeout;
+bool             TrailsLoaded;
+ConVar           CvarSayHookTimeout;
 
 char strRocketClassMenu[view_as<int>(SizeOfRocketClassMenu) - 1][] =
 {
@@ -217,7 +217,7 @@ public void OnPluginStart()
 	
 	RegAdminCmd("sm_tfdb", CmdDodgeballMenu, ADMFLAG_CONFIG, "Dodgeball admin menu.");
 	
-	g_hCvarSayHookTimeout = CreateConVar("tf_dodgeball_sayhook_timeout", "15.0", "Chat hook time span", _, true, 0.0);
+	CvarSayHookTimeout = CreateConVar("tf_dodgeball_sayhook_timeout", "15.0", "Chat hook time span", _, true, 0.0);
 	
 	if (!TFDB_IsDodgeballEnabled()) return;
 	
@@ -230,12 +230,12 @@ public void OnPluginStart()
 
 public void OnLibraryAdded(const char[] strName)
 {
-	if (strcmp(strName, "tfdbtrails") == 0) g_bTrailsLoaded = true;
+	if (strcmp(strName, "tfdbtrails") == 0) TrailsLoaded = true;
 }
 
 public void OnLibraryRemoved(const char[] strName)
 {
-	if (strcmp(strName, "tfdbtrails") == 0) g_bTrailsLoaded = false;
+	if (strcmp(strName, "tfdbtrails") == 0) TrailsLoaded = false;
 }
 
 public void OnMapEnd()
@@ -258,18 +258,18 @@ public void TFDB_OnRocketsConfigExecuted(const char[] strConfigFile)
 
 public void OnClientDisconnect(int iClient)
 {
-	g_bClientSayHook[iClient]          = false;
+	ClientSayHook[iClient]          = false;
 	g_iClientRocketClass[iClient]      = -1;
-	g_fClientMenuSelectTime[iClient]   = 0.0;
+	ClientMenuSelectTime[iClient]   = 0.0;
 	g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
 	g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
 }
 
 public void OnClientConnected(int iClient)
 {
-	g_bClientSayHook[iClient]          = false;
+	ClientSayHook[iClient]          = false;
 	g_iClientRocketClass[iClient]      = -1;
-	g_fClientMenuSelectTime[iClient]   = 0.0;
+	ClientMenuSelectTime[iClient]   = 0.0;
 	g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
 	g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
 }
@@ -818,25 +818,25 @@ public int RocketClassOptionsMenuHandler(Menu hMenu, MenuAction iMenuActions, in
 				
 				case RocketClassMenu_SpriteColor :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_SpriteColor", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_SpriteColor", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_SpriteLifetime :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_SpriteLifetime", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_SpriteLifetime", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_SpriteStartWidth :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_SpriteStartWidth", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_SpriteStartWidth", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_SpriteEndWidth :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_SpriteEndWidth", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_SpriteEndWidth", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
@@ -847,129 +847,129 @@ public int RocketClassOptionsMenuHandler(Menu hMenu, MenuAction iMenuActions, in
 				
 				case RocketClassMenu_BeepInterval :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_BeepInterval", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_BeepInterval", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_ResetBeepInterval");
 				}
 				
 				case RocketClassMenu_CritChance :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_CritChance", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_CritChance", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_Damage :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_Damage", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_Damage", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_DamageIncrement :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_DamageIncrement", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_DamageIncrement", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_Speed :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_Speed", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_Speed", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_SpeedIncrement :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_SpeedIncrement", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_SpeedIncrement", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_SpeedLimit :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_SpeedLimit", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_SpeedLimit", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_ResetSpeedLimit");
 				}
 				
 				case RocketClassMenu_TurnRate :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_TurnRate", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_TurnRate", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_TurnRateIncrement :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_TurnRateIncrement", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_TurnRateIncrement", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_TurnRateLimit :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_TurnRateLimit", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_TurnRateLimit", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_ResetTurnRateLimit");
 				}
 				
 				case RocketClassMenu_ElevationRate :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_ElevationRate", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_ElevationRate", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_ElevationLimit :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_ElevationLimit", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_ElevationLimit", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_RocketsModifier :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_RocketsModifier", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_RocketsModifier", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_PlayerModifier :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_PlayerModifier", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_PlayerModifier", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_ControlDelay :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_ControlDelay", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_ControlDelay", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_DragTimeMin :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_DragTimeMin", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_DragTimeMin", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_DragTimeMax :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_DragTimeMax", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_DragTimeMax", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_TargetWeight :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_TargetWeight", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_TargetWeight", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_MaxBounces :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_MaxBounces", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_MaxBounces", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
 				case RocketClassMenu_BounceScale :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_BounceScale", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_BounceScale", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 			}
 			
 			g_iClientRocketClassMenu[iParam1]  = iOption;
-			g_bClientSayHook[iParam1]          = true;
+			ClientSayHook[iParam1]          = true;
 			g_iClientRocketClass[iParam1]      = iClass;
-			g_fClientMenuSelectTime[iParam1]   = GetGameTime();
+			ClientMenuSelectTime[iParam1]   = GetGameTime();
 			g_iClientSpawnerClassMenu[iParam1] = SpawnerClassMenu_None;
 			
 			if (IsClientInGame(iParam1) && !IsClientInKickQueue(iParam1) && (iOption != RocketClassMenu_Flags && iOption != RocketClassMenu_Behaviour))
@@ -1250,21 +1250,21 @@ public int SpawnerClassesMenuHandler(Menu hMenu, MenuAction iMenuActions, int iP
 			{
 				case SpawnerClassMenu_MaxRockets :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_MaxRockets", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_MaxRockets", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 					
-					g_bClientSayHook[iParam1]          = true;
-					g_fClientMenuSelectTime[iParam1]   = GetGameTime();
+					ClientSayHook[iParam1]          = true;
+					ClientMenuSelectTime[iParam1]   = GetGameTime();
 					g_iClientSpawnerClassMenu[iParam1] = iOption;
 				}
 				
 				case SpawnerClassMenu_Interval :
 				{
-					CPrintToChat(iParam1, "%t", "Menu_Interval", g_hCvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_Interval", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 					
-					g_bClientSayHook[iParam1]          = true;
-					g_fClientMenuSelectTime[iParam1]   = GetGameTime();
+					ClientSayHook[iParam1]          = true;
+					ClientMenuSelectTime[iParam1]   = GetGameTime();
 					g_iClientSpawnerClassMenu[iParam1] = iOption;
 				}
 				
@@ -1328,12 +1328,12 @@ public int SpawnerClassChancesMenuHandler(Menu hMenu, MenuAction iMenuActions, i
 			
 			int iClass = StringToInt(strClass);
 			
-			g_bClientSayHook[iParam1]          = true;
-			g_fClientMenuSelectTime[iParam1]   = GetGameTime();
+			ClientSayHook[iParam1]          = true;
+			ClientMenuSelectTime[iParam1]   = GetGameTime();
 			g_iClientSpawnerClassMenu[iParam1] = SpawnerClassMenu_ChancesTable;
 			g_iClientRocketClass[iParam1]      = iClass;
 			
-			CPrintToChat(iParam1, "%t", "Menu_ChancesTable", g_hCvarSayHookTimeout.IntValue);
+			CPrintToChat(iParam1, "%t", "Menu_ChancesTable", CvarSayHookTimeout.IntValue);
 			CPrintToChat(iParam1, "%t", "Menu_Reset");
 			
 			if (IsClientInGame(iParam1) && !IsClientInKickQueue(iParam1))
@@ -1358,11 +1358,11 @@ public int SpawnerClassChancesMenuHandler(Menu hMenu, MenuAction iMenuActions, i
 
 public Action OnClientSayCommand(int iClient, const char[] strCommand, const char[] strArgs)
 {
-	if (!g_bClientSayHook[iClient]) return Plugin_Continue;
+	if (!ClientSayHook[iClient]) return Plugin_Continue;
 	
-	g_bClientSayHook[iClient] = false;
+	ClientSayHook[iClient] = false;
 	
-	if ((GetGameTime() - g_fClientMenuSelectTime[iClient]) > g_hCvarSayHookTimeout.FloatValue) return Plugin_Continue;
+	if ((GetGameTime() - ClientMenuSelectTime[iClient]) > CvarSayHookTimeout.FloatValue) return Plugin_Continue;
 	
 	if (!((strcmp(strCommand, "say") == 0) || (strcmp(strCommand, "say_team") == 0))) return Plugin_Continue;
 	
@@ -2264,7 +2264,7 @@ bool IsRocketClassMenuDisabled(RocketClassMenu iOption)
 	       iOption == RocketClassMenu_CmdsOnKill     ||
 	       iOption == RocketClassMenu_CmdsOnExplode  ||
 	       iOption == RocketClassMenu_CmdsOnNoTarget ||
-	       (!g_bTrailsLoaded &&
+	       (!TrailsLoaded &&
 	       (iOption == RocketClassMenu_SpriteColor    ||
 	        iOption == RocketClassMenu_SpriteEndWidth ||
 	        iOption == RocketClassMenu_SpriteLifetime ||

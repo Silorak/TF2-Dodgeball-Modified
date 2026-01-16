@@ -14,7 +14,7 @@
 
 #define COLLISION_GROUP_PUSHAWAY 17
 
-bool g_bLoaded;
+bool Loaded;
 
 public Plugin myinfo =
 {
@@ -41,20 +41,20 @@ public void OnPluginStart()
 
 public void TFDB_OnRocketsConfigExecuted()
 {
-	if (g_bLoaded) return;
+	if (Loaded) return;
 	
 	HookEvent("player_spawn", OnPlayerSpawn);
 	
-	g_bLoaded = true;
+	Loaded = true;
 }
 
 public void OnMapEnd()
 {
-	if (!g_bLoaded) return;
+	if (!Loaded) return;
 	
 	UnhookEvent("player_spawn", OnPlayerSpawn);
 	
-	g_bLoaded = false;
+	Loaded = false;
 }
 
 public void OnPlayerSpawn(Event hEvent, char[] strEventName, bool bDontBroadcast)

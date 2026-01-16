@@ -14,28 +14,28 @@
 
 int g_iSpawnersCount;
 
-ConVar g_hCvarVoteBounceDuration;
-ConVar g_hCvarVoteClassDuration;
-ConVar g_hCvarVoteCountDuration;
-ConVar g_hCvarVoteBounceTimeout;
-ConVar g_hCvarVoteClassTimeout;
-ConVar g_hCvarVoteCountTimeout;
+ConVar CvarVoteBounceDuration;
+ConVar CvarVoteClassDuration;
+ConVar CvarVoteCountDuration;
+ConVar CvarVoteBounceTimeout;
+ConVar CvarVoteClassTimeout;
+ConVar CvarVoteCountTimeout;
 
-bool g_bVoteBounceAllowed;
-bool g_bVoteClassAllowed;
-bool g_bVoteCountAllowed;
+bool VoteBounceAllowed;
+bool VoteClassAllowed;
+bool VoteCountAllowed;
 
-float g_fLastVoteBounceTime;
-float g_fLastVoteClassTime;
-float g_fLastVoteCountTime;
+float LastVoteBounceTime;
+float LastVoteClassTime;
+float LastVoteCountTime;
 
-bool g_bBounceEnabled;
-int g_iMainRocketClass = -1;
-int g_iRocketsCount = -1;
+bool BounceEnabled;
+int MainRocketClass = -1;
+int RocketsCount = -1;
 
-int g_iSavedMaxRockets[MAX_SPAWNER_CLASSES];
+int SavedMaxRockets[MAX_SPAWNER_CLASSES];
 
-bool g_bLoaded;
+bool Loaded;
 
 public Plugin myinfo =
 {
@@ -50,12 +50,12 @@ public void OnPluginStart()
 {
 	LoadTranslations("tfdb.phrases.txt");
 	
-	g_hCvarVoteBounceDuration = CreateConVar("tf_dodgeball_votes_bounce_duration", "20", _, _, true, 0.0);
-	g_hCvarVoteClassDuration  = CreateConVar("tf_dodgeball_votes_class_duration", "20", _, _, true, 0.0);
-	g_hCvarVoteCountDuration  = CreateConVar("tf_dodgeball_votes_count_duration", "20", _, _, true, 0.0);
-	g_hCvarVoteBounceTimeout  = CreateConVar("tf_dodgeball_votes_bounce_timeout", "150", _, _, true, 0.0);
-	g_hCvarVoteClassTimeout   = CreateConVar("tf_dodgeball_votes_class_timeout", "150", _, _, true, 0.0);
-	g_hCvarVoteCountTimeout   = CreateConVar("tf_dodgeball_votes_count_timeout", "150", _, _, true, 0.0);
+	CvarVoteBounceDuration = CreateConVar("tf_dodgeball_votes_bounce_duration", "20", _, _, true, 0.0);
+	CvarVoteClassDuration  = CreateConVar("tf_dodgeball_votes_class_duration", "20", _, _, true, 0.0);
+	CvarVoteCountDuration  = CreateConVar("tf_dodgeball_votes_count_duration", "20", _, _, true, 0.0);
+	CvarVoteBounceTimeout  = CreateConVar("tf_dodgeball_votes_bounce_timeout", "150", _, _, true, 0.0);
+	CvarVoteClassTimeout   = CreateConVar("tf_dodgeball_votes_class_timeout", "150", _, _, true, 0.0);
+	CvarVoteCountTimeout   = CreateConVar("tf_dodgeball_votes_count_timeout", "150", _, _, true, 0.0);
 	
 	RegConsoleCmd("sm_vrb", CmdVoteBounce, "Start a rocket bounce vote");
 	RegConsoleCmd("sm_vrc", CmdVoteClass, "Start a rocket class vote");
@@ -78,42 +78,42 @@ public void OnPluginStart()
 
 public void OnMapEnd()
 {
-	if (!g_bLoaded) return;
+	if (!Loaded) return;
 	
-	g_bVoteBounceAllowed =
-	g_bVoteClassAllowed  =
-	g_bVoteCountAllowed  = false;
+	VoteBounceAllowed =
+	VoteClassAllowed  =
+	VoteCountAllowed  = false;
 	
-	g_fLastVoteBounceTime =
-	g_fLastVoteClassTime  =
-	g_fLastVoteCountTime  = 0.0;
+	LastVoteBounceTime =
+	LastVoteClassTime  =
+	LastVoteCountTime  = 0.0;
 	
-	g_bBounceEnabled = false;
-	g_iMainRocketClass = -1;
-	g_iRocketsCount = -1;
+	BounceEnabled = false;
+	MainRocketClass = -1;
+	RocketsCount = -1;
 	
-	g_bLoaded = false;
+	Loaded = false;
 	
 	g_iSpawnersCount = 0;
 }
 
 public void TFDB_OnRocketsConfigExecuted(const char[] strConfigFile)
 {
-	if (!g_bLoaded)
+	if (!Loaded)
 	{
-		g_bVoteBounceAllowed =
-		g_bVoteClassAllowed  =
-		g_bVoteCountAllowed  = true;
+		VoteBounceAllowed =
+		VoteClassAllowed  =
+		VoteCountAllowed  = true;
 		
-		g_fLastVoteBounceTime =
-		g_fLastVoteClassTime  =
-		g_fLastVoteCountTime  = 0.0;
+		LastVoteBounceTime =
+		LastVoteClassTime  =
+		LastVoteCountTime  = 0.0;
 		
-		g_bBounceEnabled = false;
-		g_iMainRocketClass = -1;
-		g_iRocketsCount = -1;
+		BounceEnabled = false;
+		MainRocketClass = -1;
+		RocketsCount = -1;
 		
-		g_bLoaded = true;
+		Loaded = true;
 	}
 	
 	if (strcmp(strConfigFile, "general.cfg") == 0)
@@ -147,18 +147,18 @@ public Action CmdVoteBounce(int iClient, int iArgs)
 		return Plugin_Handled;
 	}
 	
-	if (g_bVoteBounceAllowed)
+	if (VoteBounceAllowed)
 	{
-		g_bVoteBounceAllowed  = false;
-		g_fLastVoteBounceTime = GetGameTime();
+		VoteBounceAllowed  = false;
+		LastVoteBounceTime = GetGameTime();
 		
 		StartBounceVote();
-		CreateTimer(g_hCvarVoteBounceTimeout.FloatValue, VoteBounceTimeoutCallback, _, TIMER_FLAG_NO_MAPCHANGE);
+		CreateTimer(CvarVoteBounceTimeout.FloatValue, VoteBounceTimeoutCallback, _, TIMER_FLAG_NO_MAPCHANGE);
 	}
 	else
 	{
 		CReplyToCommand(iClient, "%t", "Dodgeball_BounceVote_Cooldown",
-		                RoundToCeil((g_fLastVoteBounceTime + g_hCvarVoteBounceTimeout.FloatValue) - GetGameTime()));
+		                RoundToCeil((LastVoteBounceTime + CvarVoteBounceTimeout.FloatValue) - GetGameTime()));
 	}
 	
 	return Plugin_Handled;
@@ -167,7 +167,7 @@ public Action CmdVoteBounce(int iClient, int iArgs)
 void StartBounceVote()
 {
 	char strMode[16];
-	strMode = !g_bBounceEnabled ? "Enable" : "Disable";
+	strMode = !BounceEnabled ? "Enable" : "Disable";
 	
 	Menu hMenu = new Menu(VoteMenuHandler);
 	hMenu.VoteResultCallback = VoteBounceResultHandler;
@@ -190,7 +190,7 @@ void StartBounceVote()
 		iClients[iTotal++] = iClient;
 	}
 	
-	hMenu.DisplayVote(iClients, iTotal, g_hCvarVoteBounceDuration.IntValue);
+	hMenu.DisplayVote(iClients, iTotal, CvarVoteBounceDuration.IntValue);
 }
 
 public int VoteMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1, int iParam2)
@@ -235,7 +235,7 @@ public void VoteBounceResultHandler(Menu hMenu,
 
 void ToggleBounce()
 {
-	if (!g_bBounceEnabled)
+	if (!BounceEnabled)
 	{
 		EnableBounce();
 	}
@@ -247,7 +247,7 @@ void ToggleBounce()
 
 void EnableBounce()
 {
-	g_bBounceEnabled = true;
+	BounceEnabled = true;
 	
 	for (int iIndex = 0; iIndex < MAX_ROCKETS; iIndex++)
 	{
@@ -261,7 +261,7 @@ void EnableBounce()
 
 void DisableBounce()
 {
-	g_bBounceEnabled = false;
+	BounceEnabled = false;
 	
 	for (int iIndex = 0; iIndex < MAX_ROCKETS; iIndex++)
 	{
@@ -296,18 +296,18 @@ public Action CmdVoteClass(int iClient, int iArgs)
 		return Plugin_Handled;
 	}
 	
-	if (g_bVoteClassAllowed)
+	if (VoteClassAllowed)
 	{
-		g_bVoteClassAllowed  = false;
-		g_fLastVoteClassTime = GetGameTime();
+		VoteClassAllowed  = false;
+		LastVoteClassTime = GetGameTime();
 		
 		StartClassVote();
-		CreateTimer(g_hCvarVoteClassTimeout.FloatValue, VoteClassTimeoutCallback, _, TIMER_FLAG_NO_MAPCHANGE);
+		CreateTimer(CvarVoteClassTimeout.FloatValue, VoteClassTimeoutCallback, _, TIMER_FLAG_NO_MAPCHANGE);
 	}
 	else
 	{
 		CReplyToCommand(iClient, "%t", "Dodgeball_ClassVote_Cooldown",
-		                RoundToCeil((g_fLastVoteClassTime + g_hCvarVoteClassTimeout.FloatValue) - GetGameTime()));
+		                RoundToCeil((LastVoteClassTime + CvarVoteClassTimeout.FloatValue) - GetGameTime()));
 	}
 	
 	return Plugin_Handled;
@@ -320,7 +320,7 @@ void StartClassVote()
 	
 	hMenu.SetTitle("Change main rocket class?");
 	
-	if (g_iMainRocketClass != -1)
+	if (MainRocketClass != -1)
 	{
 		hMenu.AddItem("-1", "Reset the spawn chances");
 	}
@@ -348,7 +348,7 @@ void StartClassVote()
 		iClients[iTotal++] = iClient;
 	}
 	
-	hMenu.DisplayVote(iClients, iTotal, g_hCvarVoteClassDuration.IntValue);
+	hMenu.DisplayVote(iClients, iTotal, CvarVoteClassDuration.IntValue);
 }
 
 public void VoteClassResultHandler(Menu hMenu,
@@ -361,7 +361,7 @@ public void VoteClassResultHandler(Menu hMenu,
 	int iWinnerIndex = 0;
 	int iClassCount = TFDB_GetRocketClassCount();
 	
-	if (g_iMainRocketClass != -1) iClassCount++;
+	if (MainRocketClass != -1) iClassCount++;
 	
 	bool bEqual = AreVotesEqual(iItemInfo, iClassCount);
 	
@@ -371,9 +371,9 @@ public void VoteClassResultHandler(Menu hMenu,
 	
 	hMenu.GetItem(iItemInfo[iWinnerIndex][VOTEINFO_ITEM_INDEX], strWinner, sizeof(strWinner), _, strClassLongName, sizeof(strClassLongName));
 	
-	g_iMainRocketClass = StringToInt(strWinner);
+	MainRocketClass = StringToInt(strWinner);
 	
-	if (g_iMainRocketClass == -1)
+	if (MainRocketClass == -1)
 	{
 		CPrintToChatAll("%t", "Dodgeball_ClassVote_Reset");
 	}
@@ -408,18 +408,18 @@ public Action CmdVoteCount(int iClient, int iArgs)
 		return Plugin_Handled;
 	}
 	
-	if (g_bVoteCountAllowed)
+	if (VoteCountAllowed)
 	{
-		g_bVoteCountAllowed  = false;
-		g_fLastVoteCountTime = GetGameTime();
+		VoteCountAllowed  = false;
+		LastVoteCountTime = GetGameTime();
 		
 		StartCountVote();
-		CreateTimer(g_hCvarVoteCountTimeout.FloatValue, VoteCountTimeoutCallback, _, TIMER_FLAG_NO_MAPCHANGE);
+		CreateTimer(CvarVoteCountTimeout.FloatValue, VoteCountTimeoutCallback, _, TIMER_FLAG_NO_MAPCHANGE);
 	}
 	else
 	{
 		CReplyToCommand(iClient, "%t", "Dodgeball_CountVote_Cooldown",
-		                RoundToCeil((g_fLastVoteCountTime + g_hCvarVoteCountTimeout.FloatValue) - GetGameTime()));
+		                RoundToCeil((LastVoteCountTime + CvarVoteCountTimeout.FloatValue) - GetGameTime()));
 	}
 	
 	return Plugin_Handled;
@@ -432,7 +432,7 @@ void StartCountVote()
 	
 	hMenu.SetTitle("Change rockets count?");
 	
-	if (g_iRocketsCount != -1)
+	if (RocketsCount != -1)
 	{
 		hMenu.AddItem("-1", "Reset rockets count");
 	}
@@ -456,7 +456,7 @@ void StartCountVote()
 		iClients[iTotal++] = iClient;
 	}
 	
-	hMenu.DisplayVote(iClients, iTotal, g_hCvarVoteCountDuration.IntValue);
+	hMenu.DisplayVote(iClients, iTotal, CvarVoteCountDuration.IntValue);
 }
 
 public void VoteCountResultHandler(Menu hMenu,
@@ -469,7 +469,7 @@ public void VoteCountResultHandler(Menu hMenu,
 	int iWinnerIndex = 0;
 	int iVotesCount = 5;
 	
-	if (g_iRocketsCount != -1) iVotesCount++;
+	if (RocketsCount != -1) iVotesCount++;
 	
 	bool bEqual = AreVotesEqual(iItemInfo, iVotesCount);
 	
@@ -477,57 +477,57 @@ public void VoteCountResultHandler(Menu hMenu,
 	
 	char strWinner[8]; hMenu.GetItem(iItemInfo[iWinnerIndex][VOTEINFO_ITEM_INDEX], strWinner, sizeof(strWinner));
 	
-	g_iRocketsCount = StringToInt(strWinner);
+	RocketsCount = StringToInt(strWinner);
 	
 	for (int iIndex = 0; iIndex < TFDB_GetSpawnersCount(); iIndex++)
 	{
-		TFDB_SetSpawnersMaxRockets(iIndex, g_iRocketsCount == -1 ? g_iSavedMaxRockets[iIndex] : (g_iRocketsCount + 1));
+		TFDB_SetSpawnersMaxRockets(iIndex, RocketsCount == -1 ? SavedMaxRockets[iIndex] : (RocketsCount + 1));
 	}
 	
-	if (g_iRocketsCount == -1)
+	if (RocketsCount == -1)
 	{
 		CPrintToChatAll("%t", "Dodgeball_CountVote_Reset");
 	}
 	else
 	{
-		CPrintToChatAll("%t", "Dodgeball_CountVote_Changed", (g_iRocketsCount + 1));
+		CPrintToChatAll("%t", "Dodgeball_CountVote_Changed", (RocketsCount + 1));
 	}
 }
 
 public Action VoteBounceTimeoutCallback(Handle hTimer)
 {
-	g_bVoteBounceAllowed = true;
+	VoteBounceAllowed = true;
 	
 	return Plugin_Continue;
 }
 
 public Action VoteClassTimeoutCallback(Handle hTimer)
 {
-	g_bVoteClassAllowed = true;
+	VoteClassAllowed = true;
 	
 	return Plugin_Continue;
 }
 
 public Action VoteCountTimeoutCallback(Handle hTimer)
 {
-	g_bVoteCountAllowed = true;
+	VoteCountAllowed = true;
 	
 	return Plugin_Continue;
 }
 
 public Action TFDB_OnRocketCreatedPre(int iIndex, int &iClass, RocketFlags &iFlags)
 {
-	if (g_iMainRocketClass == -1) return Plugin_Continue;
+	if (MainRocketClass == -1) return Plugin_Continue;
 	
-	iClass = g_iMainRocketClass;
-	iFlags = TFDB_GetRocketClassFlags(g_iMainRocketClass);
+	iClass = MainRocketClass;
+	iFlags = TFDB_GetRocketClassFlags(MainRocketClass);
 	
 	return Plugin_Changed;
 }
 
 public void TFDB_OnRocketCreated(int iIndex)
 {
-	if (!g_bBounceEnabled) return;
+	if (!BounceEnabled) return;
 	
 	TFDB_SetRocketBounces(iIndex, TFDB_GetRocketClassMaxBounces(TFDB_GetRocketClass(iIndex)));
 }
@@ -566,7 +566,7 @@ void ParseSpawners(KeyValues kvConfig)
 	{
 		int iIndex = g_iSpawnersCount;
 		
-		g_iSavedMaxRockets[iIndex] = kvConfig.GetNum("max rockets", 1);
+		SavedMaxRockets[iIndex] = kvConfig.GetNum("max rockets", 1);
 		
 		g_iSpawnersCount++;
 	}

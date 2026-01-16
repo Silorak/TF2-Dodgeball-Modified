@@ -13,24 +13,24 @@
 #define PLUGIN_VERSION     "1.1.3"
 #define PLUGIN_URL         "https://github.com/x07x08/TF2-Dodgeball-Modified"
 
-bool  g_bLoaded;
-bool  g_bFFAEnabled;
-int   g_iBotCount;
-bool  g_bVoteAllowed;
-float g_fLastVoteTime;
-int   g_iOldTeam[MAXPLAYERS + 1];
+bool  Loaded;
+bool  FFAEnabled;
+int   BotCount;
+bool  VoteAllowed;
+float LastVoteTime;
+int   OldTeam[MAXPLAYERS + 1];
 
-Address g_pMyWearables;
+Address MyWearables;
 
-ConVar g_hCvarDisableOnBot;
-ConVar g_hCvarVoteTimeout;
-ConVar g_hCvarVoteDuration;
-ConVar g_hCvarToggleMode;
-ConVar g_hCvarAllowStealing;
-ConVar g_hCvarDisableConfig;
-ConVar g_hCvarEnableConfig;
-ConVar g_hCvarSwitchTeams;
-ConVar g_hCvarFriendlyFire;
+ConVar CvarDisableOnBot;
+ConVar CvarVoteTimeout;
+ConVar CvarVoteDuration;
+ConVar CvarToggleMode;
+ConVar CvarAllowStealing;
+ConVar CvarDisableConfig;
+ConVar CvarEnableConfig;
+ConVar CvarSwitchTeams;
+ConVar CvarFriendlyFire;
 
 public Plugin myinfo =
 {
@@ -45,17 +45,17 @@ public void OnPluginStart()
 {
 	LoadTranslations("tfdb.phrases.txt");
 	
-	g_pMyWearables = view_as<Address>(FindSendPropInfo("CTFPlayer", "m_hMyWearables"));
+	MyWearables = view_as<Address>(FindSendPropInfo("CTFPlayer", "m_hMyWearables"));
 	
-	g_hCvarDisableOnBot  = CreateConVar("tf_dodgeball_ffa_bot", "1", "Disable FFA when a bot joins?", _, true, 0.0, true, 1.0);
-	g_hCvarVoteTimeout   = CreateConVar("tf_dodgeball_ffa_timeout", "150", "Vote timeout (in seconds)", _, true, 0.0);
-	g_hCvarVoteDuration  = CreateConVar("tf_dodgeball_ffa_duration", "20", "Vote duration (in seconds)", _, true, 0.0);
-	g_hCvarToggleMode    = CreateConVar("tf_dodgeball_ffa_mode", "1", "How does changing FFA affect the rockets?\n 0 - No effect, wait for the next spawn\n 1 - Destroy all active rockets\n 2 - Immediately change the rockets to be neutral", _, true, 0.0);
-	g_hCvarAllowStealing = CreateConVar("tf_dodgeball_ffa_stealing", "1", "Allow stealing in FFA mode?", _, true, 0.0, true, 1.0);
-	g_hCvarDisableConfig = CreateConVar("tf_dodgeball_ffa_disablecfg", "sourcemod/dodgeball_ffa_disable.cfg", "Config file to execute when disabling FFA mode");
-	g_hCvarEnableConfig  = CreateConVar("tf_dodgeball_ffa_enablecfg", "sourcemod/dodgeball_ffa_enable.cfg", "Config file to execute when enabling FFA mode");
-	g_hCvarSwitchTeams   = CreateConVar("tf_dodgeball_ffa_teams", "1", "Automatically swap players when a team is empty in FFA mode?", _, true, 0.0, true, 1.0);
-	g_hCvarFriendlyFire  = FindConVar("mp_friendlyfire");
+	CvarDisableOnBot  = CreateConVar("tf_dodgeball_ffa_bot", "1", "Disable FFA when a bot joins?", _, true, 0.0, true, 1.0);
+	CvarVoteTimeout   = CreateConVar("tf_dodgeball_ffa_timeout", "150", "Vote timeout (in seconds)", _, true, 0.0);
+	CvarVoteDuration  = CreateConVar("tf_dodgeball_ffa_duration", "20", "Vote duration (in seconds)", _, true, 0.0);
+	CvarToggleMode    = CreateConVar("tf_dodgeball_ffa_mode", "1", "How does changing FFA affect the rockets?\n 0 - No effect, wait for the next spawn\n 1 - Destroy all active rockets\n 2 - Immediately change the rockets to be neutral", _, true, 0.0);
+	CvarAllowStealing = CreateConVar("tf_dodgeball_ffa_stealing", "1", "Allow stealing in FFA mode?", _, true, 0.0, true, 1.0);
+	CvarDisableConfig = CreateConVar("tf_dodgeball_ffa_disablecfg", "sourcemod/dodgeball_ffa_disable.cfg", "Config file to execute when disabling FFA mode");
+	CvarEnableConfig  = CreateConVar("tf_dodgeball_ffa_enablecfg", "sourcemod/dodgeball_ffa_enable.cfg", "Config file to execute when enabling FFA mode");
+	CvarSwitchTeams   = CreateConVar("tf_dodgeball_ffa_teams", "1", "Automatically swap players when a team is empty in FFA mode?", _, true, 0.0, true, 1.0);
+	CvarFriendlyFire  = FindConVar("mp_friendlyfire");
 	
 	RegAdminCmd("sm_ffa", CmdToggleFFA, ADMFLAG_CONFIG, "Forcefully toggle FFA");
 	RegConsoleCmd("sm_voteffa", CmdVoteFFA, "Start a vote to toggle FFA");
@@ -67,14 +67,14 @@ public void OnPluginStart()
 
 public void TFDB_OnRocketsConfigExecuted()
 {
-	if (g_bLoaded) return;
+	if (Loaded) return;
 	
 	int iTeam;
 	
-	g_bVoteAllowed  = true;
-	g_bFFAEnabled   = false;
-	g_iBotCount     = 0;
-	g_fLastVoteTime = 0.0;
+	VoteAllowed  = true;
+	FFAEnabled   = false;
+	BotCount     = 0;
+	LastVoteTime = 0.0;
 	
 	for (int iClient = 1; iClient <= MaxClients; iClient++)
 	{
@@ -84,48 +84,48 @@ public void TFDB_OnRocketsConfigExecuted()
 		
 		if (!(iTeam >= 2)) continue;
 		
-		g_iOldTeam[iClient] = iTeam;
+		OldTeam[iClient] = iTeam;
 		
-		if (IsFakeClient(iClient)) g_iBotCount++;
+		if (IsFakeClient(iClient)) BotCount++;
 	}
 	
-	g_hCvarDisableOnBot.AddChangeHook(DisableOnBotCallback);
+	CvarDisableOnBot.AddChangeHook(DisableOnBotCallback);
 	
 	HookEvent("player_team", OnPlayerTeam);
 	HookEvent("player_death", OnPlayerDeath);
 	HookEvent("teamplay_round_start", OnRoundStart);
 	
-	g_bLoaded = true;
+	Loaded = true;
 }
 
 public void OnMapEnd()
 {
-	if (!g_bLoaded) return;
+	if (!Loaded) return;
 	
 	UnhookEvent("player_team", OnPlayerTeam);
 	UnhookEvent("player_death", OnPlayerDeath);
 	UnhookEvent("teamplay_round_start", OnRoundStart);
 	
-	g_hCvarDisableOnBot.RemoveChangeHook(DisableOnBotCallback);
+	CvarDisableOnBot.RemoveChangeHook(DisableOnBotCallback);
 	
-	g_bVoteAllowed  = false;
-	g_bFFAEnabled   = false;
-	g_iBotCount     = 0;
-	g_fLastVoteTime = 0.0;
+	VoteAllowed  = false;
+	FFAEnabled   = false;
+	BotCount     = 0;
+	LastVoteTime = 0.0;
 	
-	g_hCvarFriendlyFire.RestoreDefault();
+	CvarFriendlyFire.RestoreDefault();
 	ExecuteDisableConfig();
 	
-	g_bLoaded = false;
+	Loaded = false;
 }
 
 public void OnClientDisconnect(int iClient)
 {
-	g_iOldTeam[iClient] = 0;
+	OldTeam[iClient] = 0;
 	
-	if (!g_bFFAEnabled ||
-	    !g_hCvarSwitchTeams.BoolValue ||
-	    (g_hCvarDisableOnBot.BoolValue && g_iBotCount) ||
+	if (!FFAEnabled ||
+	    !CvarSwitchTeams.BoolValue ||
+	    (CvarDisableOnBot.BoolValue && BotCount) ||
 	    !TFDB_GetRoundStarted())
 	{
 		return;
@@ -146,7 +146,7 @@ public void OnClientDisconnect(int iClient)
 
 public void OnClientConnected(int iClient)
 {
-	g_iOldTeam[iClient] = 0;
+	OldTeam[iClient] = 0;
 }
 
 public void OnPlayerTeam(Event hEvent, char[] strEventName, bool bDontBroadcast)
@@ -155,12 +155,12 @@ public void OnPlayerTeam(Event hEvent, char[] strEventName, bool bDontBroadcast)
 	int iTeam    = hEvent.GetInt("team");
 	int iOldTeam = hEvent.GetInt("oldteam");
 	
-	if (!g_bFFAEnabled ||
-	    !g_hCvarSwitchTeams.BoolValue ||
-	    (g_hCvarDisableOnBot.BoolValue && g_iBotCount) ||
+	if (!FFAEnabled ||
+	    !CvarSwitchTeams.BoolValue ||
+	    (CvarDisableOnBot.BoolValue && BotCount) ||
 	    !TFDB_GetRoundStarted())
 	{
-		g_iOldTeam[iClient] = iTeam;
+		OldTeam[iClient] = iTeam;
 	}
 	else
 	{
@@ -169,7 +169,7 @@ public void OnPlayerTeam(Event hEvent, char[] strEventName, bool bDontBroadcast)
 		
 		if (iTeam <= 1)
 		{
-			g_iOldTeam[iClient] = iTeam;
+			OldTeam[iClient] = iTeam;
 		}
 		else if ((iOldTeam >= 2) &&
 		         ((GetTeamAliveClientCount(iOldTeam) - view_as<int>(IsPlayerAlive(iClient))) == 0) &&
@@ -183,23 +183,23 @@ public void OnPlayerTeam(Event hEvent, char[] strEventName, bool bDontBroadcast)
 	
 	if ((iOldTeam <= 1) && (iTeam >= 2))
 	{
-		g_iBotCount++;
+		BotCount++;
 		
-		if (g_bFFAEnabled && (g_iBotCount == 1) && g_hCvarDisableOnBot.BoolValue)
+		if (FFAEnabled && (BotCount == 1) && CvarDisableOnBot.BoolValue)
 		{
 			CPrintToChatAll("%t", "Dodgeball_FFABot_Joined");
-			g_hCvarFriendlyFire.RestoreDefault();
+			CvarFriendlyFire.RestoreDefault();
 			ExecuteDisableConfig();
 		}
 	}
 	else if ((iOldTeam >= 2) && (iTeam <= 1))
 	{
-		g_iBotCount--;
+		BotCount--;
 		
-		if (g_bFFAEnabled && (g_iBotCount == 0) && g_hCvarDisableOnBot.BoolValue)
+		if (FFAEnabled && (BotCount == 0) && CvarDisableOnBot.BoolValue)
 		{
 			CPrintToChatAll("%t", "Dodgeball_FFABot_Left");
-			g_hCvarFriendlyFire.SetBool(true);
+			CvarFriendlyFire.SetBool(true);
 			ExecuteEnableConfig();
 		}
 	}
@@ -207,9 +207,9 @@ public void OnPlayerTeam(Event hEvent, char[] strEventName, bool bDontBroadcast)
 
 public void OnPlayerDeath(Event hEvent, char[] strEventName, bool bDontBroadcast)
 {
-	if (!g_bFFAEnabled ||
-	    !g_hCvarSwitchTeams.BoolValue ||
-	    (g_hCvarDisableOnBot.BoolValue && g_iBotCount) ||
+	if (!FFAEnabled ||
+	    !CvarSwitchTeams.BoolValue ||
+	    (CvarDisableOnBot.BoolValue && BotCount) ||
 	    !TFDB_GetRoundStarted())
 	{
 		return;
@@ -234,9 +234,9 @@ public void OnPlayerDeath(Event hEvent, char[] strEventName, bool bDontBroadcast
 
 public void OnRoundStart(Event hEvent, char[] strEventName, bool bDontBroadcast)
 {
-	if (!g_bFFAEnabled ||
-	    !g_hCvarSwitchTeams.BoolValue ||
-	    (g_hCvarDisableOnBot.BoolValue && g_iBotCount))
+	if (!FFAEnabled ||
+	    !CvarSwitchTeams.BoolValue ||
+	    (CvarDisableOnBot.BoolValue && BotCount))
 	{
 		return;
 	}
@@ -247,14 +247,14 @@ public void OnRoundStart(Event hEvent, char[] strEventName, bool bDontBroadcast)
 	{
 		if (!IsClientInGame(iClient) || ((iTeam = GetClientTeam(iClient)) <= 1)) continue;
 		
-		if ((g_iOldTeam[iClient] >= 2) &&
-		    (g_iOldTeam[iClient] != iTeam) &&
+		if ((OldTeam[iClient] >= 2) &&
+		    (OldTeam[iClient] != iTeam) &&
 		    ((GetTeamAliveClientCount(iTeam) - view_as<int>(IsPlayerAlive(iClient))) >= 1))
 		{
-			ChangeClientTeam(iClient, g_iOldTeam[iClient]);
+			ChangeClientTeam(iClient, OldTeam[iClient]);
 		}
 		
-		if (g_iOldTeam[iClient] <= 1) g_iOldTeam[iClient] = iTeam;
+		if (OldTeam[iClient] <= 1) OldTeam[iClient] = iTeam;
 	}
 }
 
@@ -296,18 +296,18 @@ public Action CmdVoteFFA(int iClient, int iArgs)
 		return Plugin_Handled;
 	}
 	
-	if (g_bVoteAllowed)
+	if (VoteAllowed)
 	{
-		g_bVoteAllowed  = false;
-		g_fLastVoteTime = GetGameTime();
+		VoteAllowed  = false;
+		LastVoteTime = GetGameTime();
 		
 		StartFFAVote();
-		CreateTimer(g_hCvarVoteTimeout.FloatValue, VoteTimeoutCallback, _, TIMER_FLAG_NO_MAPCHANGE);
+		CreateTimer(CvarVoteTimeout.FloatValue, VoteTimeoutCallback, _, TIMER_FLAG_NO_MAPCHANGE);
 	}
 	else
 	{
 		CReplyToCommand(iClient, "%t", "Dodgeball_FFAVote_Cooldown",
-		                RoundToCeil((g_fLastVoteTime + g_hCvarVoteTimeout.FloatValue) - GetGameTime()));
+		                RoundToCeil((LastVoteTime + CvarVoteTimeout.FloatValue) - GetGameTime()));
 	}
 	
 	return Plugin_Handled;
@@ -315,16 +315,16 @@ public Action CmdVoteFFA(int iClient, int iArgs)
 
 public void DisableOnBotCallback(ConVar hConvar, const char[] strOldValue, const char[] strNewValue)
 {
-	if (!g_bFFAEnabled || !g_iBotCount) return;
+	if (!FFAEnabled || !BotCount) return;
 	
 	if (hConvar.BoolValue)
 	{
-		g_hCvarFriendlyFire.RestoreDefault();
+		CvarFriendlyFire.RestoreDefault();
 		ExecuteDisableConfig();
 	}
 	else
 	{
-		g_hCvarFriendlyFire.SetBool(true);
+		CvarFriendlyFire.SetBool(true);
 		ExecuteEnableConfig();
 	}
 }
@@ -332,7 +332,7 @@ public void DisableOnBotCallback(ConVar hConvar, const char[] strOldValue, const
 void StartFFAVote()
 {
 	char strMode[16];
-	strMode = !g_bFFAEnabled ? "Enable" : "Disable";
+	strMode = !FFAEnabled ? "Enable" : "Disable";
 	
 	Menu hMenu = new Menu(VoteMenuHandler);
 	hMenu.VoteResultCallback = VoteResultHandler;
@@ -355,7 +355,7 @@ void StartFFAVote()
 		iClients[iTotal++] = iClient;
 	}
 	
-	hMenu.DisplayVote(iClients, iTotal, g_hCvarVoteDuration.IntValue);
+	hMenu.DisplayVote(iClients, iTotal, CvarVoteDuration.IntValue);
 }
 
 public int VoteMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1, int iParam2)
@@ -400,18 +400,18 @@ public void VoteResultHandler(Menu hMenu,
 
 void EnableFFA()
 {
-	g_bFFAEnabled = true;
+	FFAEnabled = true;
 	
-	if (g_hCvarDisableOnBot.BoolValue && g_iBotCount)
+	if (CvarDisableOnBot.BoolValue && BotCount)
 	{
 		CPrintToChatAll("%t", "Dodgeball_FFAVote_LateEnabled");
 	}
 	else
 	{
-		g_hCvarFriendlyFire.SetBool(true);
+		CvarFriendlyFire.SetBool(true);
 		ExecuteEnableConfig();
 		
-		switch (g_hCvarToggleMode.IntValue)
+		switch (CvarToggleMode.IntValue)
 		{
 			case 1 :
 			{
@@ -430,11 +430,11 @@ void EnableFFA()
 
 void DisableFFA()
 {
-	g_bFFAEnabled = false;
-	g_hCvarFriendlyFire.RestoreDefault();
+	FFAEnabled = false;
+	CvarFriendlyFire.RestoreDefault();
 	ExecuteDisableConfig();
 	
-	switch (g_hCvarToggleMode.IntValue)
+	switch (CvarToggleMode.IntValue)
 	{
 		case 1 :
 		{
@@ -452,7 +452,7 @@ void DisableFFA()
 
 void ToggleFFA()
 {
-	if (!g_bFFAEnabled)
+	if (!FFAEnabled)
 	{
 		EnableFFA();
 	}
@@ -475,11 +475,11 @@ void ChangeRockets()
 		iClassFlags = TFDB_GetRocketClassFlags(TFDB_GetRocketClass(iIndex));
 		iEntity = EntRefToEntIndex(TFDB_GetRocketEntity(iIndex));
 		
-		if (g_bFFAEnabled)
+		if (FFAEnabled)
 		{
 			iFlags |= RocketFlag_IsNeutral;
 			
-			if (g_hCvarAllowStealing.BoolValue) iFlags |= RocketFlag_CanBeStolen;
+			if (CvarAllowStealing.BoolValue) iFlags |= RocketFlag_CanBeStolen;
 			
 			SetEntProp(iEntity, Prop_Send, "m_iTeamNum", 1, 1);
 			
@@ -489,7 +489,7 @@ void ChangeRockets()
 		{
 			if (!(iClassFlags & RocketFlag_IsNeutral)) iFlags &= ~RocketFlag_IsNeutral;
 			
-			if (g_hCvarAllowStealing.BoolValue && !(iClassFlags & RocketFlag_CanBeStolen)) iFlags &= ~RocketFlag_CanBeStolen;
+			if (CvarAllowStealing.BoolValue && !(iClassFlags & RocketFlag_CanBeStolen)) iFlags &= ~RocketFlag_CanBeStolen;
 			
 			int iOwner = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
 			SetEntProp(iEntity, Prop_Send, "m_iTeamNum", GetClientTeam(iOwner), 1);
@@ -501,18 +501,18 @@ void ChangeRockets()
 
 public Action VoteTimeoutCallback(Handle hTimer)
 {
-	g_bVoteAllowed = true;
+	VoteAllowed = true;
 	
 	return Plugin_Continue;
 }
 
 public Action TFDB_OnRocketCreatedPre(int iIndex, int &iClass, RocketFlags &iFlags)
 {
-	if (g_bFFAEnabled && (!g_hCvarDisableOnBot.BoolValue || !g_iBotCount))
+	if (FFAEnabled && (!CvarDisableOnBot.BoolValue || !BotCount))
 	{
 		iFlags |= RocketFlag_IsNeutral;
 		
-		if (g_hCvarAllowStealing.BoolValue) iFlags |= RocketFlag_CanBeStolen;
+		if (CvarAllowStealing.BoolValue) iFlags |= RocketFlag_CanBeStolen;
 		
 		return Plugin_Changed;
 	}
@@ -522,13 +522,13 @@ public Action TFDB_OnRocketCreatedPre(int iIndex, int &iClass, RocketFlags &iFla
 
 void ExecuteDisableConfig()
 {
-	char strConfigPath[64]; g_hCvarDisableConfig.GetString(strConfigPath, sizeof(strConfigPath));
+	char strConfigPath[64]; CvarDisableConfig.GetString(strConfigPath, sizeof(strConfigPath));
 	ServerCommand("exec \"%s\"", strConfigPath);
 }
 
 void ExecuteEnableConfig()
 {
-	char strConfigPath[64]; g_hCvarEnableConfig.GetString(strConfigPath, sizeof(strConfigPath));
+	char strConfigPath[64]; CvarEnableConfig.GetString(strConfigPath, sizeof(strConfigPath));
 	ServerCommand("exec \"%s\"", strConfigPath);
 }
 
@@ -582,7 +582,7 @@ void ChangeAliveClientTeam(int iClient, int iTeam)
 	
 	int iWearable;
 	int iWearablesCount = GetPlayerWearablesCount(iClient);
-	Address pData = DereferencePointer(GetEntityAddress(iClient) + g_pMyWearables);
+	Address pData = DereferencePointer(GetEntityAddress(iClient) + MyWearables);
 	
 	for (int iIndex = 0; iIndex < iWearablesCount; iIndex++)
 	{
@@ -611,5 +611,5 @@ stock Address DereferencePointer(Address pAddress)
 
 int GetPlayerWearablesCount(int iClient)
 {
-	return GetEntData(iClient, view_as<int>(g_pMyWearables) + 0x0C);
+	return GetEntData(iClient, view_as<int>(MyWearables) + 0x0C);
 }

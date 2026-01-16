@@ -16,8 +16,8 @@
 #define PLUGIN_VERSION     "1.2.2"
 #define PLUGIN_URL         "https://github.com/x07x08/TF2-Dodgeball-Modified"
 
-ConVar g_hCvarHookDamage;
-ConVar g_hCvarHookCollision;
+ConVar CvarHookDamage;
+ConVar CvarHookCollision;
 
 public Plugin myinfo =
 {
@@ -30,8 +30,8 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-	g_hCvarHookDamage    = CreateConVar("tf_dodgeball_as_damage", "1", "Hook damage for anti-sniping?", _, true, 0.0, true, 1.0);
-	g_hCvarHookCollision = CreateConVar("tf_dodgeball_as_collision", "1", "Change player collisions for anti-sniping?", _, true, 0.0, true, 1.0);
+	CvarHookDamage    = CreateConVar("tf_dodgeball_as_damage", "1", "Hook damage for anti-sniping?", _, true, 0.0, true, 1.0);
+	CvarHookCollision = CreateConVar("tf_dodgeball_as_collision", "1", "Change player collisions for anti-sniping?", _, true, 0.0, true, 1.0);
 	
 	if (!TFDB_IsDodgeballEnabled()) return;
 	
@@ -52,7 +52,7 @@ public void OnClientPutInServer(int iClient)
 
 public Action OnPlayerTakeDamage(int iVictim, int &iAttacker, int &iInflictor, float &fDamage, int &iDamageType)
 {
-	if (!g_hCvarHookDamage.BoolValue) return Plugin_Continue;
+	if (!CvarHookDamage.BoolValue) return Plugin_Continue;
 	
 	int iIndex = TFDB_FindRocketByEntity(iInflictor);
 	
@@ -69,7 +69,7 @@ public Action OnPlayerTakeDamage(int iVictim, int &iAttacker, int &iInflictor, f
 
 public Action CH_PassFilter(int iEntity1, int iEntity2, bool &bResult)
 {
-	if (!TFDB_IsDodgeballEnabled() || !g_hCvarHookCollision.BoolValue) return Plugin_Continue;
+	if (!TFDB_IsDodgeballEnabled() || !CvarHookCollision.BoolValue) return Plugin_Continue;
 	
 	int iIndex1 = TFDB_FindRocketByEntity(iEntity1);
 	int iIndex2 = TFDB_FindRocketByEntity(iEntity2);

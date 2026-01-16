@@ -10,10 +10,10 @@
 #define PLUGIN_VERSION     "1.1.2"
 #define PLUGIN_URL         "https://github.com/x07x08/TF2-Dodgeball-Modified"
 
-char g_strCmdBuffer[255];
-char g_strExplodeBuffer[32][255];
+char CmdBuffer[255];
+char ExplodeBuffer[32][255];
 
-Regex g_hBracketsPattern;
+Regex BracketsPattern;
 
 public Plugin myinfo =
 {
@@ -28,7 +28,7 @@ public void OnPluginStart()
 {
 	LoadTranslations("tfdb.phrases.txt");
 	
-	g_hBracketsPattern = new Regex("(?<=\\[)(.*?)(?=\\])");
+	BracketsPattern = new Regex("(?<=\\[)(.*?)(?=\\])");
 	
 	RegAdminCmd("tf_dodgeball_print", CmdPrintMessage, ADMFLAG_CHAT, "Prints a message to chat and replaces client indexes inside a pair of '##'");
 	RegAdminCmd("tf_dodgeball_print_c", CmdPrintMessageClient, ADMFLAG_CHAT, "Prints a message to a client and replaces client indexes inside a pair of '##'");
@@ -45,26 +45,26 @@ public Action CmdPrintMessage(int iClient, int iArgs)
 		return Plugin_Handled;
 	}
 	
-	GetCmdArgString(g_strCmdBuffer, sizeof(g_strCmdBuffer));
-	TrimString(g_strCmdBuffer);
+	GetCmdArgString(CmdBuffer, sizeof(CmdBuffer));
+	TrimString(CmdBuffer);
 	
-	int iNumStrings = ExplodeString(g_strCmdBuffer, "##", g_strExplodeBuffer, sizeof(g_strExplodeBuffer), sizeof(g_strExplodeBuffer[]));
+	int iNumStrings = ExplodeString(CmdBuffer, "##", ExplodeBuffer, sizeof(ExplodeBuffer), sizeof(ExplodeBuffer[]));
 	int iIndex;
 	
 	for (int iPos = 0; iPos < iNumStrings; iPos++)
 	{
-		if (!g_strExplodeBuffer[iPos][0]) continue;
+		if (!ExplodeBuffer[iPos][0]) continue;
 		
-		if ((StringToIntEx(g_strExplodeBuffer[iPos], iIndex) == strlen(g_strExplodeBuffer[iPos])) &&
+		if ((StringToIntEx(ExplodeBuffer[iPos], iIndex) == strlen(ExplodeBuffer[iPos])) &&
 		    ((iIndex >= 1) && (iIndex <= MaxClients) && IsClientInGame(iIndex)))
 		{
-			FormatEx(g_strExplodeBuffer[iPos], sizeof(g_strExplodeBuffer[]), "%N", iIndex);
+			FormatEx(ExplodeBuffer[iPos], sizeof(ExplodeBuffer[]), "%N", iIndex);
 		}
 	}
 	
-	ImplodeStrings(g_strExplodeBuffer, iNumStrings, "", g_strCmdBuffer, sizeof(g_strCmdBuffer));
+	ImplodeStrings(ExplodeBuffer, iNumStrings, "", CmdBuffer, sizeof(CmdBuffer));
 	
-	CPrintToChatAll(g_strCmdBuffer);
+	CPrintToChatAll(CmdBuffer);
 	
 	return Plugin_Handled;
 }
@@ -80,32 +80,32 @@ public Action CmdPrintMessageClient(int iClient, int iArgs)
 	
 	char strBuffer[8];
 	
-	GetCmdArgString(g_strCmdBuffer, sizeof(g_strCmdBuffer));
+	GetCmdArgString(CmdBuffer, sizeof(CmdBuffer));
 	
-	int iLength = BreakString(g_strCmdBuffer, strBuffer, sizeof(strBuffer));
+	int iLength = BreakString(CmdBuffer, strBuffer, sizeof(strBuffer));
 	int iTarget = StringToInt(strBuffer);
 	
-	TrimString(g_strCmdBuffer[iLength]);
+	TrimString(CmdBuffer[iLength]);
 	
-	int iNumStrings = ExplodeString(g_strCmdBuffer[iLength], "##", g_strExplodeBuffer, sizeof(g_strExplodeBuffer), sizeof(g_strExplodeBuffer[]));
+	int iNumStrings = ExplodeString(CmdBuffer[iLength], "##", ExplodeBuffer, sizeof(ExplodeBuffer), sizeof(ExplodeBuffer[]));
 	int iIndex;
 	
 	for (int iPos = 0; iPos < iNumStrings; iPos++)
 	{
-		if (!g_strExplodeBuffer[iPos][0]) continue;
+		if (!ExplodeBuffer[iPos][0]) continue;
 		
-		if ((StringToIntEx(g_strExplodeBuffer[iPos], iIndex) == strlen(g_strExplodeBuffer[iPos])) &&
+		if ((StringToIntEx(ExplodeBuffer[iPos], iIndex) == strlen(ExplodeBuffer[iPos])) &&
 		    ((iIndex >= 1) && (iIndex <= MaxClients) && IsClientInGame(iIndex)))
 		{
-			FormatEx(g_strExplodeBuffer[iPos], sizeof(g_strExplodeBuffer[]), "%N", iIndex);
+			FormatEx(ExplodeBuffer[iPos], sizeof(ExplodeBuffer[]), "%N", iIndex);
 		}
 	}
 	
-	ImplodeStrings(g_strExplodeBuffer, iNumStrings, "", g_strCmdBuffer[iLength], sizeof(g_strCmdBuffer));
+	ImplodeStrings(ExplodeBuffer, iNumStrings, "", CmdBuffer[iLength], sizeof(CmdBuffer));
 	
 	if ((iTarget >= 1) && (iTarget <= MaxClients) && IsClientInGame(iTarget))
 	{
-		CPrintToChat(iTarget, g_strCmdBuffer[iLength]);
+		CPrintToChat(iTarget, CmdBuffer[iLength]);
 	}
 	
 	return Plugin_Handled;
@@ -115,9 +115,9 @@ public Action CmdPrintPhrase(int iClient, int iArgs)
 {
 	char strPhrase[48];
 	
-	GetCmdArgString(g_strCmdBuffer, sizeof(g_strCmdBuffer)); TrimString(g_strCmdBuffer);
+	GetCmdArgString(CmdBuffer, sizeof(CmdBuffer)); TrimString(CmdBuffer);
 	
-	int iMatches = g_hBracketsPattern.MatchAll(g_strCmdBuffer);
+	int iMatches = BracketsPattern.MatchAll(CmdBuffer);
 	
 	if (!(iMatches >= 1))
 	{
@@ -128,27 +128,27 @@ public Action CmdPrintPhrase(int iClient, int iArgs)
 	
 	any aArgs[32];
 	
-	g_hBracketsPattern.GetSubString(0, strPhrase, sizeof(strPhrase), 0); TrimString(strPhrase);
+	BracketsPattern.GetSubString(0, strPhrase, sizeof(strPhrase), 0); TrimString(strPhrase);
 	
 	if (iMatches == 2)
 	{
-		g_hBracketsPattern.GetSubString(0, g_strCmdBuffer, sizeof(g_strCmdBuffer), 1);
+		BracketsPattern.GetSubString(0, CmdBuffer, sizeof(CmdBuffer), 1);
 		
-		int iStrings = ExplodeString(g_strCmdBuffer, ",", g_strExplodeBuffer, sizeof(g_strExplodeBuffer), sizeof(g_strExplodeBuffer[]));
+		int iStrings = ExplodeString(CmdBuffer, ",", ExplodeBuffer, sizeof(ExplodeBuffer), sizeof(ExplodeBuffer[]));
 		
 		for (int iIndex = 0; iIndex < iStrings; iIndex++)
 		{
-			TrimString(g_strExplodeBuffer[iIndex]);
+			TrimString(ExplodeBuffer[iIndex]);
 			
-			if ((StringToIntEx(g_strExplodeBuffer[iIndex], aArgs[iIndex]) == strlen(g_strExplodeBuffer[iIndex])) ||
-			    (StringToFloatEx(g_strExplodeBuffer[iIndex], aArgs[iIndex]) == strlen(g_strExplodeBuffer[iIndex])))
+			if ((StringToIntEx(ExplodeBuffer[iIndex], aArgs[iIndex]) == strlen(ExplodeBuffer[iIndex])) ||
+			    (StringToFloatEx(ExplodeBuffer[iIndex], aArgs[iIndex]) == strlen(ExplodeBuffer[iIndex])))
 			{
-				g_strExplodeBuffer[iIndex] = "\0";
+				ExplodeBuffer[iIndex] = "\0";
 			}
 		}
 	}
 	
-	PrintPhrase(strPhrase, g_strExplodeBuffer, aArgs, true);
+	PrintPhrase(strPhrase, ExplodeBuffer, aArgs, true);
 	
 	return Plugin_Handled;
 }
@@ -157,9 +157,9 @@ public Action CmdPrintPhraseClient(int iClient, int iArgs)
 {
 	char strPhrase[48], strTarget[8];
 	
-	GetCmdArgString(g_strCmdBuffer, sizeof(g_strCmdBuffer)); TrimString(g_strCmdBuffer);
+	GetCmdArgString(CmdBuffer, sizeof(CmdBuffer)); TrimString(CmdBuffer);
 	
-	int iMatches = g_hBracketsPattern.MatchAll(g_strCmdBuffer);
+	int iMatches = BracketsPattern.MatchAll(CmdBuffer);
 	
 	if (!(iMatches >= 2))
 	{
@@ -170,32 +170,32 @@ public Action CmdPrintPhraseClient(int iClient, int iArgs)
 	
 	any aArgs[32];
 	
-	g_hBracketsPattern.GetSubString(0, strTarget, sizeof(strTarget), 0); TrimString(strTarget);
-	g_hBracketsPattern.GetSubString(0, strPhrase, sizeof(strPhrase), 1); TrimString(strPhrase);
+	BracketsPattern.GetSubString(0, strTarget, sizeof(strTarget), 0); TrimString(strTarget);
+	BracketsPattern.GetSubString(0, strPhrase, sizeof(strPhrase), 1); TrimString(strPhrase);
 	
 	int iTarget = StringToInt(strTarget);
 	
 	if (iMatches == 3)
 	{
-		g_hBracketsPattern.GetSubString(0, g_strCmdBuffer, sizeof(g_strCmdBuffer), 2);
+		BracketsPattern.GetSubString(0, CmdBuffer, sizeof(CmdBuffer), 2);
 		
-		int iStrings = ExplodeString(g_strCmdBuffer, ",", g_strExplodeBuffer, sizeof(g_strExplodeBuffer), sizeof(g_strExplodeBuffer[]));
+		int iStrings = ExplodeString(CmdBuffer, ",", ExplodeBuffer, sizeof(ExplodeBuffer), sizeof(ExplodeBuffer[]));
 		
 		for (int iIndex = 0; iIndex < iStrings; iIndex++)
 		{
-			TrimString(g_strExplodeBuffer[iIndex]);
+			TrimString(ExplodeBuffer[iIndex]);
 			
-			if ((StringToIntEx(g_strExplodeBuffer[iIndex], aArgs[iIndex]) == strlen(g_strExplodeBuffer[iIndex])) ||
-			    (StringToFloatEx(g_strExplodeBuffer[iIndex], aArgs[iIndex]) == strlen(g_strExplodeBuffer[iIndex])))
+			if ((StringToIntEx(ExplodeBuffer[iIndex], aArgs[iIndex]) == strlen(ExplodeBuffer[iIndex])) ||
+			    (StringToFloatEx(ExplodeBuffer[iIndex], aArgs[iIndex]) == strlen(ExplodeBuffer[iIndex])))
 			{
-				g_strExplodeBuffer[iIndex] = "\0";
+				ExplodeBuffer[iIndex] = "\0";
 			}
 		}
 	}
 	
 	if ((iTarget >= 1) && (iTarget <= MaxClients) && IsClientInGame(iTarget))
 	{
-		PrintPhrase(strPhrase, g_strExplodeBuffer, aArgs, false, iTarget);
+		PrintPhrase(strPhrase, ExplodeBuffer, aArgs, false, iTarget);
 	}
 	
 	return Plugin_Handled;
