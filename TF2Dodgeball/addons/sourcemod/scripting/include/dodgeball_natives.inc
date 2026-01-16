@@ -634,10 +634,9 @@ public any Native_GetStealInfo(Handle hPlugin, int iNumParams) {
 	if (iClient < 1 || iClient > MaxClients) {
 		return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d", iClient);
 	}
-	DataPack hPack = new DataPack();
-	hPack.WriteCell(StealInfo[iClient].stoleRocket ? 1 : 0);
-	hPack.WriteCell(StealInfo[iClient].rocketsStolen);
-	return hPack;
+	SetNativeCellRef(2, StealInfo[iClient].stoleRocket);
+	SetNativeCellRef(3, StealInfo[iClient].rocketsStolen);
+	return 0;
 }
 
 public any Native_SetStealInfo(Handle hPlugin, int iNumParams) {
@@ -645,13 +644,8 @@ public any Native_SetStealInfo(Handle hPlugin, int iNumParams) {
 	if (iClient < 1 || iClient > MaxClients) {
 		return ThrowNativeError(SP_ERROR_NATIVE, "Invalid client index %d", iClient);
 	}
-	DataPack hPack = view_as<DataPack>(GetNativeCell(2));
-	if (hPack == null) {
-		return ThrowNativeError(SP_ERROR_NATIVE, "Invalid DataPack handle provided");
-	}
-	hPack.Reset(false);
-	StealInfo[iClient].stoleRocket = (hPack.ReadCell() != 0);
-	StealInfo[iClient].rocketsStolen = hPack.ReadCell();
+	StealInfo[iClient].stoleRocket = view_as<bool>(GetNativeCell(2));
+	StealInfo[iClient].rocketsStolen = GetNativeCell(3);
 	return 0;
 }
 

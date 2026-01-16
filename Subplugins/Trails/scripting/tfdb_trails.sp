@@ -2,6 +2,7 @@
 #pragma newdecls required
 
 #include <sourcemod>
+#include <sdktools>
 #include <tf2_stocks>
 #include <multicolors>
 #include <sdkhooks>

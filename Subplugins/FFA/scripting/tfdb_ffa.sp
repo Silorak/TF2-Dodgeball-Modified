@@ -62,10 +62,10 @@ public void OnPluginStart()
 	
 	if (!TFDB_IsDodgeballEnabled()) return;
 	
-	TFDB_OnRocketsConfigExecuted();
+	TFDB_OnRocketsConfigExecuted("general.cfg");
 }
 
-public void TFDB_OnRocketsConfigExecuted()
+public void TFDB_OnRocketsConfigExecuted(const char[] strConfigFile)
 {
 	if (Loaded) return;
 	
