@@ -283,10 +283,27 @@ void PrintPhrase(const char[] strPhrase, const char strArgs[32][255], const any 
 // If I do "!strArgs[iIndex][0] ? aArgs[iIndex] : strArgs[iIndex]", it will print random stuff.
 // Found out it's because it returns a value on one side of the conditional operator and an array on the other.
 // I wasted 2 hours on this issue.
+// Updated for SM 1.12 compatibility - using explicit if/else
 
 any[] HandleBadConversion(const char[][] strArgs, const any[] aArgs, int iIndex)
 {
-	any aTemp[1][1]; aTemp[0][0] = aArgs[iIndex];
+	static any aResult[256];
 	
-	return !strArgs[iIndex][0] ? aTemp[0] : strArgs[iIndex];
+	if (!strArgs[iIndex][0])
+	{
+		// Return the numeric value
+		aResult[0] = aArgs[iIndex];
+		return aResult;
+	}
+	else
+	{
+		// Copy string to result array
+		for (int i = 0; i < 255 && strArgs[iIndex][i]; i++)
+		{
+			aResult[i] = view_as<any>(strArgs[iIndex][i]);
+			aResult[i + 1] = 0;
+		}
+		return aResult;
+	}
 }
+
