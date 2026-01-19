@@ -231,7 +231,7 @@ public Action DisplayHud(Handle timer)
 		// No rockets are active, clear the HUD for anyone who has it visible.
 		for (int i = 1; i <= MaxClients; i++)
 		{
-			if (IsHudVisible[i])
+			if (IsHudVisible[i] && IsClientInGame(i))
 			{
 				SetHudTextParams(0.0, 0.0, 0.1, 255, 255, 255, 0, 0, 0.0, 0.0, 0.0);
 				ShowHudText(i, 4, " ");
