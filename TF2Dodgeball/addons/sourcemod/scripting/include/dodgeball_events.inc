@@ -25,6 +25,8 @@ public void OnRoundStart(Event hEvent, char[] strEventName, bool bDontBroadcast)
 /** Called when setup phase ends. Initializes spawn points and starts the game timer. */
 public void OnSetupFinished(Event hEvent, char[] strEventName, bool bDontBroadcast)
 {
+	// Guard against being called twice (both teamplay_round_active and arena_round_start hook this)
+	if (RoundStarted) return;
 	if (!BothTeamsPlaying()) return;
 
 	PopulateSpawnPoints();

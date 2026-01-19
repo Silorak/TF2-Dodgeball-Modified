@@ -7,11 +7,16 @@
  * Contains core gamemode logic: enabling/disabling the mod and the main game timer.
  */
 
-/** Checks if the current map is a dodgeball map (starts with "tfdb_"). */
+// Tracks whether game events have been hooked (to prevent double-unhook errors)
+static bool EventsHooked = false;
+
+/** Checks if the current map is a dodgeball map (starts with "tfdb_", "db_", or "dbs_"). */
 bool IsDodgeBallMap()
 {
 	char map[64]; GetCurrentMap(map, sizeof(map));
-	return StrContains(map, "tfdb_", false) == 0;
+	return (StrContains(map, "tfdb_", false) == 0 ||
+	        StrContains(map, "db_", false) == 0 ||
+	        StrContains(map, "dbs_", false) == 0);
 }
 
 /**
@@ -33,15 +38,20 @@ void EnableDodgeBall()
 	if (DefaultRedSpawner == -1) SetFailState("No spawner class definition for the Red spawners exists in the config file.");
 	if (DefaultBluSpawner == -1) SetFailState("No spawner class definition for the Blu spawners exists in the config file.");
 
-	HookEvent("teamplay_round_start", OnRoundStart, EventHookMode_PostNoCopy);
-	HookEvent("arena_round_start", OnSetupFinished, EventHookMode_PostNoCopy);
-	HookEvent("teamplay_round_win", OnRoundEnd, EventHookMode_PostNoCopy);
-	HookEvent("player_spawn", OnPlayerSpawn, EventHookMode_Post);
-	HookEvent("player_death", OnPlayerDeath, EventHookMode_Pre);
-	HookEvent("post_inventory_application", OnPlayerInventory, EventHookMode_Post);
-	HookEvent("teamplay_broadcast_audio", OnBroadcastAudio, EventHookMode_Pre);
-	HookEvent("object_deflected", OnObjectDeflected);
-
+	// Only hook events if not already hooked
+	if (!EventsHooked)
+	{
+		HookEventEx("teamplay_round_start", OnRoundStart, EventHookMode_PostNoCopy);
+		HookEventEx("teamplay_round_active", OnSetupFinished, EventHookMode_PostNoCopy);  // For non-Arena modes
+		HookEventEx("arena_round_start", OnSetupFinished, EventHookMode_PostNoCopy);      // For Arena mode
+		HookEventEx("teamplay_round_win", OnRoundEnd, EventHookMode_PostNoCopy);
+		HookEventEx("player_spawn", OnPlayerSpawn, EventHookMode_Post);
+		HookEventEx("player_death", OnPlayerDeath, EventHookMode_Pre);
+		HookEventEx("post_inventory_application", OnPlayerInventory, EventHookMode_Post);
+		HookEventEx("teamplay_broadcast_audio", OnBroadcastAudio, EventHookMode_Pre);
+		HookEventEx("object_deflected", OnObjectDeflected);
+		EventsHooked = true;
+	}
 
 	AddMultiTargetFilter("@stealer", MLTargetFilterStealer, "last stealer", false);
 	AddMultiTargetFilter("@!stealer", MLTargetFilterStealer, "non last stealer", false);
@@ -104,15 +114,20 @@ void DisableDodgeBall()
 	Music[Music_RoundLose]  =
 	Music[Music_Gameplay]   = false;
 
-	UnhookEvent("teamplay_round_start", OnRoundStart, EventHookMode_PostNoCopy);
-	UnhookEvent("arena_round_start", OnSetupFinished, EventHookMode_PostNoCopy);
-	UnhookEvent("teamplay_round_win", OnRoundEnd, EventHookMode_PostNoCopy);
-	UnhookEvent("player_spawn", OnPlayerSpawn, EventHookMode_Post);
-	UnhookEvent("player_death", OnPlayerDeath, EventHookMode_Pre);
-	UnhookEvent("post_inventory_application", OnPlayerInventory, EventHookMode_Post);
-	UnhookEvent("teamplay_broadcast_audio", OnBroadcastAudio, EventHookMode_Pre);
-	UnhookEvent("object_deflected", OnObjectDeflected);
-
+	// Only unhook events if they were previously hooked
+	if (EventsHooked)
+	{
+		UnhookEvent("teamplay_round_start", OnRoundStart, EventHookMode_PostNoCopy);
+		UnhookEvent("teamplay_round_active", OnSetupFinished, EventHookMode_PostNoCopy);
+		UnhookEvent("arena_round_start", OnSetupFinished, EventHookMode_PostNoCopy);
+		UnhookEvent("teamplay_round_win", OnRoundEnd, EventHookMode_PostNoCopy);
+		UnhookEvent("player_spawn", OnPlayerSpawn, EventHookMode_Post);
+		UnhookEvent("player_death", OnPlayerDeath, EventHookMode_Pre);
+		UnhookEvent("post_inventory_application", OnPlayerInventory, EventHookMode_Post);
+		UnhookEvent("teamplay_broadcast_audio", OnBroadcastAudio, EventHookMode_Pre);
+		UnhookEvent("object_deflected", OnObjectDeflected);
+		EventsHooked = false;
+	}
 
 	RemoveMultiTargetFilter("@stealer", MLTargetFilterStealer);
 	RemoveMultiTargetFilter("@!stealer", MLTargetFilterStealer);
