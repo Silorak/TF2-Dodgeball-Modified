@@ -75,6 +75,20 @@ char MusicPath[view_as<int>(SizeOfMusicsArray)][PLATFORM_MAX_PATH];
 bool UseWebPlayer;
 char WebPlayerUrl[256];
 
+// Random speed coefficient
+bool  RandomSpeedEnabled;
+float RandomSpeedMin;
+float RandomSpeedMax;
+
+// Observer camera
+bool ObserverCameraEnabled;
+int  ObserverCameraEntity = INVALID_ENT_REFERENCE;
+int  ObserverCameraRocket = -1;
+
+// Weapon restriction
+bool      WeaponRestrictionEnabled;
+ArrayList RestrictedWeapons;
+
 // -----<<< Structures >>>-----
 // Rockets
 bool        RocketIsValid[MAX_ROCKETS];

@@ -619,4 +619,33 @@
 		"#format"	"{1:i}"
 		"en"		"[{olive}TFDB{default}] The rockets count has been changed to {community}{1}{default}."
 	}
+	
+	"Weapon_Restricted"
+	{
+		"en"		"[{olive}TFDB{default}] Your flamethrower is {red}restricted{default}. Please change your loadout."
+	}
+	
+	"1v1_Started"
+	{
+		"#format"	"{1:N},{2:N}"
+		"en"		"[{olive}TFDB{default}] {steelblue}1v1 Mode!{default} {darkorange}{1}{default} vs {darkorange}{2}{default}"
+	}
+	
+	"1v1_Lives"
+	{
+		"#format"	"{1:i}"
+		"en"		"[{olive}TFDB{default}] You have {darkorange}{1}{default} lives remaining."
+	}
+	
+	"1v1_Lost_Life"
+	{
+		"#format"	"{1:N},{2:i}"
+		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} lost a life! ({steelblue}{2}{default} remaining)"
+	}
+	
+	"Annotation_Rocket"
+	{
+		"#format"	"{1:s}"
+		"en"		"► {1}"
+	}
 }

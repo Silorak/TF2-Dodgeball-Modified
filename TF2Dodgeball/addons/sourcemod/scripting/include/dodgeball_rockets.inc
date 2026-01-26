@@ -70,8 +70,16 @@ void CreateRocket(int iSpawnerEntity, int iSpawnerClass, int iTeam, int iClass =
 	RocketBounces[iIndex]            = 0;
 	RocketLastDeflectionTime[iIndex] = GetGameTime();
 	RocketLastBeepTime[iIndex]       = GetGameTime();
-	RocketSpeed[iIndex]              = CalculateRocketSpeed(iClass, fModifier);
-	RocketMphSpeed[iIndex]           = CalculateRocketSpeed(iClass, fModifier) * HAMMER_TO_MPH;
+
+	// Calculate speed with optional random coefficient
+	float fBaseSpeed = CalculateRocketSpeed(iClass, fModifier);
+	if (RandomSpeedEnabled)
+	{
+		float fCoefficient = GetURandomFloatRange(RandomSpeedMin, RandomSpeedMax);
+		fBaseSpeed *= fCoefficient;
+	}
+	RocketSpeed[iIndex]              = fBaseSpeed;
+	RocketMphSpeed[iIndex]           = fBaseSpeed * HAMMER_TO_MPH;
 	Internal_SetRocketState(iIndex, RocketState_None);
 
 	CopyVectors(fDirection, RocketDirection[iIndex]);

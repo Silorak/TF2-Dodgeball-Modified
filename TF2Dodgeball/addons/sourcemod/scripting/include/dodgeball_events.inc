@@ -126,16 +126,42 @@ public void OnPlayerDeath(Event hEvent, char[] strEventName, bool bDontBroadcast
 	}
 }
 
-/** Called when player receives inventory. Removes non-flamethrower weapons. */
+/** Called when player receives inventory. Removes non-flamethrower weapons and checks weapon restrictions. */
 public void OnPlayerInventory(Event hEvent, char[] strEventName, bool bDontBroadcast)
 {
 	int iClient = GetClientOfUserId(hEvent.GetInt("userid"));
 
 	if (!IsValidClient(iClient)) return;
+	
+	// Remove non-primary weapons (slots 1-4)
 	for (int iSlot = 1; iSlot < 5; iSlot++)
 	{
 		int iEntity = GetPlayerWeaponSlot(iClient, iSlot);
 		if (iEntity != -1) RemoveEdict(iEntity);
+	}
+
+	// Weapon restriction check
+	if (WeaponRestrictionEnabled && RestrictedWeapons != null && RestrictedWeapons.Length > 0)
+	{
+		int iPrimary = GetPlayerWeaponSlot(iClient, 0);
+		if (iPrimary != -1)
+		{
+			int iItemDefIndex = GetEntProp(iPrimary, Prop_Send, "m_iItemDefinitionIndex");
+			if (RestrictedWeapons.FindValue(iItemDefIndex) != -1)
+			{
+				// Remove the restricted weapon
+				TF2_RemoveWeaponSlot(iClient, 0);
+				
+				// Give stock flamethrower
+				int iWeapon = GivePlayerItem(iClient, "tf_weapon_flamethrower");
+				if (iWeapon != -1)
+				{
+					EquipPlayerWeapon(iClient, iWeapon);
+				}
+				
+				CPrintToChat(iClient, "%t", "Weapon_Restricted");
+			}
+		}
 	}
 }
 

@@ -322,18 +322,60 @@ void ParseConfigurations(char[] strConfigFile = "general.cfg")
 	Forward_OnRocketsConfigExecuted(strConfigFile);
 }
 
-/** Parses the "general" section of the config (music settings). */
+/** Parses the \"general\" section of the config (music and new feature settings). */
 void ParseGeneral(KeyValues kvConfig)
 {
 	MusicEnabled = view_as<bool>(kvConfig.GetNum("music", 0));
-	if (!MusicEnabled) return;
+	if (MusicEnabled)
+	{
+		UseWebPlayer = view_as<bool>(kvConfig.GetNum("use web player", 0));
+		kvConfig.GetString("web player url", WebPlayerUrl, sizeof(WebPlayerUrl));
+		Music[Music_RoundStart] = kvConfig.GetString("round start",      MusicPath[Music_RoundStart], PLATFORM_MAX_PATH) && MusicPath[Music_RoundStart][0];
+		Music[Music_RoundWin]   = kvConfig.GetString("round end (win)",  MusicPath[Music_RoundWin],   PLATFORM_MAX_PATH) && MusicPath[Music_RoundWin][0];
+		Music[Music_RoundLose]  = kvConfig.GetString("round end (lose)", MusicPath[Music_RoundLose],  PLATFORM_MAX_PATH) && MusicPath[Music_RoundLose][0];
+		Music[Music_Gameplay]   = kvConfig.GetString("gameplay",         MusicPath[Music_Gameplay],   PLATFORM_MAX_PATH) && MusicPath[Music_Gameplay][0];
+	}
 
-	UseWebPlayer = view_as<bool>(kvConfig.GetNum("use web player", 0));
-	kvConfig.GetString("web player url", WebPlayerUrl, sizeof(WebPlayerUrl));
-	Music[Music_RoundStart] = kvConfig.GetString("round start",      MusicPath[Music_RoundStart], PLATFORM_MAX_PATH) && MusicPath[Music_RoundStart][0];
-	Music[Music_RoundWin]   = kvConfig.GetString("round end (win)",  MusicPath[Music_RoundWin],   PLATFORM_MAX_PATH) && MusicPath[Music_RoundWin][0];
-	Music[Music_RoundLose]  = kvConfig.GetString("round end (lose)", MusicPath[Music_RoundLose],  PLATFORM_MAX_PATH) && MusicPath[Music_RoundLose][0];
-	Music[Music_Gameplay]   = kvConfig.GetString("gameplay",         MusicPath[Music_Gameplay],   PLATFORM_MAX_PATH) && MusicPath[Music_Gameplay][0];
+	// Random speed coefficient
+	RandomSpeedEnabled = view_as<bool>(kvConfig.GetNum("random speed coefficient", 0));
+	RandomSpeedMin = kvConfig.GetFloat("speed coefficient min", 0.98);
+	RandomSpeedMax = kvConfig.GetFloat("speed coefficient max", 1.02);
+
+	// Observer camera
+	ObserverCameraEnabled = view_as<bool>(kvConfig.GetNum("observer camera", 0));
+
+	// Weapon restriction
+	if (kvConfig.JumpToKey("weapon restriction"))
+	{
+		WeaponRestrictionEnabled = view_as<bool>(kvConfig.GetNum("enabled", 0));
+		if (WeaponRestrictionEnabled)
+		{
+			if (RestrictedWeapons == null)
+			{
+				RestrictedWeapons = new ArrayList();
+			}
+			else
+			{
+				RestrictedWeapons.Clear();
+			}
+
+			// Parse all numbered weapon IDs (1, 2, 3, etc.)
+			char strKey[8], strValue[16];
+			for (int i = 1; i <= 32; i++)
+			{
+				IntToString(i, strKey, sizeof(strKey));
+				if (kvConfig.GetString(strKey, strValue, sizeof(strValue)) && strValue[0])
+				{
+					int weaponId = StringToInt(strValue);
+					if (weaponId > 0)
+					{
+						RestrictedWeapons.Push(weaponId);
+					}
+				}
+			}
+		}
+		kvConfig.GoBack();
+	}
 }
 
 /** Parses the "classes" section of the config (rocket class definitions). */

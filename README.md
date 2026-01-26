@@ -30,6 +30,8 @@ built on the shoulders of community giants.
 - **Dual Homing Modes** — Smooth `homing` or classic `legacy homing`
 - **Bouncing Rockets** — With player-controlled force bouncing
 - **"Keep Direction"** — Popular Redux feature included
+- **Random Speed Variation** — Subtle spawn speed randomization
+- **Weapon Restriction** — Block Phlog/Dragon's Fury (gives stock)
 
 </td>
 <td width="50%">
@@ -46,7 +48,7 @@ built on the shoulders of community giants.
 <td>
 
 ### 🧩 Modular Architecture
-- **11 Optional Subplugins** — Enable only what you need
+- **13 Optional Subplugins** — Enable only what you need
 - **Powerful API** — 130+ natives for addon developers
 - **Rich Forward System** — Hook into every game event
 
@@ -101,8 +103,10 @@ built on the shoulders of community giants.
 | **NoBlock** | Player collision toggle |
 | **Print** | Enhanced chat messages |
 | **Speedometer** | Real-time rocket speed display |
-| **Trails** | Visual rocket trail effects |
+| **Trails** | Visual trails, dynamic lights, model scaling |
 | **Votes** | Player voting system |
+| **1v1Mode** | Lives-based 1v1 when one player per team |
+| **Annotations** | Floating rocket indicators for targets |
 
 ---
 
@@ -141,6 +145,42 @@ The gamemode activates automatically on maps with the `tfdb_` prefix.
     "turn rate"           "0.05"
     "max bounces"         "2"
     "on kill"             "sm_beacon @target"
+    
+    // Trails subplugin options
+    "dynamic light"       "1"
+    "light color"         "255 128 0"
+    "model size"          "1.0"
+    "model size increment" "0.1"
+    "model size max"      "3.0"
+}
+```
+
+</details>
+
+<details>
+<summary><b>🔒 Weapon Restriction</b></summary>
+
+```
+"weapon restriction"
+{
+    "enabled"    "1"
+    "1"          "594"     // Phlogistinator
+    "2"          "1178"    // Dragon's Fury
+}
+```
+
+</details>
+
+<details>
+<summary><b>⚔️ 1v1 Mode</b></summary>
+
+```
+"1v1"
+{
+    "enabled"         "1"
+    "lives"           "3"
+    "chance"          "100"
+    "heart icon"      "♥"
 }
 ```
 

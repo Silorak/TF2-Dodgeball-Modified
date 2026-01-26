@@ -50,6 +50,23 @@ TrailFlags RocketClassTrailFlags      [MAX_ROCKET_CLASSES];
 
 StringMap RocketClassSpriteTrie[MAX_ROCKET_CLASSES];
 
+// Dynamic lights
+bool       RocketClassDynamicLight[MAX_ROCKET_CLASSES];
+char       RocketClassLightColor[MAX_ROCKET_CLASSES][16];
+float      RocketClassLightRadius[MAX_ROCKET_CLASSES];
+int        RocketClassLightBrightness[MAX_ROCKET_CLASSES];
+int        RocketLightEntity[MAX_ROCKETS] = {INVALID_ENT_REFERENCE, ...};
+
+// Model size scaling
+float      RocketClassModelSize[MAX_ROCKET_CLASSES];
+float      RocketClassModelSizeIncrement[MAX_ROCKET_CLASSES];
+float      RocketClassModelSizeMax[MAX_ROCKET_CLASSES];
+
+// Multi-rocket colors (from general.cfg)
+bool       MultiRocketColorsEnabled;
+char       MultiRocketColor[MAX_ROCKETS][16];
+char       MultiRocketName[MAX_ROCKETS][32];
+
 public Plugin myinfo =
 {
 	name        = PLUGIN_NAME,
@@ -178,6 +195,19 @@ public void OnObjectDeflected(Event hEvent, char[] strEventName, bool bDontBroad
 	if (iIndex == -1) return;
 	
 	int iClass = TFDB_GetRocketClass(iIndex);
+	int iDeflections = TFDB_GetRocketDeflections(iIndex);
+	
+	// Model size scaling on deflection
+	if (RocketClassModelSize[iClass] > 0.0 && RocketClassModelSizeIncrement[iClass] > 0.0)
+	{
+		float fNewSize = RocketClassModelSize[iClass] + (RocketClassModelSizeIncrement[iClass] * iDeflections);
+		float fMaxSize = RocketClassModelSizeMax[iClass];
+		if (fMaxSize > 0.0 && fNewSize > fMaxSize)
+		{
+			fNewSize = fMaxSize;
+		}
+		SetEntPropFloat(iEntity, Prop_Send, "m_flModelScale", fNewSize);
+	}
 	
 	if (!(RocketClassTrailFlags[iClass] & TrailFlag_ReplaceParticles)) return;
 	
@@ -451,6 +481,42 @@ public void TFDB_OnRocketCreated(int iIndex, int iEntity)
 		SetEntityModel(iOtherEntity, strCustomModel);
 		UpdateRocketSkin(iOtherEntity, iTeam, TestFlags(iRocketFlags, RocketFlag_IsNeutral));
 	}
+
+	// Dynamic light - create light_dynamic entity attached to rocket
+	if (RocketClassDynamicLight[iClass])
+	{
+		int iLightEntity = CreateEntityByName("light_dynamic");
+		if (iLightEntity != -1)
+		{
+			TeleportEntity(iLightEntity, fPosition, fAngles, NULL_VECTOR);
+			
+			DispatchKeyValue(iLightEntity, "_light", RocketClassLightColor[iClass]);
+			
+			char strRadius[16];
+			FloatToString(RocketClassLightRadius[iClass], strRadius, sizeof(strRadius));
+			DispatchKeyValue(iLightEntity, "distance", strRadius);
+			
+			char strBrightness[8];
+			IntToString(RocketClassLightBrightness[iClass], strBrightness, sizeof(strBrightness));
+			DispatchKeyValue(iLightEntity, "brightness", strBrightness);
+			
+			DispatchKeyValue(iLightEntity, "style", "0");
+			DispatchSpawn(iLightEntity);
+			ActivateEntity(iLightEntity);
+			AcceptEntityInput(iLightEntity, "TurnOn");
+			
+			SetVariantString("!activator");
+			AcceptEntityInput(iLightEntity, "SetParent", iEntity, iLightEntity);
+			
+			RocketLightEntity[iIndex] = EntIndexToEntRef(iLightEntity);
+		}
+	}
+
+	// Model size scaling - apply initial size
+	if (RocketClassModelSize[iClass] > 0.0)
+	{
+		SetEntPropFloat(iEntity, Prop_Send, "m_flModelScale", RocketClassModelSize[iClass]);
+	}
 }
 
 public Action TrailSetTransmit(int iEntity, int iClient)
@@ -594,6 +660,20 @@ void ParseClasses(KeyValues kvConfig)
 			
 			if (kvConfig.GetNum("replace particles", 0)) iFlags |= TrailFlag_ReplaceParticles;
 		}
+
+		// Dynamic lights
+		RocketClassDynamicLight[iIndex] = view_as<bool>(kvConfig.GetNum("dynamic light", 0));
+		if (RocketClassDynamicLight[iIndex])
+		{
+			kvConfig.GetString("light color", RocketClassLightColor[iIndex], sizeof(RocketClassLightColor[]), "255 128 0");
+			RocketClassLightRadius[iIndex] = kvConfig.GetFloat("light radius", 150.0);
+			RocketClassLightBrightness[iIndex] = kvConfig.GetNum("light brightness", 10);
+		}
+
+		// Model size scaling
+		RocketClassModelSize[iIndex] = kvConfig.GetFloat("model size", 0.0);
+		RocketClassModelSizeIncrement[iIndex] = kvConfig.GetFloat("model size increment", 0.0);
+		RocketClassModelSizeMax[iIndex] = kvConfig.GetFloat("model size max", 3.0);
 		
 		RocketClassTrailFlags[iIndex] = iFlags;
 		RocketClassCount++;
