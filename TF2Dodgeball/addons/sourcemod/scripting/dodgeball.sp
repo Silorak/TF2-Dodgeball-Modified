@@ -128,6 +128,8 @@ DataPack       RocketClassCmdsOnExplode[MAX_ROCKET_CLASSES];
 DataPack       RocketClassCmdsOnNoTarget[MAX_ROCKET_CLASSES];
 int            RocketClassMaxBounces[MAX_ROCKET_CLASSES];
 float          RocketClassBounceScale[MAX_ROCKET_CLASSES];
+float          RocketClassCrawlBounceScale[MAX_ROCKET_CLASSES];
+float          RocketClassCrawlBounceMaxUp[MAX_ROCKET_CLASSES];
 int            RocketClassCount;
 
 // Spawner classes

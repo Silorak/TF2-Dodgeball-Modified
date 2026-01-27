@@ -399,6 +399,7 @@ void ParseClasses(KeyValues kvConfig)
 		if (kvConfig.GetNum("teamless deflects", 0) == 1)  iFlags |= RocketFlag_TeamlessHits;
 		if (kvConfig.GetNum("reset bounces", 0) == 1)      iFlags |= RocketFlag_ResetBounces;
 		if (kvConfig.GetNum("no bounce drags", 0) == 1)    iFlags |= RocketFlag_NoBounceDrags;
+		if (kvConfig.GetNum("crawl bounce", 0) == 1)      iFlags |= RocketFlag_CrawlBounce;
 		if (kvConfig.GetNum("can be stolen", 0) == 1)      iFlags |= RocketFlag_CanBeStolen;
 		if (kvConfig.GetNum("steal team check", 0) == 1)   iFlags |= RocketFlag_StealTeamCheck;
 
@@ -426,6 +427,8 @@ void ParseClasses(KeyValues kvConfig)
 		RocketClassDragTimeMax[iIndex]       = kvConfig.GetFloat("drag time max");
 		RocketClassMaxBounces[iIndex]        = kvConfig.GetNum("max bounces");
 		RocketClassBounceScale[iIndex]       = kvConfig.GetFloat("bounce scale", 1.0);
+		RocketClassCrawlBounceScale[iIndex]  = kvConfig.GetFloat("crawl bounce scale", 0.4);
+		RocketClassCrawlBounceMaxUp[iIndex]  = kvConfig.GetFloat("crawl bounce max up", 250.0);
 		RocketClassPlayerModifier[iIndex]    = kvConfig.GetFloat("no. players modifier");
 		RocketClassRocketsModifier[iIndex]   = kvConfig.GetFloat("no. rockets modifier");
 		RocketClassTargetWeight[iIndex]      = kvConfig.GetFloat("direction to target weight");
@@ -492,19 +495,31 @@ void ParseSpawners(KeyValues kvConfig)
  */
 DataPack ParseCommands(char[] strLine)
 {
-    TrimString(strLine);
-    if (!strLine[0]) return null;
+	TrimString(strLine);
+	if (!strLine[0]) return null;
 
-    ArrayList hCommands = new ArrayList(ByteCountToCells(256));
-    char strBuffer[256];
-    char[][] strParts = new char[32][256];
-    int iNumParts = ExplodeString(strLine, ";", strParts, 32, 256);
+	ArrayList hCommands = new ArrayList(ByteCountToCells(256));
+	char strBuffer[256];
+	char strWork[256];
+	strcopy(strWork, sizeof(strWork), strLine);
 
-    for (int i = 0; i < iNumParts; i++)
-    {
-        TrimString(strParts[i]);
-        if (strParts[i][0]) hCommands.PushString(strParts[i]);
-    }
+	while (true)
+	{
+		int iPos = FindCharInString(strWork, ';');
+		if (iPos == -1)
+		{
+			TrimString(strWork);
+			if (strWork[0]) hCommands.PushString(strWork);
+			break;
+		}
+
+		strWork[iPos] = '\0';
+		strcopy(strBuffer, sizeof(strBuffer), strWork);
+		TrimString(strBuffer);
+		if (strBuffer[0]) hCommands.PushString(strBuffer);
+
+		strcopy(strWork, sizeof(strWork), strWork[iPos + 1]);
+	}
     
     int iNumCommands = hCommands.Length;
     if (iNumCommands == 0)

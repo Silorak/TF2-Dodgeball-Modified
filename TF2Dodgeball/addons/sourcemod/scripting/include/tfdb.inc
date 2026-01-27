@@ -59,7 +59,8 @@ enum RocketFlags
 	RocketFlag_NoBounceDrags    = 1 << 21,  /**< Can't drag while bouncing */
 	RocketFlag_OnNoTargetCmd    = 1 << 22,  /**< Execute commands when no target */
 	RocketFlag_CanBeStolen      = 1 << 23,  /**< Rocket can be stolen by other players */
-	RocketFlag_StealTeamCheck   = 1 << 24   /**< Only teammates can steal */
+	RocketFlag_StealTeamCheck   = 1 << 24,  /**< Only teammates can steal */
+	RocketFlag_CrawlBounce      = 1 << 25   /**< Use crawling downspike bounce */
 };
 
 /**
