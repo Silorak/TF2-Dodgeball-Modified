@@ -495,10 +495,13 @@ DataPack ParseCommands(char[] strLine)
     TrimString(strLine);
     if (!strLine[0]) return null;
 
+    // Use static array to avoid heap allocation on each call
+    // This prevents "Not enough space on the heap" when parsing many rocket classes
+    static char strParts[32][256];
+    int iNumParts = ExplodeString(strLine, ";", strParts, 32, 256);
+    
     ArrayList hCommands = new ArrayList(ByteCountToCells(256));
     char strBuffer[256];
-    char[][] strParts = new char[32][256];
-    int iNumParts = ExplodeString(strLine, ";", strParts, 32, 256);
 
     for (int i = 0; i < iNumParts; i++)
     {
