@@ -141,7 +141,7 @@ public Action CmdExplosion(int iArgs)
 	GetCmdArg(1, strBuffer, sizeof(strBuffer));
 	iClient = StringToInt(strBuffer);
 
-	if (!IsValidEntity(iClient)) return Plugin_Handled;
+	if (!IsValidClient(iClient)) return Plugin_Handled;
 
 	float fPosition[3];
 	GetClientAbsOrigin(iClient, fPosition);
@@ -179,7 +179,7 @@ public Action CmdShockwave(int iArgs)
 		return Plugin_Handled;
 	}
 
-	char strBuffer[8];
+	char strBuffer[32];
 	int iClient, iTeam;
 	float fPosition[3];
 	int iDamage;
@@ -448,6 +448,12 @@ void ParseClasses(KeyValues kvConfig)
 
 		RocketClassFlags[iIndex] = iFlags;
 		RocketClassCount++;
+
+		if (RocketClassCount >= MAX_ROCKET_CLASSES)
+		{
+			LogError("Reached maximum rocket classes (%d). Remaining classes will be ignored.", MAX_ROCKET_CLASSES);
+			break;
+		}
 	}
 	while (kvConfig.GotoNextKey());
 	kvConfig.GoBack();

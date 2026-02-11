@@ -283,7 +283,7 @@ public Action KillParticle(Handle hTimer, any iEntityRef)
 	int iEntity = EntRefToEntIndex(iEntityRef);
 	if (iEntity != INVALID_ENT_REFERENCE)
 	{
-		RemoveEdict(iEntity);
+		RemoveEntity(iEntity);
 	}
 	
 	return Plugin_Continue;
