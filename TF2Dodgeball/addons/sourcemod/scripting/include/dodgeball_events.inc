@@ -102,6 +102,7 @@ public void OnPlayerDeath(Event hEvent, char[] strEventName, bool bDontBroadcast
 
 	LastDeadClient = iVictim;
 	LastDeadTeam = GetClientTeam(iVictim);
+	PlayerCount = CountAlivePlayers();
 	
 	int iInflictor = hEvent.GetInt("inflictor_entindex");
 	int iIndex = FindRocketByEntity(iInflictor);

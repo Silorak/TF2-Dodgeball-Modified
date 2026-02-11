@@ -71,7 +71,7 @@ void CreateRocket(int iSpawnerEntity, int iSpawnerClass, int iTeam, int iClass =
 	RocketLastDeflectionTime[iIndex] = GetGameTime();
 	RocketLastBeepTime[iIndex]       = GetGameTime();
 	RocketSpeed[iIndex]              = CalculateRocketSpeed(iClass, fModifier);
-	RocketMphSpeed[iIndex]           = CalculateRocketSpeed(iClass, fModifier) * HAMMER_TO_MPH;
+	RocketMphSpeed[iIndex]           = RocketSpeed[iIndex] * HAMMER_TO_MPH;
 	Internal_SetRocketState(iIndex, RocketState_None);
 
 	CopyVectors(fDirection, RocketDirection[iIndex]);
@@ -110,7 +110,11 @@ void DestroyRocket(int iIndex)
 {
 	if (!IsValidRocket(iIndex)) return;
 
-	RemoveEdict(EntRefToEntIndex(RocketEntity[iIndex]));
+	int iEntity = EntRefToEntIndex(RocketEntity[iIndex]);
+	if (iEntity != INVALID_ENT_REFERENCE)
+	{
+		RemoveEntity(iEntity);
+	}
 	RocketIsValid[iIndex] = false;
 	RocketCount--;
 }
@@ -167,13 +171,10 @@ int FindNextValidRocket(int iIndex)
  */
 int FindFreeRocketSlot()
 {
-	int iCurrent = 0;
-	do
+	for (int iCurrent = 0; iCurrent < MAX_ROCKETS; iCurrent++)
 	{
 		if (!IsValidRocket(iCurrent)) return iCurrent;
-		if ((++iCurrent) == MAX_ROCKETS) iCurrent = 0;
 	}
-	while (iCurrent != 0);
 
 	return -1;
 }
@@ -278,7 +279,6 @@ void HomingRocketThink(int iIndex)
 				RocketTarget[iIndex]      = EntIndexToEntRef(iTarget);
 				RocketDeflections[iIndex] = iDeflectionCount;
 				RocketSpeed[iIndex]       = CalculateRocketSpeed(iClass, fModifier);
-				RocketMphSpeed[iIndex]    = CalculateRocketSpeed(iClass, fModifier) * HAMMER_TO_MPH;
 				SetEntDataFloat(iEntity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4, CalculateRocketDamage(iClass, fModifier), true);
 				
 				if (TestFlags(iFlags, RocketFlag_ElevateOnDeflect)) RocketInstanceFlags[iIndex] |= RocketFlag_Elevating;
@@ -287,6 +287,8 @@ void HomingRocketThink(int iIndex)
 				{
 					RocketSpeed[iIndex] = RocketClassSpeedLimit[iClass];
 				}
+
+				RocketMphSpeed[iIndex] = RocketSpeed[iIndex] * HAMMER_TO_MPH;
 
 				if (CvarStealPreventionDamage.BoolValue && (RocketInstanceState[iIndex] & RocketState_Stolen))
 				{
@@ -450,7 +452,6 @@ void RocketLegacyThink(int iIndex)
 		RocketDeflections[iIndex]        = iDeflectionCount;
 		RocketLastDeflectionTime[iIndex] = GetGameTime();
 		RocketSpeed[iIndex]              = CalculateRocketSpeed(iClass, fModifier);
-		RocketMphSpeed[iIndex]           = CalculateRocketSpeed(iClass, fModifier) * HAMMER_TO_MPH;
 		SetEntDataFloat(iEntity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4, CalculateRocketDamage(iClass, fModifier), true);
 
 		if (TestFlags(iFlags, RocketFlag_ElevateOnDeflect)) RocketInstanceFlags[iIndex] |= RocketFlag_Elevating;
@@ -459,6 +460,8 @@ void RocketLegacyThink(int iIndex)
 		{
 			RocketSpeed[iIndex] = RocketClassSpeedLimit[iClass];
 		}
+
+		RocketMphSpeed[iIndex] = RocketSpeed[iIndex] * HAMMER_TO_MPH;
 
 		if (CvarStealPreventionDamage.BoolValue && (RocketInstanceState[iIndex] & RocketState_Stolen))
 		{
