@@ -14,6 +14,7 @@ static bool EventsHooked = false;
 bool IsDodgeBallMap()
 {
 	char map[64]; GetCurrentMap(map, sizeof(map));
+	GetMapDisplayName(map, map, sizeof(map));
 	return (StrContains(map, "tfdb_", false) == 0 ||
 	        StrContains(map, "db_", false) == 0 ||
 	        StrContains(map, "dbs_", false) == 0);
@@ -28,6 +29,7 @@ void EnableDodgeBall()
 	if (Enabled) return;
 
 	char mapName[64]; GetCurrentMap(mapName, sizeof(mapName));
+	GetMapDisplayName(mapName, mapName, sizeof(mapName));
 	char mapFile[PLATFORM_MAX_PATH]; FormatEx(mapFile, sizeof(mapFile), "%s.cfg", mapName);
 
 	ParseConfigurations();
