@@ -70,7 +70,7 @@ built on the shoulders of community giants.
 # 1. Download the latest release
 # 2. Extract to your server's tf/ directory
 # 3. (Optional) Add subplugins from Subplugins/ folder
-# 4. Restart server or change to a tfdb_ map
+# 4. Restart server or change to a tfdb_, db_, or dbs_ map
 ```
 
 <details>
@@ -80,7 +80,7 @@ built on the shoulders of community giants.
 2. **Extract** the `addons` folder into your server's `tf/` directory
 3. **Add Subplugins** (optional): Copy desired modules from `Subplugins/` to `tf/addons/sourcemod/plugins/`
 4. **Verify Dependencies**: See [Dependencies](#-dependencies) section
-5. **Restart** your server or change to any `tfdb_` prefixed map
+5. **Restart** your server or change to any `tfdb_`, `db_`, or `dbs_` prefixed map
 
 > 📖 See the [Installation Wiki](https://github.com/Silorak/TF2-Dodgeball-Modified/wiki/Installation) for a complete guide.
 
@@ -125,7 +125,7 @@ built on the shoulders of community giants.
 └── tfdb_mapname.cfg     # Per-map overrides (optional)
 ```
 
-The gamemode activates automatically on maps with the `tfdb_` prefix.
+The gamemode activates automatically on maps with the `tfdb_`, `db_`, or `dbs_` prefix (including Workshop maps).
 
 <details>
 <summary><b>🎯 Example Rocket Class</b></summary>
