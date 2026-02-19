@@ -222,6 +222,7 @@ public void OnPluginStart()
 	if (!TFDB_IsDodgeballEnabled()) return;
 	
 	char strMapName[64]; GetCurrentMap(strMapName, sizeof(strMapName));
+	GetMapDisplayName(strMapName, strMapName, sizeof(strMapName));
 	char strMapFile[PLATFORM_MAX_PATH]; FormatEx(strMapFile, sizeof(strMapFile), "%s.cfg", strMapName);
 	
 	TFDB_OnRocketsConfigExecuted("general.cfg");
@@ -351,6 +352,7 @@ public int DodgeballMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1
 					TFDB_DestroySpawners();
 					
 					char strMapName[64]; GetCurrentMap(strMapName, sizeof(strMapName));
+					GetMapDisplayName(strMapName, strMapName, sizeof(strMapName));
 					char strMapFile[PLATFORM_MAX_PATH]; FormatEx(strMapFile, sizeof(strMapFile), "%s.cfg", strMapName);
 					
 					TFDB_ParseConfigurations();
