@@ -185,7 +185,12 @@ stock int SelectTarget(int iTeam, int iRocket = -1)
 			iOwner = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
 			
 			GetEntPropVector(iEntity, Prop_Send, "m_vecOrigin", fRocketPosition);
-			CopyVectors(RocketDirection[iRocket], fRocketDirection);
+			// Keep target selection direction locked to the first flick of this deflect cycle.
+			CopyVectors(RocketDoubleFlickBaseDirection[iRocket], fRocketDirection);
+			if (GetVectorLength(fRocketDirection) <= 0.001)
+			{
+				CopyVectors(RocketDirection[iRocket], fRocketDirection);
+			}
 			fWeight = RocketClassTargetWeight[iClass];
 			
 			bUseRocket = true;
@@ -205,7 +210,6 @@ stock int SelectTarget(int iTeam, int iRocket = -1)
 		{
 			float fClientPosition[3]; GetClientEyePosition(iClient, fClientPosition);
 			float fDirectionToClient[3]; MakeVectorFromPoints(fRocketPosition, fClientPosition, fDirectionToClient);
-			
 			fNewWeight += GetVectorDotProduct(fRocketDirection, fDirectionToClient) * fWeight;
 		}
 		

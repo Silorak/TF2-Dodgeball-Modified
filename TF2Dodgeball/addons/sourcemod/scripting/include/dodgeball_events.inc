@@ -207,6 +207,29 @@ public void OnObjectDeflected(Event hEvent, char[] strEventName, bool bDontBroad
 
 	RocketEventDeflections[iIndex]++;
 
+	int iOwner = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
+	if (IsValidClient(iOwner, true))
+	{
+		float fViewAngles[3], fDirection[3];
+		GetClientEyeAngles(iOwner, fViewAngles);
+		GetAngleVectors(fViewAngles, fDirection, NULL_VECTOR, NULL_VECTOR);
+		CopyVectors(fDirection, RocketPendingDeflectDirection[iIndex]);
+		RocketPendingDeflectDirectionValid[iIndex] = true;
+
+		// Apply the first flick immediately at deflect time for consistent "original flick" feel.
+		if (RocketClassBehaviour[RocketClass[iIndex]] == Behaviour_Homing)
+		{
+			CopyVectors(fDirection, RocketDirection[iIndex]);
+			CopyVectors(fDirection, RocketDoubleFlickBaseDirection[iIndex]);
+			RocketDoubleFlickUsed[iIndex] = false;
+			ApplyRocketParameters(iIndex);
+		}
+	}
+	else
+	{
+		RocketPendingDeflectDirectionValid[iIndex] = false;
+	}
+
 	int iLauncher = GetEntPropEnt(iEntity, Prop_Send, "m_hLauncher");
 	if (iLauncher != -1)
 	{
@@ -373,7 +396,22 @@ public Action OnTouch(int iEntity, int iOther)
 	}
 	else
 	{
-		ScaleVector(vBounceVec, RocketClassBounceScale[iClass] * RocketClassCrawlBounceScale[iClass]);
+		float fBounceScale = RocketClassBounceScale[iClass];
+		if (IsValidClient(iOwner, true))
+		{
+			float fOwnerAngles[3];
+			GetClientEyeAngles(iOwner, fOwnerAngles);
+			if (fOwnerAngles[0] >= CvarBounceForceAngle.FloatValue)
+			{
+				fBounceScale *= CvarBounceForceScale.FloatValue;
+			}
+		}
+
+		// Crawl bounces should stay low, but keep horizontal carry for better drag control.
+		vBounceVec[0] *= fBounceScale;
+		vBounceVec[1] *= fBounceScale;
+		vBounceVec[2] *= fBounceScale * RocketClassCrawlBounceScale[iClass];
+
 		if (RocketClassCrawlBounceMaxUp[iClass] > 0.0 && vBounceVec[2] > RocketClassCrawlBounceMaxUp[iClass])
 		{
 			vBounceVec[2] = RocketClassCrawlBounceMaxUp[iClass];

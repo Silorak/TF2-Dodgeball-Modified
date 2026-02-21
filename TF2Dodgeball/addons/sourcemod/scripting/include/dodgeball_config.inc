@@ -408,6 +408,9 @@ void ParseClasses(KeyValues kvConfig)
 		RocketClassCritChance[iIndex]        = kvConfig.GetFloat("critical chance");
 		RocketClassSpeed[iIndex]             = kvConfig.GetFloat("speed");
 		RocketClassSpeedIncrement[iIndex]    = kvConfig.GetFloat("speed increment");
+		RocketClassExpSpeedEnabled[iIndex]   = kvConfig.GetNum("speed exponential", 0) == 1;
+		RocketClassExpSpeedStartIncrease[iIndex] = kvConfig.GetFloat("speed increase start", RocketClassSpeedIncrement[iIndex]);
+		RocketClassExpSpeedMaxIncrease[iIndex]   = kvConfig.GetFloat("speed increase max", RocketClassSpeedIncrement[iIndex]);
 		if ((RocketClassSpeedLimit[iIndex] = kvConfig.GetFloat("speed limit")) != 0.0)
 		{
 			iFlags |= RocketFlag_IsSpeedLimited;
@@ -425,6 +428,15 @@ void ParseClasses(KeyValues kvConfig)
 		RocketClassControlDelay[iIndex]      = kvConfig.GetFloat("control delay");
 		RocketClassDragTimeMin[iIndex]       = kvConfig.GetFloat("drag time min");
 		RocketClassDragTimeMax[iIndex]       = kvConfig.GetFloat("drag time max");
+		RocketClassDragSteeringMode[iIndex]  = kvConfig.GetNum("drag steering mode", 0) == 1;
+		RocketClassDragSteerTurnRate[iIndex] = kvConfig.GetFloat("drag steer turn rate", RocketClassTurnRate[iIndex]);
+		RocketClassDragInputSmoothing[iIndex] = kvConfig.GetFloat("drag input smoothing", 0.0);
+		RocketClassDragSteerMouseSpeedScale[iIndex] = kvConfig.GetFloat("drag steer mouse speed scale", 0.0);
+		RocketClassDragSteerTurnRateMax[iIndex] = kvConfig.GetFloat("drag steer turn rate max", 0.0);
+		RocketClassDoubleFlickMode[iIndex] = kvConfig.GetNum("double flick mode", 0) == 1;
+		RocketClassDoubleFlickDelay[iIndex] = kvConfig.GetFloat("double flick delay", 0.06);
+		RocketClassDoubleFlickWindow[iIndex] = kvConfig.GetFloat("double flick window", 0.10);
+		RocketClassDoubleFlickMinAngle[iIndex] = kvConfig.GetFloat("double flick min angle", 3.0);
 		RocketClassMaxBounces[iIndex]        = kvConfig.GetNum("max bounces");
 		RocketClassBounceScale[iIndex]       = kvConfig.GetFloat("bounce scale", 1.0);
 		RocketClassCrawlBounceScale[iIndex]  = kvConfig.GetFloat("crawl bounce scale", 0.4);

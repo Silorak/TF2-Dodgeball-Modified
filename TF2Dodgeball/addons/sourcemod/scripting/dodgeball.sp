@@ -10,9 +10,10 @@
 #include <sourcemod>
 #include <tf2_stocks>
 #include <sdkhooks>
-#include <multicolors>
+#include "include/multicolors.inc"
 
-#include <tfdb>
+
+#include "include/tfdb.inc"
 
 // *********************************************************************************
 // CONSTANTS
@@ -92,6 +93,14 @@ float       RocketLastDeflectionTime[MAX_ROCKETS];
 float       RocketLastBeepTime[MAX_ROCKETS];
 float       LastSpawnTime[MAX_ROCKETS];
 int         RocketBounces[MAX_ROCKETS];
+float       RocketDragAimDirection[MAX_ROCKETS][3];
+float       RocketDragLastInputDirection[MAX_ROCKETS][3];
+float       RocketDragLastSampleTime[MAX_ROCKETS];
+bool        RocketDragInputValid[MAX_ROCKETS];
+float       RocketDoubleFlickBaseDirection[MAX_ROCKETS][3];
+bool        RocketDoubleFlickUsed[MAX_ROCKETS];
+float       RocketPendingDeflectDirection[MAX_ROCKETS][3];
+bool        RocketPendingDeflectDirectionValid[MAX_ROCKETS];
 int         RocketCount;
 
 // Classes
@@ -109,6 +118,9 @@ float          RocketClassDamage[MAX_ROCKET_CLASSES];
 float          RocketClassDamageIncrement[MAX_ROCKET_CLASSES];
 float          RocketClassSpeed[MAX_ROCKET_CLASSES];
 float          RocketClassSpeedIncrement[MAX_ROCKET_CLASSES];
+bool           RocketClassExpSpeedEnabled[MAX_ROCKET_CLASSES];
+float          RocketClassExpSpeedStartIncrease[MAX_ROCKET_CLASSES];
+float          RocketClassExpSpeedMaxIncrease[MAX_ROCKET_CLASSES];
 float          RocketClassSpeedLimit[MAX_ROCKET_CLASSES];
 float          RocketClassTurnRate[MAX_ROCKET_CLASSES];
 float          RocketClassTurnRateIncrement[MAX_ROCKET_CLASSES];
@@ -120,6 +132,15 @@ float          RocketClassPlayerModifier[MAX_ROCKET_CLASSES];
 float          RocketClassControlDelay[MAX_ROCKET_CLASSES];
 float          RocketClassDragTimeMin[MAX_ROCKET_CLASSES];
 float          RocketClassDragTimeMax[MAX_ROCKET_CLASSES];
+bool           RocketClassDragSteeringMode[MAX_ROCKET_CLASSES];
+float          RocketClassDragSteerTurnRate[MAX_ROCKET_CLASSES];
+float          RocketClassDragInputSmoothing[MAX_ROCKET_CLASSES];
+float          RocketClassDragSteerMouseSpeedScale[MAX_ROCKET_CLASSES];
+float          RocketClassDragSteerTurnRateMax[MAX_ROCKET_CLASSES];
+bool           RocketClassDoubleFlickMode[MAX_ROCKET_CLASSES];
+float          RocketClassDoubleFlickDelay[MAX_ROCKET_CLASSES];
+float          RocketClassDoubleFlickWindow[MAX_ROCKET_CLASSES];
+float          RocketClassDoubleFlickMinAngle[MAX_ROCKET_CLASSES];
 float          RocketClassTargetWeight[MAX_ROCKET_CLASSES];
 DataPack       RocketClassCmdsOnSpawn[MAX_ROCKET_CLASSES];
 DataPack       RocketClassCmdsOnDeflect[MAX_ROCKET_CLASSES];
@@ -169,12 +190,12 @@ Handle ForwardOnRocketStateChanged;
 // *********************************************************************************
 // PLUGIN LOGIC (INCLUDES)
 // *********************************************************************************
-#include "dodgeball_utilities.inc"
-#include "dodgeball_config.inc"
-#include "dodgeball_rockets.inc"
-#include "dodgeball_events.inc"
-#include "dodgeball_core.inc"
-#include "dodgeball_natives.inc"
+#include "include/dodgeball_utilities.inc"
+#include "include/dodgeball_config.inc"
+#include "include/dodgeball_rockets.inc"
+#include "include/dodgeball_events.inc"
+#include "include/dodgeball_core.inc"
+#include "include/dodgeball_natives.inc"
 
 // *********************************************************************************
 // PLUGIN INFO & LIFECYCLE
