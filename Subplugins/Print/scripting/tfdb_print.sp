@@ -203,107 +203,51 @@ public Action CmdPrintPhraseClient(int iClient, int iArgs)
 
 void PrintPhrase(const char[] strPhrase, const char strArgs[32][255], const any aArgs[32], bool bAll, int iClient = -1)
 {
+	// Pre-build arguments to avoid heap exhaustion from inline conversion
+	any convertedArgs[29][256];
+	
+	for (int i = 0; i < 29; i++)
+	{
+		if (!strArgs[i][0])
+		{
+			// Numeric value
+			convertedArgs[i][0] = aArgs[i];
+		}
+		else
+		{
+			// String value - copy character by character
+			for (int j = 0; j < 255 && strArgs[i][j]; j++)
+			{
+				convertedArgs[i][j] = view_as<any>(strArgs[i][j]);
+			}
+		}
+	}
+	
 	if (bAll)
 	{
-		// There are a maximum of 32 arguments for the translation format function.
-		// Three of them seem to be reserved :
-		//
-		//     - One for the phrase name
-		//     - One for the client or the language ID (no idea which)
-		//     - One that is unknown to me (most likely one of the above)
-		//
-		// Found the optimal number through plenty of crashes.
-		
-		// Ok so this has 29 arguments, which contradicts everything above...
-		// I have no clue why this works with 29 instead of 28...
-		
-		CPrintToChatAll("%t", strPhrase, HandleBadConversion(strArgs, aArgs, 0),
-		                                 HandleBadConversion(strArgs, aArgs, 1),
-		                                 HandleBadConversion(strArgs, aArgs, 2),
-		                                 HandleBadConversion(strArgs, aArgs, 3),
-		                                 HandleBadConversion(strArgs, aArgs, 4),
-		                                 HandleBadConversion(strArgs, aArgs, 5),
-		                                 HandleBadConversion(strArgs, aArgs, 6),
-		                                 HandleBadConversion(strArgs, aArgs, 7),
-		                                 HandleBadConversion(strArgs, aArgs, 8),
-		                                 HandleBadConversion(strArgs, aArgs, 9),
-		                                 HandleBadConversion(strArgs, aArgs, 10),
-		                                 HandleBadConversion(strArgs, aArgs, 11),
-		                                 HandleBadConversion(strArgs, aArgs, 12),
-		                                 HandleBadConversion(strArgs, aArgs, 13),
-		                                 HandleBadConversion(strArgs, aArgs, 14),
-		                                 HandleBadConversion(strArgs, aArgs, 15),
-		                                 HandleBadConversion(strArgs, aArgs, 16),
-		                                 HandleBadConversion(strArgs, aArgs, 17),
-		                                 HandleBadConversion(strArgs, aArgs, 18),
-		                                 HandleBadConversion(strArgs, aArgs, 19),
-		                                 HandleBadConversion(strArgs, aArgs, 20),
-		                                 HandleBadConversion(strArgs, aArgs, 21),
-		                                 HandleBadConversion(strArgs, aArgs, 22),
-		                                 HandleBadConversion(strArgs, aArgs, 23),
-		                                 HandleBadConversion(strArgs, aArgs, 24),
-		                                 HandleBadConversion(strArgs, aArgs, 25),
-		                                 HandleBadConversion(strArgs, aArgs, 26),
-		                                 HandleBadConversion(strArgs, aArgs, 27),
-		                                 HandleBadConversion(strArgs, aArgs, 28));
+		CPrintToChatAll("%t", strPhrase, convertedArgs[0], convertedArgs[1], convertedArgs[2],
+		                                 convertedArgs[3], convertedArgs[4], convertedArgs[5],
+		                                 convertedArgs[6], convertedArgs[7], convertedArgs[8],
+		                                 convertedArgs[9], convertedArgs[10], convertedArgs[11],
+		                                 convertedArgs[12], convertedArgs[13], convertedArgs[14],
+		                                 convertedArgs[15], convertedArgs[16], convertedArgs[17],
+		                                 convertedArgs[18], convertedArgs[19], convertedArgs[20],
+		                                 convertedArgs[21], convertedArgs[22], convertedArgs[23],
+		                                 convertedArgs[24], convertedArgs[25], convertedArgs[26],
+		                                 convertedArgs[27], convertedArgs[28]);
 	}
 	else
 	{
-		CPrintToChat(iClient, "%t", strPhrase, HandleBadConversion(strArgs, aArgs, 0),
-		                                       HandleBadConversion(strArgs, aArgs, 1),
-		                                       HandleBadConversion(strArgs, aArgs, 2),
-		                                       HandleBadConversion(strArgs, aArgs, 3),
-		                                       HandleBadConversion(strArgs, aArgs, 4),
-		                                       HandleBadConversion(strArgs, aArgs, 5),
-		                                       HandleBadConversion(strArgs, aArgs, 6),
-		                                       HandleBadConversion(strArgs, aArgs, 7),
-		                                       HandleBadConversion(strArgs, aArgs, 8),
-		                                       HandleBadConversion(strArgs, aArgs, 9),
-		                                       HandleBadConversion(strArgs, aArgs, 10),
-		                                       HandleBadConversion(strArgs, aArgs, 11),
-		                                       HandleBadConversion(strArgs, aArgs, 12),
-		                                       HandleBadConversion(strArgs, aArgs, 13),
-		                                       HandleBadConversion(strArgs, aArgs, 14),
-		                                       HandleBadConversion(strArgs, aArgs, 15),
-		                                       HandleBadConversion(strArgs, aArgs, 16),
-		                                       HandleBadConversion(strArgs, aArgs, 17),
-		                                       HandleBadConversion(strArgs, aArgs, 18),
-		                                       HandleBadConversion(strArgs, aArgs, 19),
-		                                       HandleBadConversion(strArgs, aArgs, 20),
-		                                       HandleBadConversion(strArgs, aArgs, 21),
-		                                       HandleBadConversion(strArgs, aArgs, 22),
-		                                       HandleBadConversion(strArgs, aArgs, 23),
-		                                       HandleBadConversion(strArgs, aArgs, 24),
-		                                       HandleBadConversion(strArgs, aArgs, 25),
-		                                       HandleBadConversion(strArgs, aArgs, 26),
-		                                       HandleBadConversion(strArgs, aArgs, 27));
-	}
-}
-
-// If I do "!strArgs[iIndex][0] ? aArgs[iIndex] : strArgs[iIndex]", it will print random stuff.
-// Found out it's because it returns a value on one side of the conditional operator and an array on the other.
-// I wasted 2 hours on this issue.
-// Updated for SM 1.12 compatibility - using explicit if/else
-
-any[] HandleBadConversion(const char[][] strArgs, const any[] aArgs, int iIndex)
-{
-	static any aResult[256];
-	
-	if (!strArgs[iIndex][0])
-	{
-		// Return the numeric value
-		aResult[0] = aArgs[iIndex];
-		return aResult;
-	}
-	else
-	{
-		// Copy string to result array
-		for (int i = 0; i < 255 && strArgs[iIndex][i]; i++)
-		{
-			aResult[i] = view_as<any>(strArgs[iIndex][i]);
-			aResult[i + 1] = 0;
-		}
-		return aResult;
+		CPrintToChat(iClient, "%t", strPhrase, convertedArgs[0], convertedArgs[1], convertedArgs[2],
+		                                       convertedArgs[3], convertedArgs[4], convertedArgs[5],
+		                                       convertedArgs[6], convertedArgs[7], convertedArgs[8],
+		                                       convertedArgs[9], convertedArgs[10], convertedArgs[11],
+		                                       convertedArgs[12], convertedArgs[13], convertedArgs[14],
+		                                       convertedArgs[15], convertedArgs[16], convertedArgs[17],
+		                                       convertedArgs[18], convertedArgs[19], convertedArgs[20],
+		                                       convertedArgs[21], convertedArgs[22], convertedArgs[23],
+		                                       convertedArgs[24], convertedArgs[25], convertedArgs[26],
+		                                       convertedArgs[27], convertedArgs[28]);
 	}
 }
 
