@@ -242,10 +242,17 @@ public Action DisplayHud(Handle timer)
 	else if (rocketCount == 1)
 	{
 		// Single rocket: Display in the center.
-		float speed = rocketSpeeds[0];
+		int rocketIndex = rocketIndices[0];
+		float mphSpeed = rocketSpeeds[0];
+		float huSpeed = TFDB_GetRocketSpeed(rocketIndex);
+		int deflections = TFDB_GetRocketDeflections(rocketIndex);
+		int rocketClass = TFDB_GetRocketClass(rocketIndex);
+		char className[64];
+		TFDB_GetRocketClassLongName(rocketClass, className, sizeof(className));
+		
 		char hudMessage[256];
 		// Format the string first to avoid issues with ShowHudText.
-		FormatEx(hudMessage, sizeof(hudMessage), "%t", "Hud_Speedometer", speed, 0.0, 0, 0, "");
+		FormatEx(hudMessage, sizeof(hudMessage), "%t", "Hud_Speedometer", mphSpeed, huSpeed, deflections, rocketIndex + 1, className);
 
 		for (int i = 1; i <= MaxClients; i++)
 		{
