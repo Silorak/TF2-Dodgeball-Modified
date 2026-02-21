@@ -5,9 +5,9 @@
 #include <multicolors>
 
 #define PLUGIN_NAME        "[TFDB] Print & replace client indexes"
-#define PLUGIN_AUTHOR      "x07x08"
+#define PLUGIN_AUTHOR      "x07x08 & Silorak"
 #define PLUGIN_DESCRIPTION "Does what it says"
-#define PLUGIN_VERSION     "1.1.2"
+#define PLUGIN_VERSION     "1.1.3"
 #define PLUGIN_URL         "https://github.com/x07x08/TF2-Dodgeball-Modified"
 
 char CmdBuffer[255];
@@ -203,107 +203,60 @@ public Action CmdPrintPhraseClient(int iClient, int iArgs)
 
 void PrintPhrase(const char[] strPhrase, const char strArgs[32][255], const any aArgs[32], bool bAll, int iClient = -1)
 {
+	// Use SetGlobalTransTarget + Format with %T to properly handle
+	// dynamic translation arguments without heap overflow.
+	// Maximum phrase args in tfdb.phrases.txt is 5, so 8 slots is plenty.
+	
 	if (bAll)
 	{
-		// There are a maximum of 32 arguments for the translation format function.
-		// Three of them seem to be reserved :
-		//
-		//     - One for the phrase name
-		//     - One for the client or the language ID (no idea which)
-		//     - One that is unknown to me (most likely one of the above)
-		//
-		// Found the optimal number through plenty of crashes.
-		
-		// Ok so this has 29 arguments, which contradicts everything above...
-		// I have no clue why this works with 29 instead of 28...
-		
-		CPrintToChatAll("%t", strPhrase, HandleBadConversion(strArgs, aArgs, 0),
-		                                 HandleBadConversion(strArgs, aArgs, 1),
-		                                 HandleBadConversion(strArgs, aArgs, 2),
-		                                 HandleBadConversion(strArgs, aArgs, 3),
-		                                 HandleBadConversion(strArgs, aArgs, 4),
-		                                 HandleBadConversion(strArgs, aArgs, 5),
-		                                 HandleBadConversion(strArgs, aArgs, 6),
-		                                 HandleBadConversion(strArgs, aArgs, 7),
-		                                 HandleBadConversion(strArgs, aArgs, 8),
-		                                 HandleBadConversion(strArgs, aArgs, 9),
-		                                 HandleBadConversion(strArgs, aArgs, 10),
-		                                 HandleBadConversion(strArgs, aArgs, 11),
-		                                 HandleBadConversion(strArgs, aArgs, 12),
-		                                 HandleBadConversion(strArgs, aArgs, 13),
-		                                 HandleBadConversion(strArgs, aArgs, 14),
-		                                 HandleBadConversion(strArgs, aArgs, 15),
-		                                 HandleBadConversion(strArgs, aArgs, 16),
-		                                 HandleBadConversion(strArgs, aArgs, 17),
-		                                 HandleBadConversion(strArgs, aArgs, 18),
-		                                 HandleBadConversion(strArgs, aArgs, 19),
-		                                 HandleBadConversion(strArgs, aArgs, 20),
-		                                 HandleBadConversion(strArgs, aArgs, 21),
-		                                 HandleBadConversion(strArgs, aArgs, 22),
-		                                 HandleBadConversion(strArgs, aArgs, 23),
-		                                 HandleBadConversion(strArgs, aArgs, 24),
-		                                 HandleBadConversion(strArgs, aArgs, 25),
-		                                 HandleBadConversion(strArgs, aArgs, 26),
-		                                 HandleBadConversion(strArgs, aArgs, 27),
-		                                 HandleBadConversion(strArgs, aArgs, 28));
+		for (int i = 1; i <= MaxClients; i++)
+		{
+			if (!IsClientInGame(i) || IsFakeClient(i)) continue;
+			
+			char strBuffer[512];
+			SetGlobalTransTarget(i);
+			FormatEx(strBuffer, sizeof(strBuffer), "%T", strPhrase, i,
+			         HBC(strArgs, aArgs, 0), HBC(strArgs, aArgs, 1),
+			         HBC(strArgs, aArgs, 2), HBC(strArgs, aArgs, 3),
+			         HBC(strArgs, aArgs, 4), HBC(strArgs, aArgs, 5),
+			         HBC(strArgs, aArgs, 6), HBC(strArgs, aArgs, 7));
+			
+			CPrintToChat(i, strBuffer);
+		}
 	}
 	else
 	{
-		CPrintToChat(iClient, "%t", strPhrase, HandleBadConversion(strArgs, aArgs, 0),
-		                                       HandleBadConversion(strArgs, aArgs, 1),
-		                                       HandleBadConversion(strArgs, aArgs, 2),
-		                                       HandleBadConversion(strArgs, aArgs, 3),
-		                                       HandleBadConversion(strArgs, aArgs, 4),
-		                                       HandleBadConversion(strArgs, aArgs, 5),
-		                                       HandleBadConversion(strArgs, aArgs, 6),
-		                                       HandleBadConversion(strArgs, aArgs, 7),
-		                                       HandleBadConversion(strArgs, aArgs, 8),
-		                                       HandleBadConversion(strArgs, aArgs, 9),
-		                                       HandleBadConversion(strArgs, aArgs, 10),
-		                                       HandleBadConversion(strArgs, aArgs, 11),
-		                                       HandleBadConversion(strArgs, aArgs, 12),
-		                                       HandleBadConversion(strArgs, aArgs, 13),
-		                                       HandleBadConversion(strArgs, aArgs, 14),
-		                                       HandleBadConversion(strArgs, aArgs, 15),
-		                                       HandleBadConversion(strArgs, aArgs, 16),
-		                                       HandleBadConversion(strArgs, aArgs, 17),
-		                                       HandleBadConversion(strArgs, aArgs, 18),
-		                                       HandleBadConversion(strArgs, aArgs, 19),
-		                                       HandleBadConversion(strArgs, aArgs, 20),
-		                                       HandleBadConversion(strArgs, aArgs, 21),
-		                                       HandleBadConversion(strArgs, aArgs, 22),
-		                                       HandleBadConversion(strArgs, aArgs, 23),
-		                                       HandleBadConversion(strArgs, aArgs, 24),
-		                                       HandleBadConversion(strArgs, aArgs, 25),
-		                                       HandleBadConversion(strArgs, aArgs, 26),
-		                                       HandleBadConversion(strArgs, aArgs, 27));
+		char strBuffer[512];
+		SetGlobalTransTarget(iClient);
+		FormatEx(strBuffer, sizeof(strBuffer), "%T", strPhrase, iClient,
+		         HBC(strArgs, aArgs, 0), HBC(strArgs, aArgs, 1),
+		         HBC(strArgs, aArgs, 2), HBC(strArgs, aArgs, 3),
+		         HBC(strArgs, aArgs, 4), HBC(strArgs, aArgs, 5),
+		         HBC(strArgs, aArgs, 6), HBC(strArgs, aArgs, 7));
+		
+		CPrintToChat(iClient, strBuffer);
 	}
 }
 
-// If I do "!strArgs[iIndex][0] ? aArgs[iIndex] : strArgs[iIndex]", it will print random stuff.
-// Found out it's because it returns a value on one side of the conditional operator and an array on the other.
-// I wasted 2 hours on this issue.
-// Updated for SM 1.12 compatibility - using explicit if/else
-
-any[] HandleBadConversion(const char[][] strArgs, const any[] aArgs, int iIndex)
+// Returns either the numeric value or the string as any[].
+// SM 1.12 requires any[] return type — cannot coerce char[] to any scalar.
+// With only 8 calls instead of 29, this fits comfortably in default heap.
+any[] HBC(const char[][] strArgs, const any[] aArgs, int iIndex)
 {
 	static any aResult[256];
 	
 	if (!strArgs[iIndex][0])
 	{
-		// Return the numeric value
 		aResult[0] = aArgs[iIndex];
 		return aResult;
 	}
-	else
+	
+	int i;
+	for (i = 0; i < 255 && strArgs[iIndex][i]; i++)
 	{
-		// Copy string to result array
-		for (int i = 0; i < 255 && strArgs[iIndex][i]; i++)
-		{
-			aResult[i] = view_as<any>(strArgs[iIndex][i]);
-			aResult[i + 1] = 0;
-		}
-		return aResult;
+		aResult[i] = view_as<any>(strArgs[iIndex][i]);
 	}
+	aResult[i] = 0;
+	return aResult;
 }
 
