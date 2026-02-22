@@ -50,8 +50,6 @@ enum RocketClassMenu
 	RocketClassMenu_RocketsModifier,
 	RocketClassMenu_PlayerModifier,
 	RocketClassMenu_ControlDelay,
-	RocketClassMenu_DragTimeMin,
-	RocketClassMenu_DragTimeMax,
 	RocketClassMenu_TargetWeight,
 	RocketClassMenu_CmdsOnSpawn,
 	RocketClassMenu_CmdsOnDeflect,
@@ -105,8 +103,6 @@ enum struct RocketClass
 	float          RocketsModifier;
 	float          PlayerModifier;
 	float          ControlDelay;
-	float          DragTimeMin;
-	float          DragTimeMax;
 	float          TargetWeight;
 	DataPack       CmdsOnSpawn;
 	DataPack       CmdsOnDeflect;
@@ -182,8 +178,6 @@ char strRocketClassMenu[view_as<int>(SizeOfRocketClassMenu) - 1][] =
 	"Rockets modifier",
 	"Player modifier",
 	"Control delay",
-	"Drag time minimum (start)",
-	"Drag time maximum (end)",
 	"Target weight",
 	"Spawn commands",
 	"Deflect commands",
@@ -934,18 +928,6 @@ public int RocketClassOptionsMenuHandler(Menu hMenu, MenuAction iMenuActions, in
 				case RocketClassMenu_ControlDelay :
 				{
 					CPrintToChat(iParam1, "%t", "Menu_ControlDelay", CvarSayHookTimeout.IntValue);
-					CPrintToChat(iParam1, "%t", "Menu_Reset");
-				}
-				
-				case RocketClassMenu_DragTimeMin :
-				{
-					CPrintToChat(iParam1, "%t", "Menu_DragTimeMin", CvarSayHookTimeout.IntValue);
-					CPrintToChat(iParam1, "%t", "Menu_Reset");
-				}
-				
-				case RocketClassMenu_DragTimeMax :
-				{
-					CPrintToChat(iParam1, "%t", "Menu_DragTimeMax", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
@@ -1766,38 +1748,6 @@ public Action OnClientSayCommand(int iClient, const char[] strCommand, const cha
 			return Plugin_Stop;
 		}
 		
-		case RocketClassMenu_DragTimeMin :
-		{
-			float fTime = StringToFloat(strArgs);
-			
-			TFDB_SetRocketClassDragTimeMin(iRocketClass, fTime == -1.0 ? g_eSavedRocketClasses[iRocketClass].DragTimeMin : fTime);
-			
-			LogAction(iClient, -1, "\"%L\" changed rocket class drag time start to %.2f", iClient, fTime);
-			CPrintToChat(iClient, "%t", "Menu_ChangedDragTimeMin", fTime);
-			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
-			
-			return Plugin_Stop;
-		}
-		
-		case RocketClassMenu_DragTimeMax :
-		{
-			float fTime = StringToFloat(strArgs);
-			
-			TFDB_SetRocketClassDragTimeMax(iRocketClass, fTime == -1.0 ? g_eSavedRocketClasses[iRocketClass].DragTimeMax : fTime);
-			
-			LogAction(iClient, -1, "\"%L\" changed rocket class drag time end to %.2f", iClient, fTime);
-			CPrintToChat(iClient, "%t", "Menu_ChangedDragTimeMax", fTime);
-			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
-			
-			return Plugin_Stop;
-		}
-		
 		case RocketClassMenu_TargetWeight :
 		{
 			float fWeight = StringToFloat(strArgs);
@@ -2086,8 +2036,6 @@ void ParseClasses(KeyValues kvConfig)
 		g_eSavedRocketClasses[iIndex].ElevationRate     = kvConfig.GetFloat("elevation rate");
 		g_eSavedRocketClasses[iIndex].ElevationLimit    = kvConfig.GetFloat("elevation limit");
 		g_eSavedRocketClasses[iIndex].ControlDelay      = kvConfig.GetFloat("control delay");
-		g_eSavedRocketClasses[iIndex].DragTimeMin       = kvConfig.GetFloat("drag time min");
-		g_eSavedRocketClasses[iIndex].DragTimeMax       = kvConfig.GetFloat("drag time max");
 		g_eSavedRocketClasses[iIndex].BounceScale       = kvConfig.GetFloat("bounce scale", 1.0);
 		g_eSavedRocketClasses[iIndex].PlayerModifier    = kvConfig.GetFloat("no. players modifier");
 		g_eSavedRocketClasses[iIndex].RocketsModifier   = kvConfig.GetFloat("no. rockets modifier");

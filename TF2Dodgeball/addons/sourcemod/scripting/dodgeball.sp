@@ -48,9 +48,7 @@ ConVar CvarDelayPreventionSpeedup;
 ConVar CvarNoTargetRedirectDamage;
 ConVar CvarStealMessage;
 ConVar CvarDelayMessage;
-// New CVar for bounce mechanic
-ConVar CvarBounceForceAngle;
-ConVar CvarBounceForceScale;
+
 
 
 // -----<<< Gameplay >>>-----
@@ -92,6 +90,7 @@ float       RocketLastDeflectionTime[MAX_ROCKETS];
 float       RocketLastBeepTime[MAX_ROCKETS];
 float       LastSpawnTime[MAX_ROCKETS];
 int         RocketBounces[MAX_ROCKETS];
+bool        RocketHomingPaused[MAX_ROCKETS];
 int         RocketCount;
 
 // Classes
@@ -118,8 +117,6 @@ float          RocketClassElevationLimit[MAX_ROCKET_CLASSES];
 float          RocketClassRocketsModifier[MAX_ROCKET_CLASSES];
 float          RocketClassPlayerModifier[MAX_ROCKET_CLASSES];
 float          RocketClassControlDelay[MAX_ROCKET_CLASSES];
-float          RocketClassDragTimeMin[MAX_ROCKET_CLASSES];
-float          RocketClassDragTimeMax[MAX_ROCKET_CLASSES];
 float          RocketClassTargetWeight[MAX_ROCKET_CLASSES];
 DataPack       RocketClassCmdsOnSpawn[MAX_ROCKET_CLASSES];
 DataPack       RocketClassCmdsOnDeflect[MAX_ROCKET_CLASSES];
@@ -206,8 +203,7 @@ public void OnPluginStart()
 	CvarNoTargetRedirectDamage = CreateConVar("tf_dodgeball_redirect_damage", "1", "Reduce all damage when a rocket has an invalid target?", _, true, 0.0, true, 1.0);
 	CvarStealMessage = CreateConVar("tf_dodgeball_sp_message", "1", "Display the steal message(s)?", _, true, 0.0, true, 1.0);
 	CvarDelayMessage = CreateConVar("tf_dodgeball_dp_message", "1", "Display the delay message(s)?", _, true, 0.0, true, 1.0);
-	CvarBounceForceAngle = CreateConVar("tf_dodgeball_bounce_force_angle", "45.0", "Minimum downward angle (pitch) for a player to trigger a forced bounce.", _, true, 0.0, true, 90.0);
-	CvarBounceForceScale = CreateConVar("tf_dodgeball_bounce_force_scale", "1.5", "How much stronger a player-forced bounce is. (Multiplier)", _, true, 1.0);
+
 
 
 	SpawnersTrie = new StringMap();
@@ -265,10 +261,7 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] strError, int iE
 	CreateNative("TFDB_SetRocketClassPlayerModifier", Native_SetRocketClassPlayerModifier);
 	CreateNative("TFDB_GetRocketClassControlDelay", Native_GetRocketClassControlDelay);
 	CreateNative("TFDB_SetRocketClassControlDelay", Native_SetRocketClassControlDelay);
-	CreateNative("TFDB_GetRocketClassDragTimeMin", Native_GetRocketClassDragTimeMin);
-	CreateNative("TFDB_SetRocketClassDragTimeMin", Native_SetRocketClassDragTimeMin);
-	CreateNative("TFDB_GetRocketClassDragTimeMax", Native_GetRocketClassDragTimeMax);
-	CreateNative("TFDB_SetRocketClassDragTimeMax", Native_SetRocketClassDragTimeMax);
+
 	CreateNative("TFDB_SetRocketClassCount", Native_SetRocketClassCount);
 	CreateNative("TFDB_SetRocketEntity", Native_SetRocketEntity);
 	CreateNative("TFDB_GetRocketClassMaxBounces", Native_GetRocketClassMaxBounces);

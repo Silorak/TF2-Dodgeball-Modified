@@ -304,23 +304,6 @@ public any Native_SetRocketClassControlDelay(Handle hPlugin, int iNumParams) {
 	return 0;
 }
 
-public any Native_GetRocketClassDragTimeMin(Handle hPlugin, int iNumParams) {
-	return view_as<any>(RocketClassDragTimeMin[GetNativeCell(1)]);
-}
-
-public any Native_SetRocketClassDragTimeMin(Handle hPlugin, int iNumParams) {
-	RocketClassDragTimeMin[GetNativeCell(1)] = GetNativeCell(2);
-	return 0;
-}
-
-public any Native_GetRocketClassDragTimeMax(Handle hPlugin, int iNumParams) {
-	return view_as<any>(RocketClassDragTimeMax[GetNativeCell(1)]);
-}
-
-public any Native_SetRocketClassDragTimeMax(Handle hPlugin, int iNumParams) {
-	RocketClassDragTimeMax[GetNativeCell(1)] = GetNativeCell(2);
-	return 0;
-}
 
 public any Native_GetRocketClassMaxBounces(Handle hPlugin, int iNumParams) {
 	return RocketClassMaxBounces[GetNativeCell(1)];

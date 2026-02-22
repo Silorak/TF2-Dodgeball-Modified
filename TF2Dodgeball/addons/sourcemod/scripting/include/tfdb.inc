@@ -442,17 +442,6 @@ native float TFDB_GetRocketClassControlDelay(int iClass);
 /** Sets the control delay. */
 native void TFDB_SetRocketClassControlDelay(int iClass, float fDelay);
 
-/** Gets the minimum drag time. */
-native float TFDB_GetRocketClassDragTimeMin(int iClass);
-
-/** Sets the minimum drag time. */
-native void TFDB_SetRocketClassDragTimeMin(int iClass, float fMin);
-
-/** Gets the maximum drag time. */
-native float TFDB_GetRocketClassDragTimeMax(int iClass);
-
-/** Sets the maximum drag time. */
-native void TFDB_SetRocketClassDragTimeMax(int iClass, float fMax);
 
 /** Sets the total number of rocket classes. */
 native void TFDB_SetRocketClassCount(int iCount);
@@ -836,10 +825,6 @@ public void __pl_TFDB_SetNTVOptional()
 	MarkNativeAsOptional("TFDB_SetRocketClassPlayerModifier");
 	MarkNativeAsOptional("TFDB_GetRocketClassControlDelay");
 	MarkNativeAsOptional("TFDB_SetRocketClassControlDelay");
-	MarkNativeAsOptional("TFDB_GetRocketClassDragTimeMin");
-	MarkNativeAsOptional("TFDB_SetRocketClassDragTimeMin");
-	MarkNativeAsOptional("TFDB_GetRocketClassDragTimeMax");
-	MarkNativeAsOptional("TFDB_SetRocketClassDragTimeMax");
 	MarkNativeAsOptional("TFDB_SetRocketClassCount");
 	MarkNativeAsOptional("TFDB_SetRocketEntity");
 	MarkNativeAsOptional("TFDB_GetRocketClassMaxBounces");

@@ -350,33 +350,7 @@ public Action OnTouch(int iEntity, int iOther)
 
 	float vBounceVec[3];
 	SubtractVectors(vVelocity, vNormal, vBounceVec);
-	// --- New Bounce Mechanic ---
-	// Check if the owner is looking down to apply extra bounce force.
-	int iOwner = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
-	if (IsValidClient(iOwner, true))
-	{
-		float fOwnerAngles[3];
-		GetClientEyeAngles(iOwner, fOwnerAngles);
-
-		// Check if player's pitch is looking down enough
-		if (fOwnerAngles[0] >= CvarBounceForceAngle.FloatValue)
-		{
-			// Apply the base bounce scale and the extra force multiplier
-			ScaleVector(vBounceVec, RocketClassBounceScale[iClass] * CvarBounceForceScale.FloatValue);
-		}
-		else
-		{
-			// Apply only the base bounce scale
-			ScaleVector(vBounceVec, RocketClassBounceScale[iClass]);
-		}
-	}
-	else
-	{
-		// Apply only the base bounce scale if there's no valid owner
-		ScaleVector(vBounceVec, RocketClassBounceScale[iClass]);
-	}
-	// --- End New Bounce Mechanic ---
-
+	ScaleVector(vBounceVec, RocketClassBounceScale[iClass]);
 
 	float vNewAngles[3];
 	GetVectorAngles(vBounceVec, vNewAngles);
@@ -396,6 +370,10 @@ public Action OnTouch(int iEntity, int iOther)
 		CopyVectors(vNewAnglesRef, vNewAngles);
 		CopyVectors(vBounceVecRef, vBounceVec);
 	}
+
+	// Pause homing — rocket flies freely with bounce velocity until
+	// the 20Hz timer re-enables it (DB_Reborn StopPause pattern).
+	RocketHomingPaused[iIndex] = true;
 
 	TeleportEntity(iEntity, NULL_VECTOR, vNewAngles, vBounceVec);
 	RocketBounces[iIndex]++;

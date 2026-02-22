@@ -422,8 +422,6 @@ void ParseClasses(KeyValues kvConfig)
 		RocketClassElevationRate[iIndex]     = kvConfig.GetFloat("elevation rate");
 		RocketClassElevationLimit[iIndex]    = kvConfig.GetFloat("elevation limit");
 		RocketClassControlDelay[iIndex]      = kvConfig.GetFloat("control delay");
-		RocketClassDragTimeMin[iIndex]       = kvConfig.GetFloat("drag time min");
-		RocketClassDragTimeMax[iIndex]       = kvConfig.GetFloat("drag time max");
 		RocketClassMaxBounces[iIndex]        = kvConfig.GetNum("max bounces");
 		RocketClassBounceScale[iIndex]       = kvConfig.GetFloat("bounce scale", 1.0);
 		RocketClassPlayerModifier[iIndex]    = kvConfig.GetFloat("no. players modifier");
