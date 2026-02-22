@@ -399,7 +399,7 @@ void ParseClasses(KeyValues kvConfig)
 			}
 		}
 
-		if (kvConfig.GetNum("elevate on deflect", 1) == 1) iFlags |= RocketFlag_ElevateOnDeflect;
+		if (kvConfig.GetNum("elevate on deflect", 0) == 1) iFlags |= RocketFlag_ElevateOnDeflect;
 		if (kvConfig.GetNum("neutral rocket", 0) == 1)     iFlags |= RocketFlag_IsNeutral;
 		if (kvConfig.GetNum("keep direction", 0) == 1)     iFlags |= RocketFlag_KeepDirection;
 		if (kvConfig.GetNum("teamless deflects", 0) == 1)  iFlags |= RocketFlag_TeamlessHits;

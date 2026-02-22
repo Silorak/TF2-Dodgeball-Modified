@@ -136,7 +136,7 @@ public void OnPlayerInventory(Event hEvent, char[] strEventName, bool bDontBroad
 	for (int iSlot = 1; iSlot < 5; iSlot++)
 	{
 		int iEntity = GetPlayerWeaponSlot(iClient, iSlot);
-		if (iEntity != -1) RemoveEdict(iEntity);
+		if (iEntity != -1) RemoveEntity(iEntity);
 	}
 }
 

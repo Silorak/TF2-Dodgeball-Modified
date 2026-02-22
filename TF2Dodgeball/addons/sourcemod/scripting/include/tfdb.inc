@@ -488,7 +488,10 @@ native float TFDB_GetSpawnersInterval(int iSpawnerClass);
 /** Sets the spawn interval (seconds between rockets). */
 native void TFDB_SetSpawnersInterval(int iSpawnerClass, float fInterval);
 
-/** Gets the rocket class spawn chances table. */
+/**
+ * Gets the rocket class spawn chances table.
+ * @note You MUST call delete on the returned ArrayList Handle when finished, or your plugin will leak memory.
+ */
 native ArrayList TFDB_GetSpawnersChancesTable(int iSpawnerClass);
 
 /** Sets the rocket class spawn chances table. */
@@ -678,31 +681,46 @@ native void TFDB_SetRocketClassTargetWeight(int iClass, float fWeight);
 
 // ============ Command Handlers ============
 
-/** Gets the commands to execute on rocket spawn. */
+/**
+ * Gets the commands to execute on rocket spawn.
+ * @note You MUST call delete on the returned DataPack Handle when finished, or your plugin will leak memory.
+ */
 native DataPack TFDB_GetRocketClassCmdsOnSpawn(int iClass);
 
 /** Sets the commands to execute on rocket spawn. */
 native void TFDB_SetRocketClassCmdsOnSpawn(int iClass, DataPack hCmds);
 
-/** Gets the commands to execute on deflection. */
+/**
+ * Gets the commands to execute on deflection.
+ * @note You MUST call delete on the returned DataPack Handle when finished, or your plugin will leak memory.
+ */
 native DataPack TFDB_GetRocketClassCmdsOnDeflect(int iClass);
 
 /** Sets the commands to execute on deflection. */
 native void TFDB_SetRocketClassCmdsOnDeflect(int iClass, DataPack hCmds);
 
-/** Gets the commands to execute when rocket kills a player. */
+/**
+ * Gets the commands to execute when rocket kills a player.
+ * @note You MUST call delete on the returned DataPack Handle when finished, or your plugin will leak memory.
+ */
 native DataPack TFDB_GetRocketClassCmdsOnKill(int iClass);
 
 /** Sets the commands to execute when rocket kills a player. */
 native void TFDB_SetRocketClassCmdsOnKill(int iClass, DataPack hCmds);
 
-/** Gets the commands to execute when rocket explodes. */
+/**
+ * Gets the commands to execute when rocket explodes.
+ * @note You MUST call delete on the returned DataPack Handle when finished, or your plugin will leak memory.
+ */
 native DataPack TFDB_GetRocketClassCmdsOnExplode(int iClass);
 
 /** Sets the commands to execute when rocket explodes. */
 native void TFDB_SetRocketClassCmdsOnExplode(int iClass, DataPack hCmds);
 
-/** Gets the commands to execute when rocket has no target. */
+/**
+ * Gets the commands to execute when rocket has no target.
+ * @note You MUST call delete on the returned DataPack Handle when finished, or your plugin will leak memory.
+ */
 native DataPack TFDB_GetRocketClassCmdsOnNoTarget(int iClass);
 
 /** Sets the commands to execute when rocket has no target. */

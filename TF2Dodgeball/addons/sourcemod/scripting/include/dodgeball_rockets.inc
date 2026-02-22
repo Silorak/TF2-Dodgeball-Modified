@@ -651,7 +651,9 @@ float CalculateRocketTurnRate(int iClass, float fModifier)
 {
 	if (UseOrbitCoefficient && RocketClassOrbitTightness[iClass] > 0.0)
 	{
-		return CalculateRocketSpeed(iClass, fModifier) * RocketClassOrbitTightness[iClass];
+		// Scale by 0.001 so config values use a friendly 0.1–1.0 range
+		// (0.3 ≈ default turn rate feel, 0.1 = loose, 1.0 = tight)
+		return CalculateRocketSpeed(iClass, fModifier) * RocketClassOrbitTightness[iClass] * 0.001;
 	}
 	return RocketClassTurnRate[iClass] + RocketClassTurnRateIncrement[iClass] * fModifier;
 }
