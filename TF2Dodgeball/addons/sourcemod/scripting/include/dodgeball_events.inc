@@ -352,6 +352,12 @@ public Action OnTouch(int iEntity, int iOther)
 	SubtractVectors(vVelocity, vNormal, vBounceVec);
 	ScaleVector(vBounceVec, RocketClassBounceScale[iClass]);
 
+	// Z-clamp: scale vertical component to prevent extreme vertical bounces
+	if (UseBounceVerticalScale && RocketClassBounceVerticalScale[iClass] < 1.0)
+	{
+		vBounceVec[2] *= RocketClassBounceVerticalScale[iClass];
+	}
+
 	float vNewAngles[3];
 	GetVectorAngles(vBounceVec, vNewAngles);
 

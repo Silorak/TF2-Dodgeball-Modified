@@ -68,6 +68,10 @@ eRocketSteal StealInfo[MAXPLAYERS + 1];
 
 // -----<<< Configuration >>>-----
 bool MusicEnabled;
+bool UseOrbitCoefficient;
+bool UseTargetSpeedScaling;
+bool UseSmoothElevation;
+bool UseBounceVerticalScale;
 bool Music[view_as<int>(SizeOfMusicsArray)];
 char MusicPath[view_as<int>(SizeOfMusicsArray)][PLATFORM_MAX_PATH];
 bool UseWebPlayer;
@@ -125,6 +129,10 @@ DataPack       RocketClassCmdsOnExplode[MAX_ROCKET_CLASSES];
 DataPack       RocketClassCmdsOnNoTarget[MAX_ROCKET_CLASSES];
 int            RocketClassMaxBounces[MAX_ROCKET_CLASSES];
 float          RocketClassBounceScale[MAX_ROCKET_CLASSES];
+float          RocketClassOrbitTightness[MAX_ROCKET_CLASSES];
+float          RocketClassMaxSpeed[MAX_ROCKET_CLASSES];
+int            RocketClassMaxDeflections[MAX_ROCKET_CLASSES];
+float          RocketClassBounceVerticalScale[MAX_ROCKET_CLASSES];
 int            RocketClassCount;
 
 // Spawner classes

@@ -264,6 +264,23 @@ void HomingRocketThink(int iIndex)
 			}
 		}
 
+		// --- Smooth elevation (OnGameFrame, frame-rate independent) ---
+		if (UseSmoothElevation && (RocketInstanceFlags[iIndex] & RocketFlag_Elevating))
+		{
+			if ((GetGameTime() - RocketLastDeflectionTime[iIndex]) >= RocketClassControlDelay[iClass])
+			{
+				float fElevRate = RocketClassElevationRate[iClass] / TickModifier;
+				if (RocketDirection[iIndex][2] < RocketClassElevationLimit[iClass])
+				{
+					RocketDirection[iIndex][2] = FMin(RocketDirection[iIndex][2] + fElevRate, RocketClassElevationLimit[iClass]);
+				}
+				else
+				{
+					RocketInstanceFlags[iIndex] &= ~RocketFlag_Elevating;
+				}
+			}
+		}
+
 		if (!(RocketInstanceState[iIndex] & RocketState_Bouncing))
 		{
 			ApplyRocketParameters(iIndex);
@@ -366,7 +383,7 @@ void SharedRocketThink(int iIndex)
 	if (!(iDeflectionCount > RocketDeflections[iIndex]))
 	{
 		if (((GetGameTime() - RocketLastDeflectionTime[iIndex]) >= RocketClassControlDelay[iClass]) &&
-		    (RocketInstanceFlags[iIndex] & RocketFlag_Elevating))
+		    (RocketInstanceFlags[iIndex] & RocketFlag_Elevating) && !UseSmoothElevation)
 		{
 			if (RocketDirection[iIndex][2] < RocketClassElevationLimit[iClass])
 			{
@@ -550,6 +567,10 @@ float CalculateRocketSpeed(int iClass, float fModifier)
 /** Calculates turn rate based on class settings and modifier. */
 float CalculateRocketTurnRate(int iClass, float fModifier)
 {
+	if (UseOrbitCoefficient && RocketClassOrbitTightness[iClass] > 0.0)
+	{
+		return CalculateRocketSpeed(iClass, fModifier) * RocketClassOrbitTightness[iClass];
+	}
 	return RocketClassTurnRate[iClass] + RocketClassTurnRateIncrement[iClass] * fModifier;
 }
 
