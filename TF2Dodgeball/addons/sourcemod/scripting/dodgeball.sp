@@ -95,6 +95,8 @@ float       RocketLastBeepTime[MAX_ROCKETS];
 float       LastSpawnTime[MAX_ROCKETS];
 int         RocketBounces[MAX_ROCKETS];
 bool        RocketHomingPaused[MAX_ROCKETS];
+bool        RocketIsDragPause[MAX_ROCKETS];     // true = drag pause (per-frame unpause), false = bounce pause (timer unpause)
+float       RocketDragPauseEnd[MAX_ROCKETS];    // GetGameTime() when drag pause should end
 int         RocketCount;
 
 // Classes
@@ -133,6 +135,8 @@ float          RocketClassOrbitTightness[MAX_ROCKET_CLASSES];
 float          RocketClassMaxSpeed[MAX_ROCKET_CLASSES];
 int            RocketClassMaxDeflections[MAX_ROCKET_CLASSES];
 float          RocketClassBounceVerticalScale[MAX_ROCKET_CLASSES];
+float          RocketClassBounceMaxVerticalSpeed[MAX_ROCKET_CLASSES];
+float          RocketClassDragPauseDuration[MAX_ROCKET_CLASSES];
 int            RocketClassCount;
 
 // Spawner classes
@@ -215,6 +219,8 @@ public void OnPluginStart()
 
 
 	SpawnersTrie = new StringMap();
+	// 0.1 matches SourceMod's TIMER_MIN_ACCURACY (the real timer fire rate).
+	// Used to scale per-frame turn rate / elevation relative to the logic timer rate.
 	TickModifier = 0.1 / GetTickInterval();
 
 	AddTempEntHook("TFExplosion", OnTFExplosion);

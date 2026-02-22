@@ -4,7 +4,20 @@
 #define _tfdb_included
 
 // ---- General settings -----------------------------------------------------------
-#define FPS_LOGIC_RATE          20.0
+//
+//   Timer rate vs OnGameFrame:
+//   SourceMod's TimerSys.cpp defines TIMER_MIN_ACCURACY = 0.1 (seconds).
+//   The timer processing loop (RunFrame) only fires every 0.1s regardless of
+//   the interval passed to CreateTimer — so the logic timer runs at ~10Hz.
+//
+//   OnGameFrame is independent — it fires every server frame (~66Hz on 66 tick,
+//   ~128Hz on 128 tick). We use it for smooth per-frame homing and the timer
+//   for chunky legacy-feel aim sampling (StopPause).
+//
+//   Previous dodgeball plugins defined FPS_LOGIC_RATE as 20.0 (0.05s), but
+//   SourceMod clamped it to 0.1s anyway. We set it to 10.0 to match reality.
+//
+#define FPS_LOGIC_RATE          10.0
 #define FPS_LOGIC_INTERVAL      1.0 / FPS_LOGIC_RATE
 
 /** Conversion factor: Hammer units/s to MPH. (1 HU ≈ 0.01905m) */

@@ -447,6 +447,8 @@ void ParseClasses(KeyValues kvConfig)
 
 		// Scaling mode: bounce vertical scale
 		RocketClassBounceVerticalScale[iIndex] = kvConfig.GetFloat("bounce vertical ratio", 1.0);
+		RocketClassBounceMaxVerticalSpeed[iIndex] = kvConfig.GetFloat("bounce max vertical speed", 0.0);
+		RocketClassDragPauseDuration[iIndex] = kvConfig.GetFloat("drag pause duration", 0.1);
 		
 		DataPack hCmds = null;
 		kvConfig.GetString("on spawn", strBuffer, sizeof(strBuffer));

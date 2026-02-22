@@ -234,7 +234,7 @@ public void OnObjectDeflected(Event hEvent, char[] strEventName, bool bDontBroad
 /**
  * This hook runs every server frame.
  * It's responsible for the smooth "homing" behaviour.
- * "legacy homing" is handled by the 20Hz timer OnDodgeBallGameFrame.
+ * "legacy homing" is handled by the logic timer OnDodgeBallGameFrame (~10Hz).
  */
 public void OnGameFrame()
 {
@@ -358,6 +358,19 @@ public Action OnTouch(int iEntity, int iOther)
 		vBounceVec[2] *= RocketClassBounceVerticalScale[iClass];
 	}
 
+	// Absolute vertical speed cap (like UDL's crawl bounce max up)
+	if (UseBounceVerticalScale && RocketClassBounceMaxVerticalSpeed[iClass] > 0.0)
+	{
+		if (vBounceVec[2] > RocketClassBounceMaxVerticalSpeed[iClass])
+		{
+			vBounceVec[2] = RocketClassBounceMaxVerticalSpeed[iClass];
+		}
+		else if (vBounceVec[2] < -RocketClassBounceMaxVerticalSpeed[iClass])
+		{
+			vBounceVec[2] = -RocketClassBounceMaxVerticalSpeed[iClass];
+		}
+	}
+
 	float vNewAngles[3];
 	GetVectorAngles(vBounceVec, vNewAngles);
 
@@ -378,8 +391,9 @@ public Action OnTouch(int iEntity, int iOther)
 	}
 
 	// Pause homing — rocket flies freely with bounce velocity until
-	// the 20Hz timer re-enables it (DB_Reborn StopPause pattern).
+	// the logic timer re-enables it (bounce pauses use timer, not per-frame drag).
 	RocketHomingPaused[iIndex] = true;
+	RocketIsDragPause[iIndex] = false;
 
 	TeleportEntity(iEntity, NULL_VECTOR, vNewAngles, vBounceVec);
 	RocketBounces[iIndex]++;

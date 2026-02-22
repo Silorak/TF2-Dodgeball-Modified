@@ -69,6 +69,8 @@ void CreateRocket(int iSpawnerEntity, int iSpawnerClass, int iTeam, int iClass =
 	RocketEventDeflections[iIndex]   = 0;
 	RocketBounces[iIndex]            = 0;
 	RocketHomingPaused[iIndex]       = false;
+	RocketIsDragPause[iIndex]        = false;
+	RocketDragPauseEnd[iIndex]       = 0.0;
 	RocketLastDeflectionTime[iIndex] = GetGameTime();
 	RocketLastBeepTime[iIndex]       = GetGameTime();
 	RocketSpeed[iIndex]              = CalculateRocketSpeed(iClass, fModifier);
@@ -199,7 +201,7 @@ int FindRocketByEntity(int iEntity)
 /**
  * Main think function for homing rockets. Handles tracking, dragging,
  * deflection, target switching, and all per-frame rocket behaviour.
- * Called from the 20Hz timer in dodgeball_core.inc.
+ * Called from the logic timer in dodgeball_core.inc (~10Hz due to SourceMod's 0.1s min timer).
  *
  * @param iIndex    The rocket's internal index.
  */
@@ -214,11 +216,90 @@ void HomingRocketThink(int iIndex)
 	int iDeflectionCount = RocketEventDeflections[iIndex];
 	float fModifier      = CalculateModifier(iClass, iDeflectionCount);
 	
-	// --- Deflection detected: pause homing, defer aim reading to 20Hz timer ---
+	// --- Deflection detected: pause homing, defer aim reading to per-frame check ---
 	if ((iDeflectionCount > RocketDeflections[iIndex]) && !(RocketInstanceState[iIndex] & RocketState_Dragging))
 	{
 		RocketHomingPaused[iIndex] = true;
+		RocketIsDragPause[iIndex] = true;
+		RocketDragPauseEnd[iIndex] = GetGameTime() + RocketClassDragPauseDuration[iClass];
 		Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] | (RocketState_CanDrag | RocketState_Dragging)));
+	}
+
+	// --- Drag pause expired: process deflection per-frame (allows sub-100ms drag) ---
+	if (RocketHomingPaused[iIndex] && RocketIsDragPause[iIndex] && GetGameTime() >= RocketDragPauseEnd[iIndex])
+	{
+		if (iDeflectionCount > RocketDeflections[iIndex])
+		{
+			int iClient = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
+			Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] & ~(RocketState_Dragging | RocketState_Stolen)));
+
+			if (iClient >= 1)
+			{
+				float fViewAngles[3], fDirection[3];
+				GetClientEyeAngles(iClient, fViewAngles);
+				GetAngleVectors(fViewAngles, fDirection, NULL_VECTOR, NULL_VECTOR);
+				CopyVectors(fDirection, RocketDirection[iIndex]);
+				UpdateRocketSkin(iEntity, iTeam, TestFlags(iFlags, RocketFlag_IsNeutral));
+
+				if (!(iFlags & RocketFlag_CanBeStolen))
+				{
+					CheckStolenRocket(iClient, iIndex);
+				}
+			}
+
+			iTarget = SelectTarget(iTargetTeam, iIndex);
+			RocketTarget[iIndex]             = EntIndexToEntRef(iTarget);
+			RocketDeflections[iIndex]        = iDeflectionCount;
+			RocketLastDeflectionTime[iIndex] = GetGameTime();
+			RocketSpeed[iIndex]              = CalculateRocketSpeed(iClass, fModifier);
+			SetEntDataFloat(iEntity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4, CalculateRocketDamage(iClass, fModifier), true);
+
+			if (TestFlags(iFlags, RocketFlag_ElevateOnDeflect)) RocketInstanceFlags[iIndex] |= RocketFlag_Elevating;
+
+			if ((iFlags & RocketFlag_IsSpeedLimited) && (RocketSpeed[iIndex] >= RocketClassSpeedLimit[iClass]))
+			{
+				RocketSpeed[iIndex] = RocketClassSpeedLimit[iClass];
+			}
+
+			RocketMphSpeed[iIndex] = RocketSpeed[iIndex] * HAMMER_TO_MPH;
+
+			if (CvarStealPreventionDamage.BoolValue && (RocketInstanceState[iIndex] & RocketState_Stolen))
+			{
+				SetEntDataFloat(iEntity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4, 0.0, true);
+			}
+
+			if (iFlags & RocketFlag_TeamlessHits)
+			{
+				SetEntProp(iEntity, Prop_Send, "m_iTeamNum", 1, 1);
+			}
+
+			int iTargetRef = iTarget;
+			Action aResult = Forward_OnRocketDeflectPre(iIndex, iEntity, iClient, iTargetRef);
+
+			if (aResult == Plugin_Stop || aResult == Plugin_Handled)
+			{
+				RocketHomingPaused[iIndex] = false;
+				RocketIsDragPause[iIndex] = false;
+				return;
+			}
+			else if (aResult == Plugin_Changed)
+			{
+				iTarget = iTargetRef;
+				RocketTarget[iIndex] = EntIndexToEntRef(iTarget);
+			}
+
+			EmitRocketSound(RocketSound_Alert, iClass, iEntity, iTarget, iFlags);
+			if (TestFlags(iFlags, RocketFlag_OnDeflectCmd))
+			{
+				ExecuteCommands(RocketClassCmdsOnDeflect[iClass], iClass, iEntity, iClient, iTarget, LastDeadClient, RocketSpeed[iIndex], iDeflectionCount, RocketMphSpeed[iIndex]);
+			}
+			Forward_OnRocketDeflect(iIndex, iEntity, iClient);
+		}
+
+		// Apply parameters and re-enable smooth homing
+		ApplyRocketParameters(iIndex);
+		RocketHomingPaused[iIndex] = false;
+		RocketIsDragPause[iIndex] = false;
 	}
 
 	// --- Normal homing: lerp toward target (only when not paused) ---
@@ -290,7 +371,7 @@ void HomingRocketThink(int iIndex)
 
 /**
  * Handles logic that is shared between all rocket behaviours, like sounds and delay checks.
- * This is called from the 20Hz timer in dodgeball_core.inc
+ * This is called from the logic timer in dodgeball_core.inc
  */
 void SharedRocketThink(int iIndex)
 {
@@ -303,10 +384,11 @@ void SharedRocketThink(int iIndex)
 	int iDeflectionCount = RocketEventDeflections[iIndex];
 	float fModifier      = CalculateModifier(iClass, iDeflectionCount);
 	
-	// --- Handle paused state: read deflect aim and/or unpause ---
-	if (RocketHomingPaused[iIndex])
+	// --- Handle paused state: bounce unpauses are handled here (timer-based) ---
+	// Drag unpauses are handled per-frame in HomingRocketThink for sub-100ms precision.
+	if (RocketHomingPaused[iIndex] && !RocketIsDragPause[iIndex])
 	{
-		// Process pending deflection on the 20Hz timer (like DB_Reborn)
+		// Process pending deflection on the logic timer (bounce unpause)
 		if (iDeflectionCount > RocketDeflections[iIndex])
 		{
 			int iClient = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
@@ -379,7 +461,7 @@ void SharedRocketThink(int iIndex)
 		RocketHomingPaused[iIndex] = false;
 	}
 
-	// --- Elevation (always runs at 20Hz) ---
+	// --- Elevation (runs at logic timer rate when smooth elevation is off) ---
 	if (!(iDeflectionCount > RocketDeflections[iIndex]))
 	{
 		if (((GetGameTime() - RocketLastDeflectionTime[iIndex]) >= RocketClassControlDelay[iClass]) &&
@@ -412,7 +494,7 @@ void SharedRocketThink(int iIndex)
 
 /**
  * Think function for legacy homing rockets. Uses instant direction changes
- * instead of smooth tracking. Called from the 20Hz timer.
+ * instead of smooth tracking. Called from the logic timer.
  *
  * @param iIndex    The rocket's internal index.
  */
