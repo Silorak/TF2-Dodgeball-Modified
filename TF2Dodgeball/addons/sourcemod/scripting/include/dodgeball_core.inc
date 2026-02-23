@@ -143,7 +143,7 @@ void DisableDodgeBall()
 }
 
 /**
- * This is the main 20Hz timer for the gamemode.
+ * This is the main logic timer for the gamemode.
  * It handles rocket spawning and the logic for "legacy homing" rockets.
  * It also calls shared logic functions like sound updates.
  */

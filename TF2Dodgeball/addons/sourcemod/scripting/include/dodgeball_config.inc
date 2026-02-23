@@ -322,9 +322,15 @@ void ParseConfigurations(char[] strConfigFile = "general.cfg")
 	Forward_OnRocketsConfigExecuted(strConfigFile);
 }
 
-/** Parses the "general" section of the config (music settings). */
+/** Parses the "general" section of the config (music and scaling settings). */
 void ParseGeneral(KeyValues kvConfig)
 {
+	// Scaling mode flags (read before music to avoid early return)
+	UseOrbitCoefficient   = view_as<bool>(kvConfig.GetNum("orbit coefficient", 0));
+	UseTargetSpeedScaling = view_as<bool>(kvConfig.GetNum("target speed scaling", 0));
+	UseSmoothElevation    = view_as<bool>(kvConfig.GetNum("smooth elevation", 0));
+	UseBounceVerticalScale = view_as<bool>(kvConfig.GetNum("bounce vertical scale", 0));
+
 	MusicEnabled = view_as<bool>(kvConfig.GetNum("music", 0));
 	if (!MusicEnabled) return;
 
@@ -393,7 +399,7 @@ void ParseClasses(KeyValues kvConfig)
 			}
 		}
 
-		if (kvConfig.GetNum("elevate on deflect", 1) == 1) iFlags |= RocketFlag_ElevateOnDeflect;
+		if (kvConfig.GetNum("elevate on deflect", 0) == 1) iFlags |= RocketFlag_ElevateOnDeflect;
 		if (kvConfig.GetNum("neutral rocket", 0) == 1)     iFlags |= RocketFlag_IsNeutral;
 		if (kvConfig.GetNum("keep direction", 0) == 1)     iFlags |= RocketFlag_KeepDirection;
 		if (kvConfig.GetNum("teamless deflects", 0) == 1)  iFlags |= RocketFlag_TeamlessHits;
@@ -422,13 +428,27 @@ void ParseClasses(KeyValues kvConfig)
 		RocketClassElevationRate[iIndex]     = kvConfig.GetFloat("elevation rate");
 		RocketClassElevationLimit[iIndex]    = kvConfig.GetFloat("elevation limit");
 		RocketClassControlDelay[iIndex]      = kvConfig.GetFloat("control delay");
-		RocketClassDragTimeMin[iIndex]       = kvConfig.GetFloat("drag time min");
-		RocketClassDragTimeMax[iIndex]       = kvConfig.GetFloat("drag time max");
 		RocketClassMaxBounces[iIndex]        = kvConfig.GetNum("max bounces");
 		RocketClassBounceScale[iIndex]       = kvConfig.GetFloat("bounce scale", 1.0);
 		RocketClassPlayerModifier[iIndex]    = kvConfig.GetFloat("no. players modifier");
 		RocketClassRocketsModifier[iIndex]   = kvConfig.GetFloat("no. rockets modifier");
 		RocketClassTargetWeight[iIndex]      = kvConfig.GetFloat("direction to target weight");
+
+		// Scaling mode: orbit coefficient
+		RocketClassOrbitTightness[iIndex]    = kvConfig.GetFloat("orbit tightness", 0.0);
+
+		// Scaling mode: target speed
+		RocketClassMaxSpeed[iIndex]          = kvConfig.GetFloat("max speed", 0.0);
+		RocketClassMaxDeflections[iIndex]    = kvConfig.GetNum("max deflections", 0);
+		if (UseTargetSpeedScaling && RocketClassMaxDeflections[iIndex] > 0)
+		{
+			RocketClassSpeedIncrement[iIndex] = (RocketClassMaxSpeed[iIndex] - RocketClassSpeed[iIndex]) / float(RocketClassMaxDeflections[iIndex]);
+		}
+
+		// Scaling mode: bounce vertical scale
+		RocketClassBounceVerticalScale[iIndex] = kvConfig.GetFloat("bounce vertical ratio", 1.0);
+		RocketClassBounceMaxVerticalSpeed[iIndex] = kvConfig.GetFloat("bounce max vertical speed", 0.0);
+		RocketClassDragPauseDuration[iIndex] = kvConfig.GetFloat("drag pause duration", 0.1);
 		
 		DataPack hCmds = null;
 		kvConfig.GetString("on spawn", strBuffer, sizeof(strBuffer));

@@ -4,8 +4,29 @@
 #define _tfdb_included
 
 // ---- General settings -----------------------------------------------------------
-#define FPS_LOGIC_RATE          20.0
+//
+//   Timer rate vs OnGameFrame:
+//   SourceMod's TimerSys.cpp defines TIMER_MIN_ACCURACY = 0.1 (seconds).
+//   The timer processing loop (RunFrame) only fires every ~0.1s regardless of
+//   the interval passed to CreateTimer — so the logic timer runs at ~10Hz.
+//   The actual fire interval is NOT exactly 0.1s: it depends on tickrate since
+//   0.1s must be rounded up to the next tick boundary (e.g. 7 ticks on 66-tick
+//   = 0.1061s, 13 ticks on 128-tick = 0.1016s).
+//
+//   OnGameFrame fires every server tick (~66Hz on 66-tick, ~128Hz on 128-tick).
+//   We use it for smooth per-frame homing. Turn rate and elevation values in the
+//   config are calibrated as "amount per 0.1s" for backwards compatibility.
+//   Per-frame scaling uses GetTickInterval() directly — no derived magic numbers.
+//
+#define FPS_LOGIC_RATE          10.0
 #define FPS_LOGIC_INTERVAL      1.0 / FPS_LOGIC_RATE
+
+/**
+ * The base time interval (seconds) that config turn rate / elevation values
+ * are calibrated against. Turn rate 0.05 means "lerp 0.05 per 0.1s."
+ * Per-frame code divides by this and multiplies by GetTickInterval().
+ */
+#define TICK_BASE_INTERVAL      0.1
 
 /** Conversion factor: Hammer units/s to MPH. (1 HU ≈ 0.01905m) */
 #define HAMMER_TO_MPH           0.042614
@@ -442,17 +463,6 @@ native float TFDB_GetRocketClassControlDelay(int iClass);
 /** Sets the control delay. */
 native void TFDB_SetRocketClassControlDelay(int iClass, float fDelay);
 
-/** Gets the minimum drag time. */
-native float TFDB_GetRocketClassDragTimeMin(int iClass);
-
-/** Sets the minimum drag time. */
-native void TFDB_SetRocketClassDragTimeMin(int iClass, float fMin);
-
-/** Gets the maximum drag time. */
-native float TFDB_GetRocketClassDragTimeMax(int iClass);
-
-/** Sets the maximum drag time. */
-native void TFDB_SetRocketClassDragTimeMax(int iClass, float fMax);
 
 /** Sets the total number of rocket classes. */
 native void TFDB_SetRocketClassCount(int iCount);
@@ -486,7 +496,10 @@ native float TFDB_GetSpawnersInterval(int iSpawnerClass);
 /** Sets the spawn interval (seconds between rockets). */
 native void TFDB_SetSpawnersInterval(int iSpawnerClass, float fInterval);
 
-/** Gets the rocket class spawn chances table. */
+/**
+ * Gets the rocket class spawn chances table.
+ * @note You MUST call delete on the returned ArrayList Handle when finished, or your plugin will leak memory.
+ */
 native ArrayList TFDB_GetSpawnersChancesTable(int iSpawnerClass);
 
 /** Sets the rocket class spawn chances table. */
@@ -676,31 +689,46 @@ native void TFDB_SetRocketClassTargetWeight(int iClass, float fWeight);
 
 // ============ Command Handlers ============
 
-/** Gets the commands to execute on rocket spawn. */
+/**
+ * Gets the commands to execute on rocket spawn.
+ * @note You MUST call delete on the returned DataPack Handle when finished, or your plugin will leak memory.
+ */
 native DataPack TFDB_GetRocketClassCmdsOnSpawn(int iClass);
 
 /** Sets the commands to execute on rocket spawn. */
 native void TFDB_SetRocketClassCmdsOnSpawn(int iClass, DataPack hCmds);
 
-/** Gets the commands to execute on deflection. */
+/**
+ * Gets the commands to execute on deflection.
+ * @note You MUST call delete on the returned DataPack Handle when finished, or your plugin will leak memory.
+ */
 native DataPack TFDB_GetRocketClassCmdsOnDeflect(int iClass);
 
 /** Sets the commands to execute on deflection. */
 native void TFDB_SetRocketClassCmdsOnDeflect(int iClass, DataPack hCmds);
 
-/** Gets the commands to execute when rocket kills a player. */
+/**
+ * Gets the commands to execute when rocket kills a player.
+ * @note You MUST call delete on the returned DataPack Handle when finished, or your plugin will leak memory.
+ */
 native DataPack TFDB_GetRocketClassCmdsOnKill(int iClass);
 
 /** Sets the commands to execute when rocket kills a player. */
 native void TFDB_SetRocketClassCmdsOnKill(int iClass, DataPack hCmds);
 
-/** Gets the commands to execute when rocket explodes. */
+/**
+ * Gets the commands to execute when rocket explodes.
+ * @note You MUST call delete on the returned DataPack Handle when finished, or your plugin will leak memory.
+ */
 native DataPack TFDB_GetRocketClassCmdsOnExplode(int iClass);
 
 /** Sets the commands to execute when rocket explodes. */
 native void TFDB_SetRocketClassCmdsOnExplode(int iClass, DataPack hCmds);
 
-/** Gets the commands to execute when rocket has no target. */
+/**
+ * Gets the commands to execute when rocket has no target.
+ * @note You MUST call delete on the returned DataPack Handle when finished, or your plugin will leak memory.
+ */
 native DataPack TFDB_GetRocketClassCmdsOnNoTarget(int iClass);
 
 /** Sets the commands to execute when rocket has no target. */
@@ -836,10 +864,6 @@ public void __pl_TFDB_SetNTVOptional()
 	MarkNativeAsOptional("TFDB_SetRocketClassPlayerModifier");
 	MarkNativeAsOptional("TFDB_GetRocketClassControlDelay");
 	MarkNativeAsOptional("TFDB_SetRocketClassControlDelay");
-	MarkNativeAsOptional("TFDB_GetRocketClassDragTimeMin");
-	MarkNativeAsOptional("TFDB_SetRocketClassDragTimeMin");
-	MarkNativeAsOptional("TFDB_GetRocketClassDragTimeMax");
-	MarkNativeAsOptional("TFDB_SetRocketClassDragTimeMax");
 	MarkNativeAsOptional("TFDB_SetRocketClassCount");
 	MarkNativeAsOptional("TFDB_SetRocketEntity");
 	MarkNativeAsOptional("TFDB_GetRocketClassMaxBounces");
