@@ -315,6 +315,7 @@ void ParseConfigurations(char[] strConfigFile = "general.cfg")
 		if (StrEqual(strSection, "general"))       ParseGeneral(kvConfig);
 		else if (StrEqual(strSection, "classes"))  ParseClasses(kvConfig);
 		else if (StrEqual(strSection, "spawners")) ParseSpawners(kvConfig);
+		else if (StrEqual(strSection, "presets"))  ParsePresets(kvConfig);
 	}
 	while (kvConfig.GotoNextKey());
 
@@ -322,9 +323,15 @@ void ParseConfigurations(char[] strConfigFile = "general.cfg")
 	Forward_OnRocketsConfigExecuted(strConfigFile);
 }
 
-/** Parses the "general" section of the config (music settings). */
+/** Parses the "general" section of the config (music and scaling settings). */
 void ParseGeneral(KeyValues kvConfig)
 {
+	// Scaling mode flags (read before music to avoid early return)
+	UseOrbitCoefficient   = view_as<bool>(kvConfig.GetNum("orbit coefficient", 0));
+	UseTargetSpeedScaling = view_as<bool>(kvConfig.GetNum("target speed scaling", 0));
+	UseSmoothElevation    = view_as<bool>(kvConfig.GetNum("smooth elevation", 0));
+	UseBounceVerticalScale = view_as<bool>(kvConfig.GetNum("bounce vertical scale", 0));
+
 	MusicEnabled = view_as<bool>(kvConfig.GetNum("music", 0));
 	if (!MusicEnabled) return;
 
@@ -393,7 +400,7 @@ void ParseClasses(KeyValues kvConfig)
 			}
 		}
 
-		if (kvConfig.GetNum("elevate on deflect", 1) == 1) iFlags |= RocketFlag_ElevateOnDeflect;
+		if (kvConfig.GetNum("elevate on deflect", 0) == 1) iFlags |= RocketFlag_ElevateOnDeflect;
 		if (kvConfig.GetNum("neutral rocket", 0) == 1)     iFlags |= RocketFlag_IsNeutral;
 		if (kvConfig.GetNum("keep direction", 0) == 1)     iFlags |= RocketFlag_KeepDirection;
 		if (kvConfig.GetNum("teamless deflects", 0) == 1)  iFlags |= RocketFlag_TeamlessHits;
@@ -422,13 +429,27 @@ void ParseClasses(KeyValues kvConfig)
 		RocketClassElevationRate[iIndex]     = kvConfig.GetFloat("elevation rate");
 		RocketClassElevationLimit[iIndex]    = kvConfig.GetFloat("elevation limit");
 		RocketClassControlDelay[iIndex]      = kvConfig.GetFloat("control delay");
-		RocketClassDragTimeMin[iIndex]       = kvConfig.GetFloat("drag time min");
-		RocketClassDragTimeMax[iIndex]       = kvConfig.GetFloat("drag time max");
 		RocketClassMaxBounces[iIndex]        = kvConfig.GetNum("max bounces");
 		RocketClassBounceScale[iIndex]       = kvConfig.GetFloat("bounce scale", 1.0);
 		RocketClassPlayerModifier[iIndex]    = kvConfig.GetFloat("no. players modifier");
 		RocketClassRocketsModifier[iIndex]   = kvConfig.GetFloat("no. rockets modifier");
 		RocketClassTargetWeight[iIndex]      = kvConfig.GetFloat("direction to target weight");
+
+		// Scaling mode: orbit coefficient
+		RocketClassOrbitTightness[iIndex]    = kvConfig.GetFloat("orbit tightness", 0.0);
+
+		// Scaling mode: target speed
+		RocketClassMaxSpeed[iIndex]          = kvConfig.GetFloat("max speed", 0.0);
+		RocketClassMaxDeflections[iIndex]    = kvConfig.GetNum("max deflections", 0);
+		if (UseTargetSpeedScaling && RocketClassMaxDeflections[iIndex] > 0)
+		{
+			RocketClassSpeedIncrement[iIndex] = (RocketClassMaxSpeed[iIndex] - RocketClassSpeed[iIndex]) / float(RocketClassMaxDeflections[iIndex]);
+		}
+
+		// Scaling mode: bounce vertical scale
+		RocketClassBounceVerticalScale[iIndex] = kvConfig.GetFloat("bounce vertical ratio", 1.0);
+		RocketClassBounceMaxVerticalSpeed[iIndex] = kvConfig.GetFloat("bounce max vertical speed", 0.0);
+		RocketClassDragPauseDuration[iIndex] = kvConfig.GetFloat("drag pause duration", 0.1);
 		
 		DataPack hCmds = null;
 		kvConfig.GetString("on spawn", strBuffer, sizeof(strBuffer));
@@ -487,6 +508,31 @@ void ParseSpawners(KeyValues kvConfig)
 	kvConfig.GoBack();
 	SpawnersTrie.GetValue("red", DefaultRedSpawner);
 	SpawnersTrie.GetValue("blu", DefaultBluSpawner);
+}
+
+/** Parses the "presets" section of the config (gameplay preset definitions). */
+void ParsePresets(KeyValues kvConfig)
+{
+	kvConfig.GotoFirstSubKey();
+	do
+	{
+		int iIndex = PresetCount;
+
+		kvConfig.GetString("name", PresetName[iIndex], sizeof(PresetName[]));
+		kvConfig.GetString("rocket class", PresetRocketClass[iIndex], sizeof(PresetRocketClass[]));
+		PresetMaxRockets[iIndex]    = kvConfig.GetNum("max rockets", 1);
+		PresetSpawnInterval[iIndex] = kvConfig.GetFloat("spawn interval", 0.0);
+
+		PresetCount++;
+
+		if (PresetCount >= MAX_PRESETS)
+		{
+			LogError("Reached maximum presets (%d). Remaining presets will be ignored.", MAX_PRESETS);
+			break;
+		}
+	}
+	while (kvConfig.GotoNextKey());
+	kvConfig.GoBack();
 }
 
 /**

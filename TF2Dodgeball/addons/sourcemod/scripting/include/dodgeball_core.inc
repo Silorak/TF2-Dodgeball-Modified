@@ -33,6 +33,7 @@ void EnableDodgeBall()
 	char mapFile[PLATFORM_MAX_PATH]; FormatEx(mapFile, sizeof(mapFile), "%s.cfg", mapName);
 
 	ParseConfigurations();
+	ParseConfigurations("presets.cfg");
 	ParseConfigurations(mapFile);
 
 	if (RocketClassCount == 0)   SetFailState("No rocket class defined.");
@@ -107,6 +108,7 @@ void DisableDodgeBall()
 	DestroyRockets();
 	DestroyRocketClasses();
 	DestroySpawners();
+	PresetCount = 0;
 
 	if (LogicTimer != null) KillTimer(LogicTimer);
 	LogicTimer = null;
@@ -143,7 +145,7 @@ void DisableDodgeBall()
 }
 
 /**
- * This is the main 20Hz timer for the gamemode.
+ * This is the main logic timer for the gamemode.
  * It handles rocket spawning and the logic for "legacy homing" rockets.
  * It also calls shared logic functions like sound updates.
  */

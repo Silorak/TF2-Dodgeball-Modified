@@ -136,7 +136,7 @@ public void OnPlayerInventory(Event hEvent, char[] strEventName, bool bDontBroad
 	for (int iSlot = 1; iSlot < 5; iSlot++)
 	{
 		int iEntity = GetPlayerWeaponSlot(iClient, iSlot);
-		if (iEntity != -1) RemoveEdict(iEntity);
+		if (iEntity != -1) RemoveEntity(iEntity);
 	}
 }
 
@@ -234,7 +234,7 @@ public void OnObjectDeflected(Event hEvent, char[] strEventName, bool bDontBroad
 /**
  * This hook runs every server frame.
  * It's responsible for the smooth "homing" behaviour.
- * "legacy homing" is handled by the 20Hz timer OnDodgeBallGameFrame.
+ * "legacy homing" is handled by the logic timer OnDodgeBallGameFrame (~10Hz).
  */
 public void OnGameFrame()
 {
@@ -350,33 +350,26 @@ public Action OnTouch(int iEntity, int iOther)
 
 	float vBounceVec[3];
 	SubtractVectors(vVelocity, vNormal, vBounceVec);
-	// --- New Bounce Mechanic ---
-	// Check if the owner is looking down to apply extra bounce force.
-	int iOwner = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
-	if (IsValidClient(iOwner, true))
-	{
-		float fOwnerAngles[3];
-		GetClientEyeAngles(iOwner, fOwnerAngles);
+	ScaleVector(vBounceVec, RocketClassBounceScale[iClass]);
 
-		// Check if player's pitch is looking down enough
-		if (fOwnerAngles[0] >= CvarBounceForceAngle.FloatValue)
+	// Z-clamp: scale vertical component to prevent extreme vertical bounces
+	if (UseBounceVerticalScale && RocketClassBounceVerticalScale[iClass] < 1.0)
+	{
+		vBounceVec[2] *= RocketClassBounceVerticalScale[iClass];
+	}
+
+	// Absolute vertical speed cap (like UDL's crawl bounce max up)
+	if (UseBounceVerticalScale && RocketClassBounceMaxVerticalSpeed[iClass] > 0.0)
+	{
+		if (vBounceVec[2] > RocketClassBounceMaxVerticalSpeed[iClass])
 		{
-			// Apply the base bounce scale and the extra force multiplier
-			ScaleVector(vBounceVec, RocketClassBounceScale[iClass] * CvarBounceForceScale.FloatValue);
+			vBounceVec[2] = RocketClassBounceMaxVerticalSpeed[iClass];
 		}
-		else
+		else if (vBounceVec[2] < -RocketClassBounceMaxVerticalSpeed[iClass])
 		{
-			// Apply only the base bounce scale
-			ScaleVector(vBounceVec, RocketClassBounceScale[iClass]);
+			vBounceVec[2] = -RocketClassBounceMaxVerticalSpeed[iClass];
 		}
 	}
-	else
-	{
-		// Apply only the base bounce scale if there's no valid owner
-		ScaleVector(vBounceVec, RocketClassBounceScale[iClass]);
-	}
-	// --- End New Bounce Mechanic ---
-
 
 	float vNewAngles[3];
 	GetVectorAngles(vBounceVec, vNewAngles);
@@ -396,6 +389,11 @@ public Action OnTouch(int iEntity, int iOther)
 		CopyVectors(vNewAnglesRef, vNewAngles);
 		CopyVectors(vBounceVecRef, vBounceVec);
 	}
+
+	// Pause homing — rocket flies freely with bounce velocity until
+	// the logic timer re-enables it (bounce pauses use timer, not per-frame drag).
+	RocketHomingPaused[iIndex] = true;
+	RocketIsDragPause[iIndex] = false;
 
 	TeleportEntity(iEntity, NULL_VECTOR, vNewAngles, vBounceVec);
 	RocketBounces[iIndex]++;

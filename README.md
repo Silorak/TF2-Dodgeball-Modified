@@ -54,7 +54,8 @@ built on the shoulders of community giants.
 <td>
 
 ### 📊 Technical
-- **20Hz Logic Timer** — Optimized performance
+- **SourceMod 1.12 Ready** — Modern syntax and memory safe
+- **10Hz Logic Timer** — Architected for SourceMod accuracy
 - **Smooth Frame Homing** — High-precision tracking
 - **Full Documentation** — Comprehensive wiki & code docs
 
@@ -138,7 +139,8 @@ The gamemode activates automatically on maps with the `tfdb_`, `db_`, or `dbs_` 
     "damage"              "50"
     "speed"               "800"
     "speed increment"     "50"
-    "turn rate"           "0.05"
+    "turn rate"           "0.260"
+    "turn rate increment" "0.018"
     "max bounces"         "2"
     "on kill"             "sm_beacon @target"
 }

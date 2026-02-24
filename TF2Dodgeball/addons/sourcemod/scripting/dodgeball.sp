@@ -19,7 +19,7 @@
 // *********************************************************************************
 #define PLUGIN_NAME             "[TF2] Dodgeball"
 #define PLUGIN_AUTHOR           "Damizean, x07x08 continued by Silorak"
-#define PLUGIN_VERSION          "2.0.2"
+#define PLUGIN_VERSION          "2.1.0"
 #define PLUGIN_CONTACT          "https://github.com/Silorak/TF2-Dodgeball-Modified"
 
 enum Musics
@@ -48,9 +48,7 @@ ConVar CvarDelayPreventionSpeedup;
 ConVar CvarNoTargetRedirectDamage;
 ConVar CvarStealMessage;
 ConVar CvarDelayMessage;
-// New CVar for bounce mechanic
-ConVar CvarBounceForceAngle;
-ConVar CvarBounceForceScale;
+
 
 
 // -----<<< Gameplay >>>-----
@@ -63,13 +61,20 @@ float  NextSpawnTime;
 int    LastDeadTeam;
 int    LastDeadClient;
 int    PlayerCount;
-float  TickModifier;
 int    LastStealer;
+
+// Cached SendProp offset for rocket damage (m_iDeflected + 4).
+// Looked up once at plugin start instead of calling FindSendPropInfo every frame.
+int    DamageOffset;
 
 eRocketSteal StealInfo[MAXPLAYERS + 1];
 
 // -----<<< Configuration >>>-----
 bool MusicEnabled;
+bool UseOrbitCoefficient;
+bool UseTargetSpeedScaling;
+bool UseSmoothElevation;
+bool UseBounceVerticalScale;
 bool Music[view_as<int>(SizeOfMusicsArray)];
 char MusicPath[view_as<int>(SizeOfMusicsArray)][PLATFORM_MAX_PATH];
 bool UseWebPlayer;
@@ -92,6 +97,9 @@ float       RocketLastDeflectionTime[MAX_ROCKETS];
 float       RocketLastBeepTime[MAX_ROCKETS];
 float       LastSpawnTime[MAX_ROCKETS];
 int         RocketBounces[MAX_ROCKETS];
+bool        RocketHomingPaused[MAX_ROCKETS];
+bool        RocketIsDragPause[MAX_ROCKETS];     // true = drag pause (per-frame unpause), false = bounce pause (timer unpause)
+float       RocketDragPauseEnd[MAX_ROCKETS];    // GetGameTime() when drag pause should end
 int         RocketCount;
 
 // Classes
@@ -118,8 +126,6 @@ float          RocketClassElevationLimit[MAX_ROCKET_CLASSES];
 float          RocketClassRocketsModifier[MAX_ROCKET_CLASSES];
 float          RocketClassPlayerModifier[MAX_ROCKET_CLASSES];
 float          RocketClassControlDelay[MAX_ROCKET_CLASSES];
-float          RocketClassDragTimeMin[MAX_ROCKET_CLASSES];
-float          RocketClassDragTimeMax[MAX_ROCKET_CLASSES];
 float          RocketClassTargetWeight[MAX_ROCKET_CLASSES];
 DataPack       RocketClassCmdsOnSpawn[MAX_ROCKET_CLASSES];
 DataPack       RocketClassCmdsOnDeflect[MAX_ROCKET_CLASSES];
@@ -128,6 +134,12 @@ DataPack       RocketClassCmdsOnExplode[MAX_ROCKET_CLASSES];
 DataPack       RocketClassCmdsOnNoTarget[MAX_ROCKET_CLASSES];
 int            RocketClassMaxBounces[MAX_ROCKET_CLASSES];
 float          RocketClassBounceScale[MAX_ROCKET_CLASSES];
+float          RocketClassOrbitTightness[MAX_ROCKET_CLASSES];
+float          RocketClassMaxSpeed[MAX_ROCKET_CLASSES];
+int            RocketClassMaxDeflections[MAX_ROCKET_CLASSES];
+float          RocketClassBounceVerticalScale[MAX_ROCKET_CLASSES];
+float          RocketClassBounceMaxVerticalSpeed[MAX_ROCKET_CLASSES];
+float          RocketClassDragPauseDuration[MAX_ROCKET_CLASSES];
 int            RocketClassCount;
 
 // Spawner classes
@@ -150,6 +162,13 @@ int SpawnPointsBluEntity[MAX_SPAWN_POINTS];
 
 int DefaultRedSpawner;
 int DefaultBluSpawner;
+
+// -----<<< Presets >>>-----
+char  PresetName[MAX_PRESETS][64];
+char  PresetRocketClass[MAX_PRESETS][16];
+int   PresetMaxRockets[MAX_PRESETS];
+float PresetSpawnInterval[MAX_PRESETS];
+int   PresetCount;
 
 // -----<<< Forward handles >>>-----
 Handle ForwardOnRocketCreated;
@@ -206,12 +225,14 @@ public void OnPluginStart()
 	CvarNoTargetRedirectDamage = CreateConVar("tf_dodgeball_redirect_damage", "1", "Reduce all damage when a rocket has an invalid target?", _, true, 0.0, true, 1.0);
 	CvarStealMessage = CreateConVar("tf_dodgeball_sp_message", "1", "Display the steal message(s)?", _, true, 0.0, true, 1.0);
 	CvarDelayMessage = CreateConVar("tf_dodgeball_dp_message", "1", "Display the delay message(s)?", _, true, 0.0, true, 1.0);
-	CvarBounceForceAngle = CreateConVar("tf_dodgeball_bounce_force_angle", "45.0", "Minimum downward angle (pitch) for a player to trigger a forced bounce.", _, true, 0.0, true, 90.0);
-	CvarBounceForceScale = CreateConVar("tf_dodgeball_bounce_force_scale", "1.5", "How much stronger a player-forced bounce is. (Multiplier)", _, true, 1.0);
+
 
 
 	SpawnersTrie = new StringMap();
-	TickModifier = 0.1 / GetTickInterval();
+
+	// Cache the SendProp offset for rocket damage once at plugin start.
+	// This is m_iDeflected + 4 bytes, used to set rocket damage via SetEntDataFloat.
+	DamageOffset = FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4;
 
 	AddTempEntHook("TFExplosion", OnTFExplosion);
 
@@ -265,10 +286,7 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] strError, int iE
 	CreateNative("TFDB_SetRocketClassPlayerModifier", Native_SetRocketClassPlayerModifier);
 	CreateNative("TFDB_GetRocketClassControlDelay", Native_GetRocketClassControlDelay);
 	CreateNative("TFDB_SetRocketClassControlDelay", Native_SetRocketClassControlDelay);
-	CreateNative("TFDB_GetRocketClassDragTimeMin", Native_GetRocketClassDragTimeMin);
-	CreateNative("TFDB_SetRocketClassDragTimeMin", Native_SetRocketClassDragTimeMin);
-	CreateNative("TFDB_GetRocketClassDragTimeMax", Native_GetRocketClassDragTimeMax);
-	CreateNative("TFDB_SetRocketClassDragTimeMax", Native_SetRocketClassDragTimeMax);
+
 	CreateNative("TFDB_SetRocketClassCount", Native_SetRocketClassCount);
 	CreateNative("TFDB_SetRocketEntity", Native_SetRocketEntity);
 	CreateNative("TFDB_GetRocketClassMaxBounces", Native_GetRocketClassMaxBounces);
@@ -364,6 +382,9 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] strError, int iE
 	CreateNative("TFDB_SetRocketState", Native_SetRocketState);
 	CreateNative("TFDB_GetStealInfo", Native_GetStealInfo);
 	CreateNative("TFDB_SetStealInfo", Native_SetStealInfo);
+	CreateNative("TFDB_GetPresetCount", Native_GetPresetCount);
+	CreateNative("TFDB_GetPresetName", Native_GetPresetName);
+	CreateNative("TFDB_ApplyPreset", Native_ApplyPreset);
 
 	SetupForwards();
 
