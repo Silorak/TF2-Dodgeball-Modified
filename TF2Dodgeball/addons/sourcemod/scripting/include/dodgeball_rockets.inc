@@ -199,6 +199,97 @@ int FindRocketByEntity(int iEntity)
 }
 
 /**
+ * Processes a rocket deflection: reads the deflector's aim, selects a new target,
+ * recalculates speed/damage, checks for steals, and fires forwards/commands.
+ * Shared by HomingRocketThink, SharedRocketThink, and RocketLegacyThink.
+ *
+ * @param iIndex            Rocket internal index.
+ * @param iEntity           Rocket entity index.
+ * @param iClass            Rocket class index.
+ * @param iFlags            Rocket instance flags.
+ * @param iTeam             Rocket's current team.
+ * @param iTargetTeam       Team to select new target from.
+ * @param iDeflectionCount  Current event deflection count.
+ * @param fModifier         Speed/damage modifier for current deflection count.
+ * @param bClearDragging    True to clear RocketState_Dragging (homing/shared).
+ *                          False for legacy (never enters drag state).
+ * @return                  False if Forward_OnRocketDeflectPre blocked the deflection.
+ */
+bool ProcessDeflection(int iIndex, int iEntity, int iClass, RocketFlags iFlags,
+                       int iTeam, int iTargetTeam, int iDeflectionCount, float fModifier,
+                       bool bClearDragging)
+{
+	int iClient = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
+
+	if (bClearDragging)
+		Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] & ~(RocketState_Dragging | RocketState_Stolen)));
+	else
+		Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] & ~RocketState_Stolen));
+
+	if (iClient >= 1)
+	{
+		float fViewAngles[3], fDirection[3];
+		GetClientEyeAngles(iClient, fViewAngles);
+		GetAngleVectors(fViewAngles, fDirection, NULL_VECTOR, NULL_VECTOR);
+		CopyVectors(fDirection, RocketDirection[iIndex]);
+		UpdateRocketSkin(iEntity, iTeam, TestFlags(iFlags, RocketFlag_IsNeutral));
+
+		if (!(iFlags & RocketFlag_CanBeStolen))
+		{
+			CheckStolenRocket(iClient, iIndex);
+		}
+	}
+
+	int iTarget = SelectTarget(iTargetTeam, iIndex);
+	RocketTarget[iIndex]             = EntIndexToEntRef(iTarget);
+	RocketDeflections[iIndex]        = iDeflectionCount;
+	RocketLastDeflectionTime[iIndex] = GetGameTime();
+	RocketSpeed[iIndex]              = CalculateRocketSpeed(iClass, fModifier);
+	SetEntDataFloat(iEntity, DamageOffset, CalculateRocketDamage(iClass, fModifier), true);
+
+	if (TestFlags(iFlags, RocketFlag_ElevateOnDeflect)) RocketInstanceFlags[iIndex] |= RocketFlag_Elevating;
+
+	if ((iFlags & RocketFlag_IsSpeedLimited) && (RocketSpeed[iIndex] >= RocketClassSpeedLimit[iClass]))
+	{
+		RocketSpeed[iIndex] = RocketClassSpeedLimit[iClass];
+	}
+
+	RocketMphSpeed[iIndex] = RocketSpeed[iIndex] * HAMMER_TO_MPH;
+
+	if (CvarStealPreventionDamage.BoolValue && (RocketInstanceState[iIndex] & RocketState_Stolen))
+	{
+		SetEntDataFloat(iEntity, DamageOffset, 0.0, true);
+	}
+
+	if (iFlags & RocketFlag_TeamlessHits)
+	{
+		SetEntProp(iEntity, Prop_Send, "m_iTeamNum", 1, 1);
+	}
+
+	int iTargetRef = iTarget;
+	Action aResult = Forward_OnRocketDeflectPre(iIndex, iEntity, iClient, iTargetRef);
+
+	if (aResult == Plugin_Stop || aResult == Plugin_Handled)
+	{
+		return false;
+	}
+	else if (aResult == Plugin_Changed)
+	{
+		iTarget = iTargetRef;
+		RocketTarget[iIndex] = EntIndexToEntRef(iTarget);
+	}
+
+	EmitRocketSound(RocketSound_Alert, iClass, iEntity, iTarget, iFlags);
+	if (TestFlags(iFlags, RocketFlag_OnDeflectCmd))
+	{
+		ExecuteCommands(RocketClassCmdsOnDeflect[iClass], iClass, iEntity, iClient, iTarget, LastDeadClient, RocketSpeed[iIndex], iDeflectionCount, RocketMphSpeed[iIndex]);
+	}
+	Forward_OnRocketDeflect(iIndex, iEntity, iClient);
+
+	return true;
+}
+
+/**
  * Main think function for homing rockets. Handles tracking, dragging,
  * deflection, target switching, and all per-frame rocket behaviour.
  * Called from the logic timer in dodgeball_core.inc (~10Hz due to SourceMod's 0.1s min timer).
@@ -236,70 +327,12 @@ void HomingRocketThink(int iIndex)
 	{
 		if (iDeflectionCount > RocketDeflections[iIndex])
 		{
-			int iClient = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
-			Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] & ~(RocketState_Dragging | RocketState_Stolen)));
-
-			if (iClient >= 1)
-			{
-				float fViewAngles[3], fDirection[3];
-				GetClientEyeAngles(iClient, fViewAngles);
-				GetAngleVectors(fViewAngles, fDirection, NULL_VECTOR, NULL_VECTOR);
-				CopyVectors(fDirection, RocketDirection[iIndex]);
-				UpdateRocketSkin(iEntity, iTeam, TestFlags(iFlags, RocketFlag_IsNeutral));
-
-				if (!(iFlags & RocketFlag_CanBeStolen))
-				{
-					CheckStolenRocket(iClient, iIndex);
-				}
-			}
-
-			iTarget = SelectTarget(iTargetTeam, iIndex);
-			RocketTarget[iIndex]             = EntIndexToEntRef(iTarget);
-			RocketDeflections[iIndex]        = iDeflectionCount;
-			RocketLastDeflectionTime[iIndex] = GetGameTime();
-			RocketSpeed[iIndex]              = CalculateRocketSpeed(iClass, fModifier);
-			SetEntDataFloat(iEntity, DamageOffset, CalculateRocketDamage(iClass, fModifier), true);
-
-			if (TestFlags(iFlags, RocketFlag_ElevateOnDeflect)) RocketInstanceFlags[iIndex] |= RocketFlag_Elevating;
-
-			if ((iFlags & RocketFlag_IsSpeedLimited) && (RocketSpeed[iIndex] >= RocketClassSpeedLimit[iClass]))
-			{
-				RocketSpeed[iIndex] = RocketClassSpeedLimit[iClass];
-			}
-
-			RocketMphSpeed[iIndex] = RocketSpeed[iIndex] * HAMMER_TO_MPH;
-
-			if (CvarStealPreventionDamage.BoolValue && (RocketInstanceState[iIndex] & RocketState_Stolen))
-			{
-				SetEntDataFloat(iEntity, DamageOffset, 0.0, true);
-			}
-
-			if (iFlags & RocketFlag_TeamlessHits)
-			{
-				SetEntProp(iEntity, Prop_Send, "m_iTeamNum", 1, 1);
-			}
-
-			int iTargetRef = iTarget;
-			Action aResult = Forward_OnRocketDeflectPre(iIndex, iEntity, iClient, iTargetRef);
-
-			if (aResult == Plugin_Stop || aResult == Plugin_Handled)
+			if (!ProcessDeflection(iIndex, iEntity, iClass, iFlags, iTeam, iTargetTeam, iDeflectionCount, fModifier, true))
 			{
 				RocketHomingPaused[iIndex] = false;
 				RocketIsDragPause[iIndex] = false;
 				return;
 			}
-			else if (aResult == Plugin_Changed)
-			{
-				iTarget = iTargetRef;
-				RocketTarget[iIndex] = EntIndexToEntRef(iTarget);
-			}
-
-			EmitRocketSound(RocketSound_Alert, iClass, iEntity, iTarget, iFlags);
-			if (TestFlags(iFlags, RocketFlag_OnDeflectCmd))
-			{
-				ExecuteCommands(RocketClassCmdsOnDeflect[iClass], iClass, iEntity, iClient, iTarget, LastDeadClient, RocketSpeed[iIndex], iDeflectionCount, RocketMphSpeed[iIndex]);
-			}
-			Forward_OnRocketDeflect(iIndex, iEntity, iClient);
 		}
 
 		// Apply parameters and re-enable smooth homing
@@ -399,69 +432,11 @@ void SharedRocketThink(int iIndex)
 		// Process pending deflection on the logic timer (bounce unpause)
 		if (iDeflectionCount > RocketDeflections[iIndex])
 		{
-			int iClient = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
-			Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] & ~(RocketState_Dragging | RocketState_Stolen)));
-
-			if (iClient >= 1)
-			{
-				float fViewAngles[3], fDirection[3];
-				GetClientEyeAngles(iClient, fViewAngles);
-				GetAngleVectors(fViewAngles, fDirection, NULL_VECTOR, NULL_VECTOR);
-				CopyVectors(fDirection, RocketDirection[iIndex]);
-				UpdateRocketSkin(iEntity, iTeam, TestFlags(iFlags, RocketFlag_IsNeutral));
-
-				if (!(iFlags & RocketFlag_CanBeStolen))
-				{
-					CheckStolenRocket(iClient, iIndex);
-				}
-			}
-
-			iTarget = SelectTarget(iTargetTeam, iIndex);
-			RocketTarget[iIndex]             = EntIndexToEntRef(iTarget);
-			RocketDeflections[iIndex]        = iDeflectionCount;
-			RocketLastDeflectionTime[iIndex] = GetGameTime();
-			RocketSpeed[iIndex]              = CalculateRocketSpeed(iClass, fModifier);
-			SetEntDataFloat(iEntity, DamageOffset, CalculateRocketDamage(iClass, fModifier), true);
-
-			if (TestFlags(iFlags, RocketFlag_ElevateOnDeflect)) RocketInstanceFlags[iIndex] |= RocketFlag_Elevating;
-
-			if ((iFlags & RocketFlag_IsSpeedLimited) && (RocketSpeed[iIndex] >= RocketClassSpeedLimit[iClass]))
-			{
-				RocketSpeed[iIndex] = RocketClassSpeedLimit[iClass];
-			}
-
-			RocketMphSpeed[iIndex] = RocketSpeed[iIndex] * HAMMER_TO_MPH;
-
-			if (CvarStealPreventionDamage.BoolValue && (RocketInstanceState[iIndex] & RocketState_Stolen))
-			{
-				SetEntDataFloat(iEntity, DamageOffset, 0.0, true);
-			}
-
-			if (iFlags & RocketFlag_TeamlessHits)
-			{
-				SetEntProp(iEntity, Prop_Send, "m_iTeamNum", 1, 1);
-			}
-
-			int iTargetRef = iTarget;
-			Action aResult = Forward_OnRocketDeflectPre(iIndex, iEntity, iClient, iTargetRef);
-
-			if (aResult == Plugin_Stop || aResult == Plugin_Handled)
+			if (!ProcessDeflection(iIndex, iEntity, iClass, iFlags, iTeam, iTargetTeam, iDeflectionCount, fModifier, true))
 			{
 				RocketHomingPaused[iIndex] = false;
 				return;
 			}
-			else if (aResult == Plugin_Changed)
-			{
-				iTarget = iTargetRef;
-				RocketTarget[iIndex] = EntIndexToEntRef(iTarget);
-			}
-
-			EmitRocketSound(RocketSound_Alert, iClass, iEntity, iTarget, iFlags);
-			if (TestFlags(iFlags, RocketFlag_OnDeflectCmd))
-			{
-				ExecuteCommands(RocketClassCmdsOnDeflect[iClass], iClass, iEntity, iClient, iTarget, LastDeadClient, RocketSpeed[iIndex], iDeflectionCount, RocketMphSpeed[iIndex]);
-			}
-			Forward_OnRocketDeflect(iIndex, iEntity, iClient);
 		}
 
 		// Apply parameters once on unpause and re-enable smooth homing
@@ -538,70 +513,12 @@ void RocketLegacyThink(int iIndex)
 		}
 		Forward_OnRocketNoTarget(iIndex, iTarget, iOwner);
 	}
-	else if ((iDeflectionCount > RocketDeflections[iIndex]))
+	else if (iDeflectionCount > RocketDeflections[iIndex])
 	{
-		int iClient = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
-		Internal_SetRocketState(iIndex, (RocketInstanceState[iIndex] & ~RocketState_Stolen));
-
-		if (iClient >= 1)
-		{
-			float fViewAngles[3], fDirection[3];
-			GetClientEyeAngles(iClient, fViewAngles);
-			GetAngleVectors(fViewAngles, fDirection, NULL_VECTOR, NULL_VECTOR);
-			CopyVectors(fDirection, RocketDirection[iIndex]);
-			UpdateRocketSkin(iEntity, iTeam, TestFlags(iFlags, RocketFlag_IsNeutral));
-
-			if (!(iFlags & RocketFlag_CanBeStolen))
-			{
-				CheckStolenRocket(iClient, iIndex);
-			}
-		}
-
-		iTarget = SelectTarget(iTargetTeam, iIndex);
-		RocketTarget[iIndex]             = EntIndexToEntRef(iTarget);
-		RocketDeflections[iIndex]        = iDeflectionCount;
-		RocketLastDeflectionTime[iIndex] = GetGameTime();
-		RocketSpeed[iIndex]              = CalculateRocketSpeed(iClass, fModifier);
-		SetEntDataFloat(iEntity, DamageOffset, CalculateRocketDamage(iClass, fModifier), true);
-
-		if (TestFlags(iFlags, RocketFlag_ElevateOnDeflect)) RocketInstanceFlags[iIndex] |= RocketFlag_Elevating;
-		
-		if ((iFlags & RocketFlag_IsSpeedLimited) && (RocketSpeed[iIndex] >= RocketClassSpeedLimit[iClass]))
-		{
-			RocketSpeed[iIndex] = RocketClassSpeedLimit[iClass];
-		}
-
-		RocketMphSpeed[iIndex] = RocketSpeed[iIndex] * HAMMER_TO_MPH;
-
-		if (CvarStealPreventionDamage.BoolValue && (RocketInstanceState[iIndex] & RocketState_Stolen))
-		{
-			SetEntDataFloat(iEntity, DamageOffset, 0.0, true);
-		}
-
-		if (iFlags & RocketFlag_TeamlessHits)
-		{
-			SetEntProp(iEntity, Prop_Send, "m_iTeamNum", 1, 1);
-		}
-
-		int iTargetRef = iTarget;
-		Action aResult = Forward_OnRocketDeflectPre(iIndex, iEntity, iClient, iTargetRef);
-
-		if (aResult == Plugin_Stop || aResult == Plugin_Handled)
+		if (!ProcessDeflection(iIndex, iEntity, iClass, iFlags, iTeam, iTargetTeam, iDeflectionCount, fModifier, false))
 		{
 			return;
 		}
-		else if (aResult == Plugin_Changed)
-		{
-			iTarget = iTargetRef;
-			RocketTarget[iIndex] = EntIndexToEntRef(iTarget);
-		}
-
-		EmitRocketSound(RocketSound_Alert, iClass, iEntity, iTarget, iFlags);
-		if (TestFlags(iFlags, RocketFlag_OnDeflectCmd))
-		{
-			ExecuteCommands(RocketClassCmdsOnDeflect[iClass], iClass, iEntity, iClient, iTarget, LastDeadClient, RocketSpeed[iIndex], iDeflectionCount, RocketMphSpeed[iIndex]);
-		}
-		Forward_OnRocketDeflect(iIndex, iEntity, iClient);
 	}
 	else
 	{
