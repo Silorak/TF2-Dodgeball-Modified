@@ -36,6 +36,7 @@
 #define MAX_ROCKET_CLASSES      50
 #define MAX_SPAWNER_CLASSES     50
 #define MAX_SPAWN_POINTS        100
+#define MAX_PRESETS             16
 
 // ---- Flags and types constants --------------------------------------------------
 
@@ -804,6 +805,33 @@ native void TFDB_GetStealInfo(int iClient, bool &stole, int &count);
  */
 native void TFDB_SetStealInfo(int iClient, bool stole, int count);
 
+// ============ Preset Functions ============
+
+/**
+ * Gets the number of loaded presets.
+ *
+ * @return          Number of presets (0 if none loaded or presets.cfg missing).
+ */
+native int TFDB_GetPresetCount();
+
+/**
+ * Gets the display name of a preset.
+ *
+ * @param iPreset   Preset index (0 to TFDB_GetPresetCount()-1).
+ * @param buffer    Buffer to store the name.
+ * @param maxlen    Maximum buffer length.
+ */
+native void TFDB_GetPresetName(int iPreset, char[] buffer, int maxlen);
+
+/**
+ * Applies a preset: destroys active rockets, sets spawner max rockets,
+ * spawn interval, and chances table to 100% the preset's rocket class.
+ *
+ * @param iPreset   Preset index (0 to TFDB_GetPresetCount()-1).
+ * @return          True if applied successfully, false if invalid preset or class not found.
+ */
+native bool TFDB_ApplyPreset(int iPreset);
+
 public SharedPlugin __pl_TFDB =
 {
 	name = "tfdb",
@@ -959,5 +987,8 @@ public void __pl_TFDB_SetNTVOptional()
 	MarkNativeAsOptional("TFDB_SetRocketState");
 	MarkNativeAsOptional("TFDB_GetStealInfo");
 	MarkNativeAsOptional("TFDB_SetStealInfo");
+	MarkNativeAsOptional("TFDB_GetPresetCount");
+	MarkNativeAsOptional("TFDB_GetPresetName");
+	MarkNativeAsOptional("TFDB_ApplyPreset");
 }
 #endif

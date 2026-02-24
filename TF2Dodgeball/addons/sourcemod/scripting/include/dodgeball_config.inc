@@ -315,6 +315,7 @@ void ParseConfigurations(char[] strConfigFile = "general.cfg")
 		if (StrEqual(strSection, "general"))       ParseGeneral(kvConfig);
 		else if (StrEqual(strSection, "classes"))  ParseClasses(kvConfig);
 		else if (StrEqual(strSection, "spawners")) ParseSpawners(kvConfig);
+		else if (StrEqual(strSection, "presets"))  ParsePresets(kvConfig);
 	}
 	while (kvConfig.GotoNextKey());
 
@@ -507,6 +508,31 @@ void ParseSpawners(KeyValues kvConfig)
 	kvConfig.GoBack();
 	SpawnersTrie.GetValue("red", DefaultRedSpawner);
 	SpawnersTrie.GetValue("blu", DefaultBluSpawner);
+}
+
+/** Parses the "presets" section of the config (gameplay preset definitions). */
+void ParsePresets(KeyValues kvConfig)
+{
+	kvConfig.GotoFirstSubKey();
+	do
+	{
+		int iIndex = PresetCount;
+
+		kvConfig.GetString("name", PresetName[iIndex], sizeof(PresetName[]));
+		kvConfig.GetString("rocket class", PresetRocketClass[iIndex], sizeof(PresetRocketClass[]));
+		PresetMaxRockets[iIndex]    = kvConfig.GetNum("max rockets", 1);
+		PresetSpawnInterval[iIndex] = kvConfig.GetFloat("spawn interval", 0.0);
+
+		PresetCount++;
+
+		if (PresetCount >= MAX_PRESETS)
+		{
+			LogError("Reached maximum presets (%d). Remaining presets will be ignored.", MAX_PRESETS);
+			break;
+		}
+	}
+	while (kvConfig.GotoNextKey());
+	kvConfig.GoBack();
 }
 
 /**

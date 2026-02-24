@@ -16,7 +16,7 @@
 #define PLUGIN_AUTHOR      "x07x08"
 #define PLUGIN_DESCRIPTION "A pretty big menu for dodgeball"
 #define PLUGIN_VERSION     "1.0.5"
-#define PLUGIN_URL         "https://github.com/x07x08/TF2-Dodgeball-Modified"
+#define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball-Modified"
 
 enum RocketClassMenu
 {
@@ -357,6 +357,7 @@ public int DodgeballMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1
 					char strMapFile[PLATFORM_MAX_PATH]; FormatEx(strMapFile, sizeof(strMapFile), "%s.cfg", strMapName);
 					
 					TFDB_ParseConfigurations();
+					TFDB_ParseConfigurations("presets.cfg");
 					TFDB_ParseConfigurations(strMapFile);
 					TFDB_PopulateSpawnPoints();
 					

@@ -33,6 +33,7 @@ void EnableDodgeBall()
 	char mapFile[PLATFORM_MAX_PATH]; FormatEx(mapFile, sizeof(mapFile), "%s.cfg", mapName);
 
 	ParseConfigurations();
+	ParseConfigurations("presets.cfg");
 	ParseConfigurations(mapFile);
 
 	if (RocketClassCount == 0)   SetFailState("No rocket class defined.");
@@ -107,6 +108,7 @@ void DisableDodgeBall()
 	DestroyRockets();
 	DestroyRocketClasses();
 	DestroySpawners();
+	PresetCount = 0;
 
 	if (LogicTimer != null) KillTimer(LogicTimer);
 	LogicTimer = null;

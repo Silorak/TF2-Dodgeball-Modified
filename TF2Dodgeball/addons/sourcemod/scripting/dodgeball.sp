@@ -163,6 +163,13 @@ int SpawnPointsBluEntity[MAX_SPAWN_POINTS];
 int DefaultRedSpawner;
 int DefaultBluSpawner;
 
+// -----<<< Presets >>>-----
+char  PresetName[MAX_PRESETS][64];
+char  PresetRocketClass[MAX_PRESETS][16];
+int   PresetMaxRockets[MAX_PRESETS];
+float PresetSpawnInterval[MAX_PRESETS];
+int   PresetCount;
+
 // -----<<< Forward handles >>>-----
 Handle ForwardOnRocketCreated;
 Handle ForwardOnRocketCreatedPre;
@@ -375,6 +382,9 @@ public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] strError, int iE
 	CreateNative("TFDB_SetRocketState", Native_SetRocketState);
 	CreateNative("TFDB_GetStealInfo", Native_GetStealInfo);
 	CreateNative("TFDB_SetStealInfo", Native_SetStealInfo);
+	CreateNative("TFDB_GetPresetCount", Native_GetPresetCount);
+	CreateNative("TFDB_GetPresetName", Native_GetPresetName);
+	CreateNative("TFDB_ApplyPreset", Native_ApplyPreset);
 
 	SetupForwards();
 

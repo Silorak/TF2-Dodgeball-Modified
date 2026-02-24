@@ -9,8 +9,8 @@
 #define PLUGIN_NAME        "[TFDB] Votes"
 #define PLUGIN_AUTHOR      "x07x08"
 #define PLUGIN_DESCRIPTION "Various rocket votes."
-#define PLUGIN_VERSION     "1.0.1"
-#define PLUGIN_URL         "https://github.com/x07x08/TF2-Dodgeball-Modified"
+#define PLUGIN_VERSION     "1.1.0"
+#define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball-Modified"
 
 int g_iSpawnersCount;
 
@@ -20,14 +20,18 @@ ConVar CvarVoteCountDuration;
 ConVar CvarVoteBounceTimeout;
 ConVar CvarVoteClassTimeout;
 ConVar CvarVoteCountTimeout;
+ConVar CvarVotePresetDuration;
+ConVar CvarVotePresetTimeout;
 
 bool VoteBounceAllowed;
 bool VoteClassAllowed;
 bool VoteCountAllowed;
+bool VotePresetAllowed;
 
 float LastVoteBounceTime;
 float LastVoteClassTime;
 float LastVoteCountTime;
+float LastVotePresetTime;
 
 bool BounceEnabled;
 int MainRocketClass = -1;
@@ -56,16 +60,21 @@ public void OnPluginStart()
 	CvarVoteBounceTimeout  = CreateConVar("tf_dodgeball_votes_bounce_timeout", "150", _, _, true, 0.0);
 	CvarVoteClassTimeout   = CreateConVar("tf_dodgeball_votes_class_timeout", "150", _, _, true, 0.0);
 	CvarVoteCountTimeout   = CreateConVar("tf_dodgeball_votes_count_timeout", "150", _, _, true, 0.0);
+	CvarVotePresetDuration = CreateConVar("tf_dodgeball_votes_preset_duration", "20", _, _, true, 0.0);
+	CvarVotePresetTimeout  = CreateConVar("tf_dodgeball_votes_preset_timeout", "150", _, _, true, 0.0);
 	
 	RegConsoleCmd("sm_vrb", CmdVoteBounce, "Start a rocket bounce vote");
 	RegConsoleCmd("sm_vrc", CmdVoteClass, "Start a rocket class vote");
 	RegConsoleCmd("sm_vrcount", CmdVoteCount, "Start a rocket count vote");
+	RegConsoleCmd("sm_vrp", CmdVotePreset, "Start a preset vote");
 	RegConsoleCmd("sm_votebounce", CmdVoteBounce, "Start a rocket bounce vote");
 	RegConsoleCmd("sm_voteclass", CmdVoteClass, "Start a rocket class vote");
 	RegConsoleCmd("sm_votecount", CmdVoteCount, "Start a rocket count vote");
+	RegConsoleCmd("sm_votepreset", CmdVotePreset, "Start a preset vote");
 	RegConsoleCmd("sm_voterocketbounce", CmdVoteBounce, "Start a rocket bounce vote");
 	RegConsoleCmd("sm_voterocketclass", CmdVoteClass, "Start a rocket class vote");
 	RegConsoleCmd("sm_voterocketcount", CmdVoteCount, "Start a rocket count vote");
+	RegConsoleCmd("sm_voterocketpreset", CmdVotePreset, "Start a preset vote");
 	
 	if (!TFDB_IsDodgeballEnabled()) return;
 	
@@ -83,11 +92,13 @@ public void OnMapEnd()
 	
 	VoteBounceAllowed =
 	VoteClassAllowed  =
-	VoteCountAllowed  = false;
+	VoteCountAllowed  =
+	VotePresetAllowed = false;
 	
 	LastVoteBounceTime =
 	LastVoteClassTime  =
-	LastVoteCountTime  = 0.0;
+	LastVoteCountTime  =
+	LastVotePresetTime = 0.0;
 	
 	BounceEnabled = false;
 	MainRocketClass = -1;
@@ -104,11 +115,13 @@ public void TFDB_OnRocketsConfigExecuted(const char[] strConfigFile)
 	{
 		VoteBounceAllowed =
 		VoteClassAllowed  =
-		VoteCountAllowed  = true;
+		VoteCountAllowed  =
+		VotePresetAllowed = true;
 		
 		LastVoteBounceTime =
 		LastVoteClassTime  =
-		LastVoteCountTime  = 0.0;
+		LastVoteCountTime  =
+		LastVotePresetTime = 0.0;
 		
 		BounceEnabled = false;
 		MainRocketClass = -1;
@@ -495,6 +508,110 @@ public void VoteCountResultHandler(Menu hMenu,
 	}
 }
 
+public Action CmdVotePreset(int iClient, int iArgs)
+{
+	if (iClient == 0)
+	{
+		ReplyToCommand(iClient, "Command is in-game only.");
+		
+		return Plugin_Handled;
+	}
+	
+	if (!TFDB_IsDodgeballEnabled())
+	{
+		CReplyToCommand(iClient, "%t", "Command_Disabled");
+		
+		return Plugin_Handled;
+	}
+	
+	if (IsVoteInProgress())
+	{
+		CReplyToCommand(iClient, "%t", "Dodgeball_FFAVote_Conflict");
+		
+		return Plugin_Handled;
+	}
+	
+	if (TFDB_GetPresetCount() == 0)
+	{
+		CReplyToCommand(iClient, "%t", "Dodgeball_PresetVote_NoPresets");
+		
+		return Plugin_Handled;
+	}
+	
+	if (VotePresetAllowed)
+	{
+		VotePresetAllowed  = false;
+		LastVotePresetTime = GetGameTime();
+		
+		StartPresetVote();
+		CreateTimer(CvarVotePresetTimeout.FloatValue, VotePresetTimeoutCallback, _, TIMER_FLAG_NO_MAPCHANGE);
+	}
+	else
+	{
+		CReplyToCommand(iClient, "%t", "Dodgeball_PresetVote_Cooldown",
+		                RoundToCeil((LastVotePresetTime + CvarVotePresetTimeout.FloatValue) - GetGameTime()));
+	}
+	
+	return Plugin_Handled;
+}
+
+void StartPresetVote()
+{
+	Menu hMenu = new Menu(VoteMenuHandler);
+	hMenu.VoteResultCallback = VotePresetResultHandler;
+	
+	hMenu.SetTitle("Select gameplay preset:");
+	
+	int iPresetCount = TFDB_GetPresetCount();
+	for (int i = 0; i < iPresetCount; i++)
+	{
+		char strIndex[8], strName[64];
+		IntToString(i, strIndex, sizeof(strIndex));
+		TFDB_GetPresetName(i, strName, sizeof(strName));
+		hMenu.AddItem(strIndex, strName);
+	}
+	
+	int iTotal;
+	int[] iClients = new int[MaxClients];
+	
+	for (int iClient = 1; iClient <= MaxClients; iClient++)
+	{
+		if (!IsClientInGame(iClient) || IsFakeClient(iClient) || GetClientTeam(iClient) <= 1)
+		{
+			continue;
+		}
+		
+		iClients[iTotal++] = iClient;
+	}
+	
+	hMenu.DisplayVote(iClients, iTotal, CvarVotePresetDuration.IntValue);
+}
+
+public void VotePresetResultHandler(Menu hMenu,
+                                    int iNumVotes,
+                                    int iNumClients,
+                                    const int[][] iClientInfo,
+                                    int iNumItems,
+                                    const int[][] iItemInfo)
+{
+	int iWinnerIndex = 0;
+	
+	bool bEqual = AreVotesEqual(iItemInfo, iNumItems);
+	
+	if (bEqual) iWinnerIndex = GetRandomInt(0, (iNumItems - 1));
+	
+	char strWinner[8]; hMenu.GetItem(iItemInfo[iWinnerIndex][VOTEINFO_ITEM_INDEX], strWinner, sizeof(strWinner));
+	
+	int iPreset = StringToInt(strWinner);
+	
+	if (TFDB_ApplyPreset(iPreset))
+	{
+		char strName[64];
+		TFDB_GetPresetName(iPreset, strName, sizeof(strName));
+		CPrintToChatAll("%t", "Dodgeball_PresetVote_Applied", strName);
+	}
+}
+
 public Action VoteBounceTimeoutCallback(Handle hTimer)
 {
 	VoteBounceAllowed = true;
@@ -512,6 +629,13 @@ public Action VoteClassTimeoutCallback(Handle hTimer)
 public Action VoteCountTimeoutCallback(Handle hTimer)
 {
 	VoteCountAllowed = true;
+	
+	return Plugin_Continue;
+}
+
+public Action VotePresetTimeoutCallback(Handle hTimer)
+{
+	VotePresetAllowed = true;
 	
 	return Plugin_Continue;
 }
