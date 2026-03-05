@@ -13,9 +13,9 @@
 #define REQUIRE_PLUGIN
 
 #define PLUGIN_NAME        "[TFDB] Admin menu"
-#define PLUGIN_AUTHOR      "x07x08"
+#define PLUGIN_AUTHOR      "x07x08, Silorak"
 #define PLUGIN_DESCRIPTION "A pretty big menu for dodgeball"
-#define PLUGIN_VERSION     "1.0.5"
+#define PLUGIN_VERSION     "2.2.0"
 #define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball-Modified"
 
 enum RocketClassMenu
@@ -215,9 +215,9 @@ public void OnPluginStart()
 	
 	if (!TFDB_IsDodgeballEnabled()) return;
 	
-	char strMapName[64]; GetCurrentMap(strMapName, sizeof(strMapName));
-	GetMapDisplayName(strMapName, strMapName, sizeof(strMapName));
-	char strMapFile[PLATFORM_MAX_PATH]; FormatEx(strMapFile, sizeof(strMapFile), "%s.cfg", strMapName);
+	char mapName[64]; GetCurrentMap(mapName, sizeof(mapName));
+	GetMapDisplayName(mapName, mapName, sizeof(mapName));
+	char strMapFile[PLATFORM_MAX_PATH]; FormatEx(strMapFile, sizeof(strMapFile), "%s.cfg", mapName);
 	
 	TFDB_OnRocketsConfigExecuted("general.cfg");
 	TFDB_OnRocketsConfigExecuted(strMapFile);
@@ -251,86 +251,86 @@ public void TFDB_OnRocketsConfigExecuted(const char[] strConfigFile)
 	ParseConfigurations(strConfigFile);
 }
 
-public void OnClientDisconnect(int iClient)
+public void OnClientDisconnect(int client)
 {
-	ClientSayHook[iClient]          = false;
-	g_iClientRocketClass[iClient]      = -1;
-	ClientMenuSelectTime[iClient]   = 0.0;
-	g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-	g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
+	ClientSayHook[client]          = false;
+	g_iClientRocketClass[client]      = -1;
+	ClientMenuSelectTime[client]   = 0.0;
+	g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+	g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
 }
 
-public void OnClientConnected(int iClient)
+public void OnClientConnected(int client)
 {
-	ClientSayHook[iClient]          = false;
-	g_iClientRocketClass[iClient]      = -1;
-	ClientMenuSelectTime[iClient]   = 0.0;
-	g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-	g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
+	ClientSayHook[client]          = false;
+	g_iClientRocketClass[client]      = -1;
+	ClientMenuSelectTime[client]   = 0.0;
+	g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+	g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
 }
 
-public Action CmdDodgeballMenu(int iClient, int iArgs)
+public Action CmdDodgeballMenu(int client, int args)
 {
-	if (iClient == 0)
+	if (client == 0)
 	{
-		ReplyToCommand(iClient, "Command is in-game only.");
+		ReplyToCommand(client, "Command is in-game only.");
 		
 		return Plugin_Handled;
 	}
 	
-	if (!CheckCommandAccess(iClient, "sm_tfdb", ADMFLAG_CONFIG))
+	if (!CheckCommandAccess(client, "sm_tfdb", ADMFLAG_CONFIG))
 	{
-		CPrintToChat(iClient, "%t", "Command_NoAccess");
+		CPrintToChat(client, "%t", "Command_NoAccess");
 		
 		return Plugin_Handled;
 	}
 	
 	if (!TFDB_IsDodgeballEnabled())
 	{
-		CReplyToCommand(iClient, "%t", "Command_Disabled");
+		CReplyToCommand(client, "%t", "Command_Disabled");
 		
 		return Plugin_Handled;
 	}
 	
-	DisplayDodgeballMenu(iClient);
+	DisplayDodgeballMenu(client);
 	
 	return Plugin_Handled;
 }
 
-void DisplayDodgeballMenu(int iClient)
+void DisplayDodgeballMenu(int client)
 {
 	if (!TFDB_IsDodgeballEnabled())
 	{
-		CPrintToChat(iClient, "%t", "Dodgeball_Disabled");
+		CPrintToChat(client, "%t", "Dodgeball_Disabled");
 		
 		return;
 	}
 	
-	Menu hMenu = new Menu(DodgeballMenuHandler);
+	Menu menu = new Menu(DodgeballMenuHandler);
 	
-	hMenu.SetTitle("What would you like to change?");
+	menu.SetTitle("What would you like to change?");
 	
-	hMenu.AddItem("0", "Rockets", ITEMDRAW_DEFAULT);
-	hMenu.AddItem("1", "Rocket classes", ITEMDRAW_DEFAULT);
-	hMenu.AddItem("2", "Spawner classes", ITEMDRAW_DEFAULT);
-	hMenu.AddItem("3", "Refresh configuration file", ITEMDRAW_DEFAULT);
-	hMenu.AddItem("4", "Destroy active rockets", ITEMDRAW_DEFAULT);
+	menu.AddItem("0", "Rockets", ITEMDRAW_DEFAULT);
+	menu.AddItem("1", "Rocket classes", ITEMDRAW_DEFAULT);
+	menu.AddItem("2", "Spawner classes", ITEMDRAW_DEFAULT);
+	menu.AddItem("3", "Refresh configuration file", ITEMDRAW_DEFAULT);
+	menu.AddItem("4", "Destroy active rockets", ITEMDRAW_DEFAULT);
 	
-	hMenu.Display(iClient, MENU_TIME_FOREVER);
+	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int DodgeballMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1, int iParam2)
+public int DodgeballMenuHandler(Menu menu, MenuAction menuActions, int iParam1, int iParam2)
 {
-	switch (iMenuActions)
+	switch (menuActions)
 	{
 		case MenuAction_Select :
 		{
 			char strOption[8];
-			hMenu.GetItem(iParam2, strOption, sizeof(strOption));
+			menu.GetItem(iParam2, strOption, sizeof(strOption));
 			
-			int iOption = StringToInt(strOption);
+			int option = StringToInt(strOption);
 			
-			switch (iOption)
+			switch (option)
 			{
 				case 0 :
 				{
@@ -352,9 +352,9 @@ public int DodgeballMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1
 					TFDB_DestroyRocketClasses();
 					TFDB_DestroySpawners();
 					
-					char strMapName[64]; GetCurrentMap(strMapName, sizeof(strMapName));
-					GetMapDisplayName(strMapName, strMapName, sizeof(strMapName));
-					char strMapFile[PLATFORM_MAX_PATH]; FormatEx(strMapFile, sizeof(strMapFile), "%s.cfg", strMapName);
+					char mapName[64]; GetCurrentMap(mapName, sizeof(mapName));
+					GetMapDisplayName(mapName, mapName, sizeof(mapName));
+					char strMapFile[PLATFORM_MAX_PATH]; FormatEx(strMapFile, sizeof(strMapFile), "%s.cfg", mapName);
 					
 					TFDB_ParseConfigurations();
 					TFDB_ParseConfigurations("presets.cfg");
@@ -383,56 +383,56 @@ public int DodgeballMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1
 		
 		case MenuAction_End :
 		{
-			delete hMenu;
+			delete menu;
 		}
 	}
 	
 	return 0;
 }
 
-void DisplayRocketsMenu(int iClient)
+void DisplayRocketsMenu(int client)
 {
 	if (TFDB_GetRocketCount() == 0)
 	{
-		CPrintToChat(iClient, "%t", "Menu_NoRockets");
+		CPrintToChat(client, "%t", "Menu_NoRockets");
 		
-		DisplayDodgeballMenu(iClient);
+		DisplayDodgeballMenu(client);
 		
 		return;
 	}
 	
-	Menu hMenu = new Menu(RocketsMenuHandler);
+	Menu menu = new Menu(RocketsMenuHandler);
 	
 	char strRocketIndex[8], strRocketLongName[48];
 	
-	hMenu.SetTitle("Active rockets :");
-	hMenu.ExitBackButton = true;
+	menu.SetTitle("Active rockets :");
+	menu.ExitBackButton = true;
 	
-	for (int iIndex = 0; iIndex < MAX_ROCKETS; iIndex++)
+	for (int index = 0; index < MAX_ROCKETS; index++)
 	{
-		if (!TFDB_IsValidRocket(iIndex)) continue;
+		if (!TFDB_IsValidRocket(index)) continue;
 		
-		IntToString(iIndex, strRocketIndex, sizeof(strRocketIndex));
-		TFDB_GetRocketClassLongName(TFDB_GetRocketClass(iIndex), strRocketLongName, sizeof(strRocketLongName));
+		IntToString(index, strRocketIndex, sizeof(strRocketIndex));
+		TFDB_GetRocketClassLongName(TFDB_GetRocketClass(index), strRocketLongName, sizeof(strRocketLongName));
 		Format(strRocketLongName, sizeof(strRocketLongName), "%s (Index : %s)", strRocketLongName, strRocketIndex);
 		
-		hMenu.AddItem(strRocketIndex, strRocketLongName, ITEMDRAW_DEFAULT);
+		menu.AddItem(strRocketIndex, strRocketLongName, ITEMDRAW_DEFAULT);
 	}
 	
-	hMenu.Display(iClient, MENU_TIME_FOREVER);
+	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int RocketsMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1, int iParam2)
+public int RocketsMenuHandler(Menu menu, MenuAction menuActions, int iParam1, int iParam2)
 {
-	switch (iMenuActions)
+	switch (menuActions)
 	{
 		case MenuAction_Select :
 		{
-			char strIndex[8];
-			hMenu.GetItem(iParam2, strIndex, sizeof(strIndex));
+			char indexStr[8];
+			menu.GetItem(iParam2, indexStr, sizeof(indexStr));
 			
-			int iIndex = StringToInt(strIndex);
-			DisplayRocketOptionsMenu(iParam1, iIndex);
+			int index = StringToInt(indexStr);
+			DisplayRocketOptionsMenu(iParam1, index);
 		}
 		
 		case MenuAction_Cancel :
@@ -442,64 +442,64 @@ public int RocketsMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1, 
 		
 		case MenuAction_End :
 		{
-			delete hMenu;
+			delete menu;
 		}
 	}
 	
 	return 0;
 }
 
-void DisplayRocketOptionsMenu(int iClient, int iIndex)
+void DisplayRocketOptionsMenu(int client, int index)
 {
-	if (!TFDB_IsValidRocket(iIndex))
+	if (!TFDB_IsValidRocket(index))
 	{
-		CPrintToChat(iClient, "%t", "Menu_InvalidRocket");
+		CPrintToChat(client, "%t", "Menu_InvalidRocket");
 		
-		DisplayRocketsMenu(iClient);
+		DisplayRocketsMenu(client);
 		
 		return;
 	}
 	
-	Menu hMenu = new Menu(RocketOptionsMenuHandler);
+	Menu menu = new Menu(RocketOptionsMenuHandler);
 	
-	char strIndex[8]; IntToString(iIndex, strIndex, sizeof(strIndex));
-	char strTitle[48]; TFDB_GetRocketClassLongName(TFDB_GetRocketClass(iIndex), strTitle, sizeof(strTitle));
+	char indexStr[8]; IntToString(index, indexStr, sizeof(indexStr));
+	char title[48]; TFDB_GetRocketClassLongName(TFDB_GetRocketClass(index), title, sizeof(title));
 	
-	Format(strTitle, sizeof(strTitle), "%s (%s) options", strTitle, strIndex);
+	Format(title, sizeof(title), "%s (%s) options", title, indexStr);
 	
-	hMenu.SetTitle(strTitle);
+	menu.SetTitle(title);
 	// https://github.com/punteroo/TF2-Item-Plugins/blob/production/scripting/tf2item_cosmetics.sp#L591
-	hMenu.AddItem(strIndex, "", ITEMDRAW_IGNORE);
-	hMenu.ExitBackButton = true;
+	menu.AddItem(indexStr, "", ITEMDRAW_IGNORE);
+	menu.ExitBackButton = true;
 	
-	hMenu.AddItem("1", "Target", ITEMDRAW_DEFAULT);
-	hMenu.AddItem("2", "Class", ITEMDRAW_DEFAULT);
+	menu.AddItem("1", "Target", ITEMDRAW_DEFAULT);
+	menu.AddItem("2", "Class", ITEMDRAW_DEFAULT);
 	
-	hMenu.Display(iClient, MENU_TIME_FOREVER);
+	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int RocketOptionsMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1, int iParam2)
+public int RocketOptionsMenuHandler(Menu menu, MenuAction menuActions, int iParam1, int iParam2)
 {
-	char strBuffer[8]; hMenu.GetItem(0, strBuffer, sizeof(strBuffer));
-	int  iIndex = StringToInt(strBuffer);
+	char buffer[8]; menu.GetItem(0, buffer, sizeof(buffer));
+	int  index = StringToInt(buffer);
 	
-	switch (iMenuActions)
+	switch (menuActions)
 	{
 		case MenuAction_Select :
 		{
-			hMenu.GetItem(iParam2, strBuffer, sizeof(strBuffer));
-			int iOption = StringToInt(strBuffer);
+			menu.GetItem(iParam2, buffer, sizeof(buffer));
+			int option = StringToInt(buffer);
 			
-			switch (iOption)
+			switch (option)
 			{
 				case 1 :
 				{
-					DisplayRocketTargetMenu(iParam1, iIndex);
+					DisplayRocketTargetMenu(iParam1, index);
 				}
 				
 				case 2 :
 				{
-					DisplayRocketClassMenu(iParam1, iIndex);
+					DisplayRocketClassMenu(iParam1, index);
 				}
 			}
 		}
@@ -511,60 +511,60 @@ public int RocketOptionsMenuHandler(Menu hMenu, MenuAction iMenuActions, int iPa
 		
 		case MenuAction_End :
 		{
-			delete hMenu;
+			delete menu;
 		}
 	}
 	
 	return 0;
 }
 
-void DisplayRocketTargetMenu(int iClient, int iIndex)
+void DisplayRocketTargetMenu(int client, int index)
 {
-	if (!TFDB_IsValidRocket(iIndex))
+	if (!TFDB_IsValidRocket(index))
 	{
-		CPrintToChat(iClient, "%t", "Menu_InvalidRocket");
+		CPrintToChat(client, "%t", "Menu_InvalidRocket");
 		
-		DisplayRocketsMenu(iClient);
+		DisplayRocketsMenu(client);
 		
 		return;
 	}
 	
-	Menu hMenu = new Menu(RocketTargetMenuHandler, MENU_ACTIONS_DEFAULT | MenuAction_DrawItem);
+	Menu menu = new Menu(RocketTargetMenuHandler, MENU_ACTIONS_DEFAULT | MenuAction_DrawItem);
 	
-	char strIndex[8]; IntToString(iIndex, strIndex, sizeof(strIndex));
+	char indexStr[8]; IntToString(index, indexStr, sizeof(indexStr));
 	
-	hMenu.SetTitle("New rocket target :");
-	hMenu.AddItem(strIndex, "", ITEMDRAW_IGNORE);
-	hMenu.ExitBackButton = true;
+	menu.SetTitle("New rocket target :");
+	menu.AddItem(indexStr, "", ITEMDRAW_IGNORE);
+	menu.ExitBackButton = true;
 	
-	AddTargetsToMenu(hMenu, iClient, true, true);
+	AddTargetsToMenu(menu, client, true, true);
 	
-	hMenu.Display(iClient, MENU_TIME_FOREVER);
+	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int RocketTargetMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1, int iParam2)
+public int RocketTargetMenuHandler(Menu menu, MenuAction menuActions, int iParam1, int iParam2)
 {
-	char strBuffer[8]; hMenu.GetItem(0, strBuffer, sizeof(strBuffer));
-	int  iIndex  = StringToInt(strBuffer);
-	int  iEntity = EntRefToEntIndex(TFDB_GetRocketEntity(iIndex));
+	char buffer[8]; menu.GetItem(0, buffer, sizeof(buffer));
+	int  index  = StringToInt(buffer);
+	int  entity = EntRefToEntIndex(TFDB_GetRocketEntity(index));
 	
-	switch (iMenuActions)
+	switch (menuActions)
 	{
 		case MenuAction_DrawItem :
 		{
 			int iStyle;
-			hMenu.GetItem(iParam2, strBuffer, sizeof(strBuffer), iStyle);
+			menu.GetItem(iParam2, buffer, sizeof(buffer), iStyle);
 			
-			int iUserID = StringToInt(strBuffer);
-			int iTarget = GetClientOfUserId(iUserID);
+			int iUserID = StringToInt(buffer);
+			int target = GetClientOfUserId(iUserID);
 			
-			return ((iEntity == -1) || (iTarget == EntRefToEntIndex(TFDB_GetRocketTarget(iIndex))) ||
-			       ((iTarget == GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity")))) ? ITEMDRAW_DISABLED : iStyle;
+			return ((entity == -1) || (target == EntRefToEntIndex(TFDB_GetRocketTarget(index))) ||
+			       ((target == GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity")))) ? ITEMDRAW_DISABLED : iStyle;
 		}
 		
 		case MenuAction_Select :
 		{
-			if (!TFDB_IsValidRocket(iIndex))
+			if (!TFDB_IsValidRocket(index))
 			{
 				CPrintToChat(iParam1, "%t", "Menu_InvalidRocket");
 				
@@ -573,105 +573,105 @@ public int RocketTargetMenuHandler(Menu hMenu, MenuAction iMenuActions, int iPar
 				return 0;
 			}
 			
-			hMenu.GetItem(iParam2, strBuffer, sizeof(strBuffer));
+			menu.GetItem(iParam2, buffer, sizeof(buffer));
 			
-			int iUserID = StringToInt(strBuffer);
-			int iTarget = GetClientOfUserId(iUserID);
+			int iUserID = StringToInt(buffer);
+			int target = GetClientOfUserId(iUserID);
 			
-			if (!iTarget || !IsPlayerAlive(iTarget))
+			if (!target || !IsPlayerAlive(target))
 			{
 				CPrintToChat(iParam1, "%t", "Menu_InvalidClient");
 			}
-			else if (!CanUserTarget(iParam1, iTarget) ||
-			        (iTarget == GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity")))
+			else if (!CanUserTarget(iParam1, target) ||
+			        (target == GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity")))
 			{
 				CPrintToChat(iParam1, "%t", "Menu_CannotTarget");
 			}
-			else if (iTarget == EntRefToEntIndex(TFDB_GetRocketTarget(iIndex)))
+			else if (target == EntRefToEntIndex(TFDB_GetRocketTarget(index)))
 			{
 				CPrintToChat(iParam1, "%t", "Menu_SameTarget");
 			}
 			else
 			{
-				TFDB_SetRocketTarget(iIndex, EntIndexToEntRef(iTarget));
+				TFDB_SetRocketTarget(index, EntIndexToEntRef(target));
 				
-				int iClass         = TFDB_GetRocketClass(iIndex);
-				RocketFlags iFlags = TFDB_GetRocketFlags(iIndex);
+				int classIndex         = TFDB_GetRocketClass(index);
+				RocketFlags flags = TFDB_GetRocketFlags(index);
 				
-				EmitRocketSound(RocketSound_Alert, iClass, iEntity, iTarget, iFlags);
+				EmitRocketSound(RocketSound_Alert, classIndex, entity, target, flags);
 				
-				if (!(iFlags & RocketFlag_IsNeutral))
+				if (!(flags & RocketFlag_IsNeutral))
 				{
-					SetEntProp(iEntity, Prop_Send, "m_iTeamNum", GetAnalogueTeam(GetClientTeam(iTarget)), 1);
+					SetEntProp(entity, Prop_Send, "m_iTeamNum", GetAnalogueTeam(GetClientTeam(target)), 1);
 				}
 				
-				LogAction(iParam1, iTarget, "\"%L\" changed the target of a rocket to \"%L\"", iParam1, iTarget);
-				CPrintToChat(iParam1, "%t", "Menu_ChangedTarget", iTarget);
+				LogAction(iParam1, target, "\"%L\" changed the target of a rocket to \"%L\"", iParam1, target);
+				CPrintToChat(iParam1, "%t", "Menu_ChangedTarget", target);
 			}
 			
 			if (IsClientInGame(iParam1) && !IsClientInKickQueue(iParam1))
 			{
-				DisplayRocketTargetMenu(iParam1, iIndex);
+				DisplayRocketTargetMenu(iParam1, index);
 			}
 		}
 		
 		case MenuAction_Cancel :
 		{
-			if (iParam2 == MenuCancel_ExitBack) { DisplayRocketOptionsMenu(iParam1, iIndex); }
+			if (iParam2 == MenuCancel_ExitBack) { DisplayRocketOptionsMenu(iParam1, index); }
 		}
 		
 		case MenuAction_End :
 		{
-			delete hMenu;
+			delete menu;
 		}
 	}
 	
 	return 0;
 }
 
-void DisplayRocketClassMenu(int iClient, int iIndex)
+void DisplayRocketClassMenu(int client, int index)
 {
-	if (!TFDB_IsValidRocket(iIndex))
+	if (!TFDB_IsValidRocket(index))
 	{
-		CPrintToChat(iClient, "%t", "Menu_InvalidRocket");
+		CPrintToChat(client, "%t", "Menu_InvalidRocket");
 		
-		DisplayRocketsMenu(iClient);
+		DisplayRocketsMenu(client);
 		
 		return;
 	}
 	
-	Menu hMenu = new Menu(RocketClassMenuHandler);
+	Menu menu = new Menu(RocketClassMenuHandler);
 	
 	
-	char strIndex[8]; IntToString(iIndex, strIndex, sizeof(strIndex));
-	char strRocketClassLongName[48];
+	char indexStr[8]; IntToString(index, indexStr, sizeof(indexStr));
+	char rocketLongName[48];
 	
-	hMenu.SetTitle("New rocket class :");
-	hMenu.AddItem(strIndex, "", ITEMDRAW_IGNORE);
-	hMenu.ExitBackButton = true;
+	menu.SetTitle("New rocket class :");
+	menu.AddItem(indexStr, "", ITEMDRAW_IGNORE);
+	menu.ExitBackButton = true;
 	
-	for (int iClass = 0; iClass < TFDB_GetRocketClassCount(); iClass++)
+	for (int classIndex = 0; classIndex < TFDB_GetRocketClassCount(); classIndex++)
 	{
-		IntToString(iClass, strIndex, sizeof(strIndex));
-		TFDB_GetRocketClassLongName(iClass, strRocketClassLongName, sizeof(strRocketClassLongName));
-		Format(strRocketClassLongName, sizeof(strRocketClassLongName), "%s (Class : %s)", strRocketClassLongName, strIndex);
+		IntToString(classIndex, indexStr, sizeof(indexStr));
+		TFDB_GetRocketClassLongName(classIndex, rocketLongName, sizeof(rocketLongName));
+		Format(rocketLongName, sizeof(rocketLongName), "%s (Class : %s)", rocketLongName, indexStr);
 		
-		hMenu.AddItem(strIndex, strRocketClassLongName, iClass != TFDB_GetRocketClass(iIndex) ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED);
+		menu.AddItem(indexStr, rocketLongName, classIndex != TFDB_GetRocketClass(index) ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED);
 	}
 	
-	hMenu.Display(iClient, MENU_TIME_FOREVER);
+	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int RocketClassMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1, int iParam2)
+public int RocketClassMenuHandler(Menu menu, MenuAction menuActions, int iParam1, int iParam2)
 {
-	char strBuffer[8]; hMenu.GetItem(0, strBuffer, sizeof(strBuffer));
-	int  iIndex = StringToInt(strBuffer);
+	char buffer[8]; menu.GetItem(0, buffer, sizeof(buffer));
+	int  index = StringToInt(buffer);
 	
-	switch (iMenuActions)
+	switch (menuActions)
 	{
 		case MenuAction_Select :
 		{
-			if (!TFDB_IsValidRocket(iIndex))
+			if (!TFDB_IsValidRocket(index))
 			{
 				CPrintToChat(iParam1, "%t", "Menu_InvalidRocket");
 				
@@ -680,84 +680,84 @@ public int RocketClassMenuHandler(Menu hMenu, MenuAction iMenuActions, int iPara
 				return 0;
 			}
 			
-			hMenu.GetItem(iParam2, strBuffer, sizeof(strBuffer));
-			int iClass = StringToInt(strBuffer);
+			menu.GetItem(iParam2, buffer, sizeof(buffer));
+			int classIndex = StringToInt(buffer);
 			
-			if (iClass == TFDB_GetRocketClass(iIndex))
+			if (classIndex == TFDB_GetRocketClass(index))
 			{
 				CPrintToChat(iParam1, "%t", "Menu_SameRocketClass");
 				
-				DisplayRocketClassMenu(iParam1, iIndex);
+				DisplayRocketClassMenu(iParam1, index);
 				
 				return 0;
 			}
 			
-			char strRocketOldLongName[32]; TFDB_GetRocketClassLongName(TFDB_GetRocketClass(iIndex), strRocketOldLongName, sizeof(strRocketOldLongName));
-			char strRocketClassLongName[32]; TFDB_GetRocketClassLongName(iClass, strRocketClassLongName, sizeof(strRocketClassLongName));
+			char strRocketOldLongName[32]; TFDB_GetRocketClassLongName(TFDB_GetRocketClass(index), strRocketOldLongName, sizeof(strRocketOldLongName));
+			char rocketLongName[32]; TFDB_GetRocketClassLongName(classIndex, rocketLongName, sizeof(rocketLongName));
 			
-			RocketFlags iFlags         = TFDB_GetRocketFlags(iIndex);
-			RocketFlags iClassFlags    = TFDB_GetRocketClassFlags(TFDB_GetRocketClass(iIndex));
-			RocketFlags iNewClassFlags = TFDB_GetRocketClassFlags(iClass);
+			RocketFlags flags         = TFDB_GetRocketFlags(index);
+			RocketFlags iClassFlags    = TFDB_GetRocketClassFlags(TFDB_GetRocketClass(index));
+			RocketFlags iNewClassFlags = TFDB_GetRocketClassFlags(classIndex);
 			
-			TFDB_SetRocketFlags(iIndex, (iFlags & ~iClassFlags) | iNewClassFlags);
+			TFDB_SetRocketFlags(index, (flags & ~iClassFlags) | iNewClassFlags);
 			
-			TFDB_SetRocketClass(iIndex, iClass);
+			TFDB_SetRocketClass(index, classIndex);
 			
-			LogAction(iParam1, -1, "\"%L\" changed the class of a rocket from \"%s\" to \"%s\"", iParam1, strRocketOldLongName, strRocketClassLongName);
-			CPrintToChat(iParam1, "%t", "Menu_ChangedRocketClass", strRocketOldLongName, strRocketClassLongName);
+			LogAction(iParam1, -1, "\"%L\" changed the class of a rocket from \"%s\" to \"%s\"", iParam1, strRocketOldLongName, rocketLongName);
+			CPrintToChat(iParam1, "%t", "Menu_ChangedRocketClass", strRocketOldLongName, rocketLongName);
 			
 			if (IsClientInGame(iParam1) && !IsClientInKickQueue(iParam1))
 			{
-				DisplayRocketClassMenu(iParam1, iIndex);
+				DisplayRocketClassMenu(iParam1, index);
 			}
 		}
 		
 		case MenuAction_Cancel :
 		{
-			if (iParam2 == MenuCancel_ExitBack) { DisplayRocketOptionsMenu(iParam1, iIndex); }
+			if (iParam2 == MenuCancel_ExitBack) { DisplayRocketOptionsMenu(iParam1, index); }
 		}
 		
 		case MenuAction_End :
 		{
-			delete hMenu;
+			delete menu;
 		}
 	}
 	
 	return 0;
 }
 
-void DisplayRocketClassesMenu(int iClient)
+void DisplayRocketClassesMenu(int client)
 {
-	Menu hMenu = new Menu(RocketClassesMenuHandler);
+	Menu menu = new Menu(RocketClassesMenuHandler);
 	
-	char strClass[8], strRocketClassLongName[48];
+	char className[8], rocketLongName[48];
 	
-	hMenu.SetTitle("Rocket classes :");
-	hMenu.ExitBackButton = true;
+	menu.SetTitle("Rocket classes :");
+	menu.ExitBackButton = true;
 	
-	for (int iClass = 0; iClass < TFDB_GetRocketClassCount(); iClass++)
+	for (int classIndex = 0; classIndex < TFDB_GetRocketClassCount(); classIndex++)
 	{
-		IntToString(iClass, strClass, sizeof(strClass));
-		TFDB_GetRocketClassLongName(iClass, strRocketClassLongName, sizeof(strRocketClassLongName));
-		Format(strRocketClassLongName, sizeof(strRocketClassLongName), "%s (Class : %s)", strRocketClassLongName, strClass);
+		IntToString(classIndex, className, sizeof(className));
+		TFDB_GetRocketClassLongName(classIndex, rocketLongName, sizeof(rocketLongName));
+		Format(rocketLongName, sizeof(rocketLongName), "%s (Class : %s)", rocketLongName, className);
 		
-		hMenu.AddItem(strClass, strRocketClassLongName, ITEMDRAW_DEFAULT);
+		menu.AddItem(className, rocketLongName, ITEMDRAW_DEFAULT);
 	}
 	
-	hMenu.Display(iClient, MENU_TIME_FOREVER);
+	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int RocketClassesMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1, int iParam2)
+public int RocketClassesMenuHandler(Menu menu, MenuAction menuActions, int iParam1, int iParam2)
 {
-	switch (iMenuActions)
+	switch (menuActions)
 	{
 		case MenuAction_Select :
 		{
-			char strClass[8];
-			hMenu.GetItem(iParam2, strClass, sizeof(strClass));
+			char className[8];
+			menu.GetItem(iParam2, className, sizeof(className));
 			
-			int iClass = StringToInt(strClass);
-			DisplayRocketClassOptionsMenu(iParam1, iClass);
+			int classIndex = StringToInt(className);
+			DisplayRocketClassOptionsMenu(iParam1, classIndex);
 		}
 		
 		case MenuAction_Cancel :
@@ -767,57 +767,57 @@ public int RocketClassesMenuHandler(Menu hMenu, MenuAction iMenuActions, int iPa
 		
 		case MenuAction_End :
 		{
-			delete hMenu;
+			delete menu;
 		}
 	}
 	
 	return 0;
 }
 
-void DisplayRocketClassOptionsMenu(int iClient, int iClass)
+void DisplayRocketClassOptionsMenu(int client, int classIndex)
 {
-	Menu hMenu = new Menu(RocketClassOptionsMenuHandler);
+	Menu menu = new Menu(RocketClassOptionsMenuHandler);
 	
-	char strBuffer[8]; IntToString(iClass, strBuffer, sizeof(strBuffer));
-	char strTitle[48]; TFDB_GetRocketClassLongName(iClass, strTitle, sizeof(strTitle));
+	char buffer[8]; IntToString(classIndex, buffer, sizeof(buffer));
+	char title[48]; TFDB_GetRocketClassLongName(classIndex, title, sizeof(title));
 	
-	Format(strTitle, sizeof(strTitle), "%s (%s) options", strTitle, strBuffer);
+	Format(title, sizeof(title), "%s (%s) options", title, buffer);
 	
-	hMenu.SetTitle(strTitle);
-	hMenu.AddItem(strBuffer, "", ITEMDRAW_IGNORE);
-	hMenu.ExitBackButton = true;
+	menu.SetTitle(title);
+	menu.AddItem(buffer, "", ITEMDRAW_IGNORE);
+	menu.ExitBackButton = true;
 	
-	for (RocketClassMenu iOption = RocketClassMenu_Name; iOption < SizeOfRocketClassMenu; iOption++)
+	for (RocketClassMenu option = RocketClassMenu_Name; option < SizeOfRocketClassMenu; option++)
 	{
-		IntToString(view_as<int>(iOption), strBuffer, sizeof(strBuffer));
+		IntToString(view_as<int>(option), buffer, sizeof(buffer));
 		
-		if (!IsRocketClassMenuDisabled(iOption))
+		if (!IsRocketClassMenuDisabled(option))
 		{
-			hMenu.AddItem(strBuffer, strRocketClassMenu[view_as<int>(iOption) - 1], ITEMDRAW_DEFAULT);
+			menu.AddItem(buffer, strRocketClassMenu[view_as<int>(option) - 1], ITEMDRAW_DEFAULT);
 		}
 	}
 	
-	hMenu.Display(iClient, MENU_TIME_FOREVER);
+	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int RocketClassOptionsMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1, int iParam2)
+public int RocketClassOptionsMenuHandler(Menu menu, MenuAction menuActions, int iParam1, int iParam2)
 {
-	char strBuffer[8]; hMenu.GetItem(0, strBuffer, sizeof(strBuffer));
-	int  iClass = StringToInt(strBuffer);
+	char buffer[8]; menu.GetItem(0, buffer, sizeof(buffer));
+	int  classIndex = StringToInt(buffer);
 	
-	switch (iMenuActions)
+	switch (menuActions)
 	{
 		case MenuAction_Select :
 		{
-			hMenu.GetItem(iParam2, strBuffer, sizeof(strBuffer));
+			menu.GetItem(iParam2, buffer, sizeof(buffer));
 			
-			RocketClassMenu iOption = view_as<RocketClassMenu>(StringToInt(strBuffer));
+			RocketClassMenu option = view_as<RocketClassMenu>(StringToInt(buffer));
 			
-			switch (iOption)
+			switch (option)
 			{
 				case RocketClassMenu_Behaviour :
 				{
-					DisplayRocketClassBehaviourMenu(iParam1, iClass);
+					DisplayRocketClassBehaviourMenu(iParam1, classIndex);
 				}
 				
 				case RocketClassMenu_SpriteColor :
@@ -846,7 +846,7 @@ public int RocketClassOptionsMenuHandler(Menu hMenu, MenuAction iMenuActions, in
 				
 				case RocketClassMenu_Flags :
 				{
-					DisplayRocketClassFlagsMenu(iParam1, iClass);
+					DisplayRocketClassFlagsMenu(iParam1, classIndex);
 				}
 				
 				case RocketClassMenu_BeepInterval :
@@ -958,15 +958,15 @@ public int RocketClassOptionsMenuHandler(Menu hMenu, MenuAction iMenuActions, in
 				}
 			}
 			
-			g_iClientRocketClassMenu[iParam1]  = iOption;
+			g_iClientRocketClassMenu[iParam1]  = option;
 			ClientSayHook[iParam1]          = true;
-			g_iClientRocketClass[iParam1]      = iClass;
+			g_iClientRocketClass[iParam1]      = classIndex;
 			ClientMenuSelectTime[iParam1]   = GetGameTime();
 			g_iClientSpawnerClassMenu[iParam1] = SpawnerClassMenu_None;
 			
-			if (IsClientInGame(iParam1) && !IsClientInKickQueue(iParam1) && (iOption != RocketClassMenu_Flags && iOption != RocketClassMenu_Behaviour))
+			if (IsClientInGame(iParam1) && !IsClientInKickQueue(iParam1) && (option != RocketClassMenu_Flags && option != RocketClassMenu_Behaviour))
 			{
-				DisplayRocketClassOptionsMenu(iParam1, iClass);
+				DisplayRocketClassOptionsMenu(iParam1, classIndex);
 			}
 		}
 		
@@ -977,268 +977,268 @@ public int RocketClassOptionsMenuHandler(Menu hMenu, MenuAction iMenuActions, in
 		
 		case MenuAction_End :
 		{
-			delete hMenu;
+			delete menu;
 		}
 	}
 	
 	return 0;
 }
 
-void DisplayRocketClassBehaviourMenu(int iClient, int iClass)
+void DisplayRocketClassBehaviourMenu(int client, int classIndex)
 {
-	Menu hMenu = new Menu(RocketClassBehaviourMenuHandler, MENU_ACTIONS_DEFAULT | MenuAction_DisplayItem);
+	Menu menu = new Menu(RocketClassBehaviourMenuHandler, MENU_ACTIONS_DEFAULT | MenuAction_DisplayItem);
 	
-	char strBuffer[8]; IntToString(iClass, strBuffer, sizeof(strBuffer));
-	char strTitle[64]; TFDB_GetRocketClassLongName(iClass, strTitle, sizeof(strTitle));
+	char buffer[8]; IntToString(classIndex, buffer, sizeof(buffer));
+	char title[64]; TFDB_GetRocketClassLongName(classIndex, title, sizeof(title));
 	
-	Format(strTitle, sizeof(strTitle), "%s (%s) behaviour", strTitle, strBuffer);
+	Format(title, sizeof(title), "%s (%s) behaviour", title, buffer);
 	
-	hMenu.SetTitle(strTitle);
-	hMenu.AddItem(strBuffer, "", ITEMDRAW_IGNORE);
-	hMenu.ExitBackButton = true;
+	menu.SetTitle(title);
+	menu.AddItem(buffer, "", ITEMDRAW_IGNORE);
+	menu.ExitBackButton = true;
 	
-	for (BehaviourTypes iOption = Behaviour_Unknown; iOption < Behaviour_LegacyHoming + view_as<BehaviourTypes>(1); iOption++)
+	for (BehaviourTypes option = Behaviour_Unknown; option < Behaviour_LegacyHoming + view_as<BehaviourTypes>(1); option++)
 	{
-		IntToString(view_as<int>(iOption) + 1, strBuffer, sizeof(strBuffer));
-		hMenu.AddItem(strBuffer, BehaviourToString(iOption), ITEMDRAW_DEFAULT);
+		IntToString(view_as<int>(option) + 1, buffer, sizeof(buffer));
+		menu.AddItem(buffer, BehaviourToString(option), ITEMDRAW_DEFAULT);
 	}
 	
-	hMenu.Display(iClient, MENU_TIME_FOREVER);
+	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int RocketClassBehaviourMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1, int iParam2)
+public int RocketClassBehaviourMenuHandler(Menu menu, MenuAction menuActions, int iParam1, int iParam2)
 {
-	char strBuffer[8]; hMenu.GetItem(0, strBuffer, sizeof(strBuffer));
-	int  iClass = StringToInt(strBuffer);
+	char buffer[8]; menu.GetItem(0, buffer, sizeof(buffer));
+	int  classIndex = StringToInt(buffer);
 	
-	switch (iMenuActions)
+	switch (menuActions)
 	{
 		case MenuAction_DisplayItem :
 		{
-			char strDisplay[32];
-			hMenu.GetItem(iParam2, strBuffer, sizeof(strBuffer), _, strDisplay, sizeof(strDisplay));
+			char display[32];
+			menu.GetItem(iParam2, buffer, sizeof(buffer), _, display, sizeof(display));
 			
-			BehaviourTypes iOption = view_as<BehaviourTypes>(StringToInt(strBuffer) - 1);
+			BehaviourTypes option = view_as<BehaviourTypes>(StringToInt(buffer) - 1);
 			
-			Format(strDisplay, sizeof(strDisplay), TFDB_GetRocketClassBehaviour(iClass) == iOption ? "[X] %s" : "[ ] %s", strDisplay);
+			Format(display, sizeof(display), TFDB_GetRocketClassBehaviour(classIndex) == option ? "[X] %s" : "[ ] %s", display);
 			
-			return RedrawMenuItem(strDisplay);
+			return RedrawMenuItem(display);
 		}
 		
 		case MenuAction_Select :
 		{
-			hMenu.GetItem(iParam2, strBuffer, sizeof(strBuffer));
+			menu.GetItem(iParam2, buffer, sizeof(buffer));
 			
-			BehaviourTypes iOption = view_as<BehaviourTypes>(StringToInt(strBuffer) - 1);
+			BehaviourTypes option = view_as<BehaviourTypes>(StringToInt(buffer) - 1);
 			
-			TFDB_SetRocketClassBehaviour(iClass, iOption);
+			TFDB_SetRocketClassBehaviour(classIndex, option);
 			
 			if (IsClientInGame(iParam1) && !IsClientInKickQueue(iParam1))
 			{
-				DisplayRocketClassBehaviourMenu(iParam1, iClass);
+				DisplayRocketClassBehaviourMenu(iParam1, classIndex);
 			}
 		}
 		
 		case MenuAction_Cancel :
 		{
-			if (iParam2 == MenuCancel_ExitBack) { DisplayRocketClassOptionsMenu(iParam1, iClass); }
+			if (iParam2 == MenuCancel_ExitBack) { DisplayRocketClassOptionsMenu(iParam1, classIndex); }
 		}
 		
 		case MenuAction_End :
 		{
-			delete hMenu;
+			delete menu;
 		}
 	}
 	
 	return 0;
 }
 
-void DisplayRocketClassFlagsMenu(int iClient, int iClass)
+void DisplayRocketClassFlagsMenu(int client, int classIndex)
 {
-	Menu hMenu = new Menu(RocketClassFlagsMenuHandler, MENU_ACTIONS_DEFAULT | MenuAction_DisplayItem);
+	Menu menu = new Menu(RocketClassFlagsMenuHandler, MENU_ACTIONS_DEFAULT | MenuAction_DisplayItem);
 	
-	char strClass[8]; IntToString(iClass, strClass, sizeof(strClass));
-	char strTitle[64]; TFDB_GetRocketClassLongName(iClass, strTitle, sizeof(strTitle));
+	char className[8]; IntToString(classIndex, className, sizeof(className));
+	char title[64]; TFDB_GetRocketClassLongName(classIndex, title, sizeof(title));
 	
-	Format(strTitle, sizeof(strTitle), "%s (%s) behaviour modifiers", strTitle, strClass);
+	Format(title, sizeof(title), "%s (%s) behaviour modifiers", title, className);
 	
-	hMenu.SetTitle(strTitle);
-	hMenu.AddItem(strClass, "", ITEMDRAW_IGNORE);
-	hMenu.ExitBackButton = true;
+	menu.SetTitle(title);
+	menu.AddItem(className, "", ITEMDRAW_IGNORE);
+	menu.ExitBackButton = true;
 	
-	hMenu.AddItem("1", "Elevate on deflect", ITEMDRAW_DEFAULT);
-	hMenu.AddItem("2", "Neutral rocket", ITEMDRAW_DEFAULT);
-	hMenu.AddItem("3", "Keep direction", ITEMDRAW_DEFAULT);
-	hMenu.AddItem("4", "Teamless deflects", ITEMDRAW_DEFAULT);
-	hMenu.AddItem("5", "Reset bounces", ITEMDRAW_DEFAULT);
-	hMenu.AddItem("6", "No bounce drags", ITEMDRAW_DEFAULT);
-	hMenu.AddItem("7", "Can be stolen", ITEMDRAW_DEFAULT);
-	hMenu.AddItem("8", "Steal team check", ITEMDRAW_DEFAULT);
+	menu.AddItem("1", "Elevate on deflect", ITEMDRAW_DEFAULT);
+	menu.AddItem("2", "Neutral rocket", ITEMDRAW_DEFAULT);
+	menu.AddItem("3", "Keep direction", ITEMDRAW_DEFAULT);
+	menu.AddItem("4", "Teamless deflects", ITEMDRAW_DEFAULT);
+	menu.AddItem("5", "Reset bounces", ITEMDRAW_DEFAULT);
+	menu.AddItem("6", "No bounce drags", ITEMDRAW_DEFAULT);
+	menu.AddItem("7", "Can be stolen", ITEMDRAW_DEFAULT);
+	menu.AddItem("8", "Steal team check", ITEMDRAW_DEFAULT);
 	
-	hMenu.Display(iClient, MENU_TIME_FOREVER);
+	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int RocketClassFlagsMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1, int iParam2)
+public int RocketClassFlagsMenuHandler(Menu menu, MenuAction menuActions, int iParam1, int iParam2)
 {
-	char strBuffer[8]; hMenu.GetItem(0, strBuffer, sizeof(strBuffer));
-	int  iClass = StringToInt(strBuffer);
+	char buffer[8]; menu.GetItem(0, buffer, sizeof(buffer));
+	int  classIndex = StringToInt(buffer);
 	
-	switch (iMenuActions)
+	switch (menuActions)
 	{
 		case MenuAction_DisplayItem :
 		{
-			char strDisplay[64];
-			hMenu.GetItem(iParam2, strBuffer, sizeof(strBuffer), _, strDisplay, sizeof(strDisplay));
+			char display[64];
+			menu.GetItem(iParam2, buffer, sizeof(buffer), _, display, sizeof(display));
 			
-			int iOption = StringToInt(strBuffer);
+			int option = StringToInt(buffer);
 			
-			switch (iOption)
+			switch (option)
 			{
 				case 1 :
 				{
-					Format(strDisplay, sizeof(strDisplay), TFDB_GetRocketClassFlags(iClass) & RocketFlag_ElevateOnDeflect ? "[X] %s" : "[ ] %s", strDisplay);
+					Format(display, sizeof(display), TFDB_GetRocketClassFlags(classIndex) & RocketFlag_ElevateOnDeflect ? "[X] %s" : "[ ] %s", display);
 				}
 				
 				case 2 :
 				{
-					Format(strDisplay, sizeof(strDisplay), TFDB_GetRocketClassFlags(iClass) & RocketFlag_IsNeutral ? "[X] %s" : "[ ] %s", strDisplay);
+					Format(display, sizeof(display), TFDB_GetRocketClassFlags(classIndex) & RocketFlag_IsNeutral ? "[X] %s" : "[ ] %s", display);
 				}
 				
 				case 3 :
 				{
-					Format(strDisplay, sizeof(strDisplay), TFDB_GetRocketClassFlags(iClass) & RocketFlag_KeepDirection ? "[X] %s" : "[ ] %s", strDisplay);
+					Format(display, sizeof(display), TFDB_GetRocketClassFlags(classIndex) & RocketFlag_KeepDirection ? "[X] %s" : "[ ] %s", display);
 				}
 				
 				case 4 :
 				{
-					Format(strDisplay, sizeof(strDisplay), TFDB_GetRocketClassFlags(iClass) & RocketFlag_TeamlessHits ? "[X] %s" : "[ ] %s", strDisplay);
+					Format(display, sizeof(display), TFDB_GetRocketClassFlags(classIndex) & RocketFlag_TeamlessHits ? "[X] %s" : "[ ] %s", display);
 				}
 				
 				case 5 :
 				{
-					Format(strDisplay, sizeof(strDisplay), TFDB_GetRocketClassFlags(iClass) & RocketFlag_ResetBounces ? "[X] %s" : "[ ] %s", strDisplay);
+					Format(display, sizeof(display), TFDB_GetRocketClassFlags(classIndex) & RocketFlag_ResetBounces ? "[X] %s" : "[ ] %s", display);
 				}
 				
 				case 6 :
 				{
-					Format(strDisplay, sizeof(strDisplay), TFDB_GetRocketClassFlags(iClass) & RocketFlag_NoBounceDrags ? "[X] %s" : "[ ] %s", strDisplay);
+					Format(display, sizeof(display), TFDB_GetRocketClassFlags(classIndex) & RocketFlag_NoBounceDrags ? "[X] %s" : "[ ] %s", display);
 				}
 				
 				case 7 :
 				{
-					Format(strDisplay, sizeof(strDisplay), TFDB_GetRocketClassFlags(iClass) & RocketFlag_CanBeStolen ? "[X] %s" : "[ ] %s", strDisplay);
+					Format(display, sizeof(display), TFDB_GetRocketClassFlags(classIndex) & RocketFlag_CanBeStolen ? "[X] %s" : "[ ] %s", display);
 				}
 				
 				case 8 :
 				{
-					Format(strDisplay, sizeof(strDisplay), TFDB_GetRocketClassFlags(iClass) & RocketFlag_StealTeamCheck ? "[X] %s" : "[ ] %s", strDisplay);
+					Format(display, sizeof(display), TFDB_GetRocketClassFlags(classIndex) & RocketFlag_StealTeamCheck ? "[X] %s" : "[ ] %s", display);
 				}
 			}
 			
-			return RedrawMenuItem(strDisplay);
+			return RedrawMenuItem(display);
 		}
 		
 		case MenuAction_Select :
 		{
-			hMenu.GetItem(iParam2, strBuffer, sizeof(strBuffer));
+			menu.GetItem(iParam2, buffer, sizeof(buffer));
 			
-			int iOption = StringToInt(strBuffer);
+			int option = StringToInt(buffer);
 			
-			switch (iOption)
+			switch (option)
 			{
 				case 1 :
 				{
-					TFDB_SetRocketClassFlags(iClass, TFDB_GetRocketClassFlags(iClass) ^ RocketFlag_ElevateOnDeflect);
+					TFDB_SetRocketClassFlags(classIndex, TFDB_GetRocketClassFlags(classIndex) ^ RocketFlag_ElevateOnDeflect);
 				}
 				
 				case 2 :
 				{
-					TFDB_SetRocketClassFlags(iClass, TFDB_GetRocketClassFlags(iClass) ^ RocketFlag_IsNeutral);
+					TFDB_SetRocketClassFlags(classIndex, TFDB_GetRocketClassFlags(classIndex) ^ RocketFlag_IsNeutral);
 				}
 				
 				case 3 :
 				{
-					TFDB_SetRocketClassFlags(iClass, TFDB_GetRocketClassFlags(iClass) ^ RocketFlag_KeepDirection);
+					TFDB_SetRocketClassFlags(classIndex, TFDB_GetRocketClassFlags(classIndex) ^ RocketFlag_KeepDirection);
 				}
 				
 				case 4 :
 				{
-					TFDB_SetRocketClassFlags(iClass, TFDB_GetRocketClassFlags(iClass) ^ RocketFlag_TeamlessHits);
+					TFDB_SetRocketClassFlags(classIndex, TFDB_GetRocketClassFlags(classIndex) ^ RocketFlag_TeamlessHits);
 				}
 				
 				case 5 :
 				{
-					TFDB_SetRocketClassFlags(iClass, TFDB_GetRocketClassFlags(iClass) ^ RocketFlag_ResetBounces);
+					TFDB_SetRocketClassFlags(classIndex, TFDB_GetRocketClassFlags(classIndex) ^ RocketFlag_ResetBounces);
 				}
 				
 				case 6 :
 				{
-					TFDB_SetRocketClassFlags(iClass, TFDB_GetRocketClassFlags(iClass) ^ RocketFlag_NoBounceDrags);
+					TFDB_SetRocketClassFlags(classIndex, TFDB_GetRocketClassFlags(classIndex) ^ RocketFlag_NoBounceDrags);
 				}
 				
 				case 7 :
 				{
-					TFDB_SetRocketClassFlags(iClass, TFDB_GetRocketClassFlags(iClass) ^ RocketFlag_CanBeStolen);
+					TFDB_SetRocketClassFlags(classIndex, TFDB_GetRocketClassFlags(classIndex) ^ RocketFlag_CanBeStolen);
 				}
 				
 				case 8 :
 				{
-					TFDB_SetRocketClassFlags(iClass, TFDB_GetRocketClassFlags(iClass) ^ RocketFlag_StealTeamCheck);
+					TFDB_SetRocketClassFlags(classIndex, TFDB_GetRocketClassFlags(classIndex) ^ RocketFlag_StealTeamCheck);
 				}
 			}
 			
 			if (IsClientInGame(iParam1) && !IsClientInKickQueue(iParam1))
 			{
-				DisplayRocketClassFlagsMenu(iParam1, iClass);
+				DisplayRocketClassFlagsMenu(iParam1, classIndex);
 			}
 		}
 		
 		case MenuAction_Cancel :
 		{
-			if (iParam2 == MenuCancel_ExitBack) { DisplayRocketClassOptionsMenu(iParam1, iClass); }
+			if (iParam2 == MenuCancel_ExitBack) { DisplayRocketClassOptionsMenu(iParam1, classIndex); }
 		}
 		
 		case MenuAction_End :
 		{
-			delete hMenu;
+			delete menu;
 		}
 	}
 	
 	return 0;
 }
 
-void DisplaySpawnerClassesMenu(int iClient)
+void DisplaySpawnerClassesMenu(int client)
 {
-	Menu hMenu = new Menu(SpawnerClassesMenuHandler);
+	Menu menu = new Menu(SpawnerClassesMenuHandler);
 	
-	char strBuffer[8];
+	char buffer[8];
 	
-	hMenu.SetTitle("Spawners options :");
-	hMenu.ExitBackButton = true;
+	menu.SetTitle("Spawners options :");
+	menu.ExitBackButton = true;
 	
-	for (SpawnerClassMenu iOption = SpawnerClassMenu_MaxRockets; iOption < SizeOfSpawnerClassMenu; iOption++)
+	for (SpawnerClassMenu option = SpawnerClassMenu_MaxRockets; option < SizeOfSpawnerClassMenu; option++)
 	{
-		IntToString(view_as<int>(iOption), strBuffer, sizeof(strBuffer));
+		IntToString(view_as<int>(option), buffer, sizeof(buffer));
 		
-		hMenu.AddItem(strBuffer, strSpawnerClassMenu[view_as<int>(iOption) - 1], ITEMDRAW_DEFAULT);
+		menu.AddItem(buffer, strSpawnerClassMenu[view_as<int>(option) - 1], ITEMDRAW_DEFAULT);
 	}
 	
-	hMenu.Display(iClient, MENU_TIME_FOREVER);
+	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int SpawnerClassesMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1, int iParam2)
+public int SpawnerClassesMenuHandler(Menu menu, MenuAction menuActions, int iParam1, int iParam2)
 {
-	char strBuffer[8]; hMenu.GetItem(0, strBuffer, sizeof(strBuffer));
+	char buffer[8]; menu.GetItem(0, buffer, sizeof(buffer));
 	
-	switch (iMenuActions)
+	switch (menuActions)
 	{
 		case MenuAction_Select :
 		{
-			hMenu.GetItem(iParam2, strBuffer, sizeof(strBuffer));
+			menu.GetItem(iParam2, buffer, sizeof(buffer));
 			
-			SpawnerClassMenu iOption = view_as<SpawnerClassMenu>(StringToInt(strBuffer));
+			SpawnerClassMenu option = view_as<SpawnerClassMenu>(StringToInt(buffer));
 			
-			switch (iOption)
+			switch (option)
 			{
 				case SpawnerClassMenu_MaxRockets :
 				{
@@ -1247,7 +1247,7 @@ public int SpawnerClassesMenuHandler(Menu hMenu, MenuAction iMenuActions, int iP
 					
 					ClientSayHook[iParam1]          = true;
 					ClientMenuSelectTime[iParam1]   = GetGameTime();
-					g_iClientSpawnerClassMenu[iParam1] = iOption;
+					g_iClientSpawnerClassMenu[iParam1] = option;
 				}
 				
 				case SpawnerClassMenu_Interval :
@@ -1257,7 +1257,7 @@ public int SpawnerClassesMenuHandler(Menu hMenu, MenuAction iMenuActions, int iP
 					
 					ClientSayHook[iParam1]          = true;
 					ClientMenuSelectTime[iParam1]   = GetGameTime();
-					g_iClientSpawnerClassMenu[iParam1] = iOption;
+					g_iClientSpawnerClassMenu[iParam1] = option;
 				}
 				
 				case SpawnerClassMenu_ChancesTable :
@@ -1268,7 +1268,7 @@ public int SpawnerClassesMenuHandler(Menu hMenu, MenuAction iMenuActions, int iP
 			
 			g_iClientRocketClassMenu[iParam1] = RocketClassMenu_None;
 			
-			if (IsClientInGame(iParam1) && !IsClientInKickQueue(iParam1) && iOption != SpawnerClassMenu_ChancesTable)
+			if (IsClientInGame(iParam1) && !IsClientInKickQueue(iParam1) && option != SpawnerClassMenu_ChancesTable)
 			{
 				DisplaySpawnerClassesMenu(iParam1);
 			}
@@ -1281,49 +1281,49 @@ public int SpawnerClassesMenuHandler(Menu hMenu, MenuAction iMenuActions, int iP
 		
 		case MenuAction_End :
 		{
-			delete hMenu;
+			delete menu;
 		}
 	}
 	
 	return 0;
 }
 
-void DisplaySpawnerClassChancesMenu(int iClient)
+void DisplaySpawnerClassChancesMenu(int client)
 {
-	Menu hMenu = new Menu(SpawnerClassChancesMenuHandler);
+	Menu menu = new Menu(SpawnerClassChancesMenuHandler);
 	
-	char strClass[8], strRocketClassLongName[48];
+	char className[8], rocketLongName[48];
 	
-	hMenu.SetTitle("Rocket classes spawn chances :");
-	hMenu.ExitBackButton = true;
+	menu.SetTitle("Rocket classes spawn chances :");
+	menu.ExitBackButton = true;
 	
-	for (int iClass = 0; iClass < TFDB_GetRocketClassCount(); iClass++)
+	for (int classIndex = 0; classIndex < TFDB_GetRocketClassCount(); classIndex++)
 	{
-		IntToString(iClass, strClass, sizeof(strClass));
-		TFDB_GetRocketClassLongName(iClass, strRocketClassLongName, sizeof(strRocketClassLongName));
-		Format(strRocketClassLongName, sizeof(strRocketClassLongName), "%s (Class : %s)", strRocketClassLongName, strClass);
+		IntToString(classIndex, className, sizeof(className));
+		TFDB_GetRocketClassLongName(classIndex, rocketLongName, sizeof(rocketLongName));
+		Format(rocketLongName, sizeof(rocketLongName), "%s (Class : %s)", rocketLongName, className);
 		
-		hMenu.AddItem(strClass, strRocketClassLongName, ITEMDRAW_DEFAULT);
+		menu.AddItem(className, rocketLongName, ITEMDRAW_DEFAULT);
 	}
 	
-	hMenu.Display(iClient, MENU_TIME_FOREVER);
+	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int SpawnerClassChancesMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1, int iParam2)
+public int SpawnerClassChancesMenuHandler(Menu menu, MenuAction menuActions, int iParam1, int iParam2)
 {
-	switch (iMenuActions)
+	switch (menuActions)
 	{
 		case MenuAction_Select :
 		{
-			char strClass[8];
-			hMenu.GetItem(iParam2, strClass, sizeof(strClass));
+			char className[8];
+			menu.GetItem(iParam2, className, sizeof(className));
 			
-			int iClass = StringToInt(strClass);
+			int classIndex = StringToInt(className);
 			
 			ClientSayHook[iParam1]          = true;
 			ClientMenuSelectTime[iParam1]   = GetGameTime();
 			g_iClientSpawnerClassMenu[iParam1] = SpawnerClassMenu_ChancesTable;
-			g_iClientRocketClass[iParam1]      = iClass;
+			g_iClientRocketClass[iParam1]      = classIndex;
 			
 			CPrintToChat(iParam1, "%t", "Menu_ChancesTable", CvarSayHookTimeout.IntValue);
 			CPrintToChat(iParam1, "%t", "Menu_Reset");
@@ -1341,465 +1341,465 @@ public int SpawnerClassChancesMenuHandler(Menu hMenu, MenuAction iMenuActions, i
 		
 		case MenuAction_End :
 		{
-			delete hMenu;
+			delete menu;
 		}
 	}
 	
 	return 0;
 }
 
-public Action OnClientSayCommand(int iClient, const char[] strCommand, const char[] strArgs)
+public Action OnClientSayCommand(int client, const char[] strCommand, const char[] args)
 {
-	if (!ClientSayHook[iClient]) return Plugin_Continue;
+	if (!ClientSayHook[client]) return Plugin_Continue;
 	
-	ClientSayHook[iClient] = false;
+	ClientSayHook[client] = false;
 	
-	if ((GetGameTime() - ClientMenuSelectTime[iClient]) > CvarSayHookTimeout.FloatValue) return Plugin_Continue;
+	if ((GetGameTime() - ClientMenuSelectTime[client]) > CvarSayHookTimeout.FloatValue) return Plugin_Continue;
 	
 	if (!((strcmp(strCommand, "say") == 0) || (strcmp(strCommand, "say_team") == 0))) return Plugin_Continue;
 	
-	RocketClassMenu  iRocketClassOption  = g_iClientRocketClassMenu[iClient];
-	SpawnerClassMenu iSpawnerClassOption = g_iClientSpawnerClassMenu[iClient];
-	int iRocketClass  = g_iClientRocketClass[iClient];
+	RocketClassMenu  iRocketClassOption  = g_iClientRocketClassMenu[client];
+	SpawnerClassMenu iSpawnerClassOption = g_iClientSpawnerClassMenu[client];
+	int rocketClass  = g_iClientRocketClass[client];
 	
 	switch (iRocketClassOption)
 	{
 		case RocketClassMenu_SpriteColor :
 		{
-			if ((strlen(strArgs) == 6) && (StrContains(strArgs, " ") == -1))
+			if ((strlen(args) == 6) && (StrContains(args, " ") == -1))
 			{
-				char strColor[16];
-				int iRGB[3]; HexToRGB(strArgs, iRGB);
+				char color[16];
+				int rgb[3]; HexToRGB(args, rgb);
 				
-				FormatEx(strColor, sizeof(strColor), "%i %i %i", iRGB[0], iRGB[1], iRGB[2]);
+				FormatEx(color, sizeof(color), "%i %i %i", rgb[0], rgb[1], rgb[2]);
 				
-				TFDB_SetRocketClassSpriteColor(iRocketClass, strColor);
+				TFDB_SetRocketClassSpriteColor(rocketClass, color);
 				
-				LogAction(iClient, -1, "\"%L\" changed rocket class sprite trail color to #%s", iClient, strArgs);
-				CPrintToChat(iClient, "\x01%t\x01", "Menu_ChangedSpriteColor", "\x07", strArgs, strArgs);
+				LogAction(client, -1, "\"%L\" changed rocket class sprite trail color to #%s", client, args);
+				CPrintToChat(client, "\x01%t\x01", "Menu_ChangedSpriteColor", "\x07", args, args);
 			}
-			else if (StringToInt(strArgs) != -1)
+			else if (StringToInt(args) != -1)
 			{
-				char strBuffer[3][8];
-				ExplodeString(strArgs, " ", strBuffer, sizeof(strBuffer), sizeof(strBuffer[]));
+				char buffer[3][8];
+				ExplodeString(args, " ", buffer, sizeof(buffer), sizeof(buffer[]));
 				
-				int iRGB[3];
-				iRGB[0] = StringToInt(strBuffer[0]);
-				iRGB[1] = StringToInt(strBuffer[1]);
-				iRGB[2] = StringToInt(strBuffer[2]);
+				int rgb[3];
+				rgb[0] = StringToInt(buffer[0]);
+				rgb[1] = StringToInt(buffer[1]);
+				rgb[2] = StringToInt(buffer[2]);
 				
-				char strColor[16]; RGBToHex(iRGB, strColor, sizeof(strColor));
+				char color[16]; RGBToHex(rgb, color, sizeof(color));
 				
-				TFDB_SetRocketClassSpriteColor(iRocketClass, strArgs);
+				TFDB_SetRocketClassSpriteColor(rocketClass, args);
 				
-				LogAction(iClient, -1, "\"%L\" changed rocket class sprite trail color to #%s", iClient, strColor);
-				CPrintToChat(iClient, "\x01%t\x01", "Menu_ChangedSpriteColor", "\x07", strColor, strColor);
+				LogAction(client, -1, "\"%L\" changed rocket class sprite trail color to #%s", client, color);
+				CPrintToChat(client, "\x01%t\x01", "Menu_ChangedSpriteColor", "\x07", color, color);
 			}
 			else
 			{
-				char strBuffer[3][8];
-				ExplodeString(g_eSavedRocketClasses[iRocketClass].SpriteColor, " ", strBuffer, sizeof(strBuffer), sizeof(strBuffer[]));
+				char buffer[3][8];
+				ExplodeString(g_eSavedRocketClasses[rocketClass].SpriteColor, " ", buffer, sizeof(buffer), sizeof(buffer[]));
 				
-				int iRGB[3];
-				iRGB[0] = StringToInt(strBuffer[0]);
-				iRGB[1] = StringToInt(strBuffer[1]);
-				iRGB[2] = StringToInt(strBuffer[2]);
+				int rgb[3];
+				rgb[0] = StringToInt(buffer[0]);
+				rgb[1] = StringToInt(buffer[1]);
+				rgb[2] = StringToInt(buffer[2]);
 				
-				char strHex[16]; RGBToHex(iRGB, strHex, sizeof(strHex));
+				char hex[16]; RGBToHex(rgb, hex, sizeof(hex));
 				
-				TFDB_SetRocketClassSpriteColor(iRocketClass, g_eSavedRocketClasses[iRocketClass].SpriteColor);
+				TFDB_SetRocketClassSpriteColor(rocketClass, g_eSavedRocketClasses[rocketClass].SpriteColor);
 				
-				LogAction(iClient, -1, "\"%L\" reset rocket class sprite trail color to #%s", iClient, strHex);
-				CPrintToChat(iClient, "\x01%t\x01", "Menu_ResetSpriteColor", "\x07", strHex, strHex);
+				LogAction(client, -1, "\"%L\" reset rocket class sprite trail color to #%s", client, hex);
+				CPrintToChat(client, "\x01%t\x01", "Menu_ResetSpriteColor", "\x07", hex, hex);
 			}
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_SpriteLifetime :
 		{
-			float fLifetime = StringToFloat(strArgs);
+			float fLifetime = StringToFloat(args);
 			
-			TFDB_SetRocketClassSpriteLifetime(iRocketClass, fLifetime == -1.0 ? g_eSavedRocketClasses[iRocketClass].SpriteLifetime : fLifetime);
+			TFDB_SetRocketClassSpriteLifetime(rocketClass, fLifetime == -1.0 ? g_eSavedRocketClasses[rocketClass].SpriteLifetime : fLifetime);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class sprite trail duration to %.2f", iClient, fLifetime);
-			CPrintToChat(iClient, "%t", "Menu_ChangedSpriteLifetime", fLifetime);
+			LogAction(client, -1, "\"%L\" changed rocket class sprite trail duration to %.2f", client, fLifetime);
+			CPrintToChat(client, "%t", "Menu_ChangedSpriteLifetime", fLifetime);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_SpriteStartWidth :
 		{
-			float fWidth = StringToFloat(strArgs);
+			float width = StringToFloat(args);
 			
-			TFDB_SetRocketClassSpriteStartWidth(iRocketClass, fWidth == -1.0 ? g_eSavedRocketClasses[iRocketClass].SpriteStartWidth : fWidth);
+			TFDB_SetRocketClassSpriteStartWidth(rocketClass, width == -1.0 ? g_eSavedRocketClasses[rocketClass].SpriteStartWidth : width);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class sprite trail start width to %.2f", iClient, fWidth);
-			CPrintToChat(iClient, "%t", "Menu_ChangedSpriteStartWidth", fWidth);
+			LogAction(client, -1, "\"%L\" changed rocket class sprite trail start width to %.2f", client, width);
+			CPrintToChat(client, "%t", "Menu_ChangedSpriteStartWidth", width);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_SpriteEndWidth :
 		{
-			float fWidth = StringToFloat(strArgs);
+			float width = StringToFloat(args);
 			
-			TFDB_SetRocketClassSpriteEndWidth(iRocketClass, fWidth == -1.0 ? g_eSavedRocketClasses[iRocketClass].SpriteEndWidth : fWidth);
+			TFDB_SetRocketClassSpriteEndWidth(rocketClass, width == -1.0 ? g_eSavedRocketClasses[rocketClass].SpriteEndWidth : width);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class sprite trail end width to %.2f", iClient, fWidth);
-			CPrintToChat(iClient, "%t", "Menu_ChangedSpriteEndWidth", fWidth);
+			LogAction(client, -1, "\"%L\" changed rocket class sprite trail end width to %.2f", client, width);
+			CPrintToChat(client, "%t", "Menu_ChangedSpriteEndWidth", width);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_BeepInterval :
 		{
-			float fInterval = StringToFloat(strArgs);
+			float interval = StringToFloat(args);
 			
-			if (fInterval == -1.0)
+			if (interval == -1.0)
 			{
-				g_eSavedRocketClasses[iRocketClass].Flags & RocketFlag_PlayBeepSound ?
-				TFDB_SetRocketClassFlags(iRocketClass, TFDB_GetRocketClassFlags(iRocketClass) | RocketFlag_PlayBeepSound) :
-				TFDB_SetRocketClassFlags(iRocketClass, TFDB_GetRocketClassFlags(iRocketClass) & ~RocketFlag_PlayBeepSound);
+				g_eSavedRocketClasses[rocketClass].Flags & RocketFlag_PlayBeepSound ?
+				TFDB_SetRocketClassFlags(rocketClass, TFDB_GetRocketClassFlags(rocketClass) | RocketFlag_PlayBeepSound) :
+				TFDB_SetRocketClassFlags(rocketClass, TFDB_GetRocketClassFlags(rocketClass) & ~RocketFlag_PlayBeepSound);
 				
-				TFDB_SetRocketClassBeepInterval(iRocketClass, g_eSavedRocketClasses[iRocketClass].BeepInterval);
+				TFDB_SetRocketClassBeepInterval(rocketClass, g_eSavedRocketClasses[rocketClass].BeepInterval);
 			}
-			else if (fInterval == 0.0)
+			else if (interval == 0.0)
 			{
-				TFDB_SetRocketClassFlags(iRocketClass, TFDB_GetRocketClassFlags(iRocketClass) & ~RocketFlag_PlayBeepSound);
+				TFDB_SetRocketClassFlags(rocketClass, TFDB_GetRocketClassFlags(rocketClass) & ~RocketFlag_PlayBeepSound);
 			}
 			else
 			{
-				TFDB_SetRocketClassFlags(iRocketClass, TFDB_GetRocketClassFlags(iRocketClass) | RocketFlag_PlayBeepSound);
-				TFDB_SetRocketClassBeepInterval(iRocketClass, fInterval);
+				TFDB_SetRocketClassFlags(rocketClass, TFDB_GetRocketClassFlags(rocketClass) | RocketFlag_PlayBeepSound);
+				TFDB_SetRocketClassBeepInterval(rocketClass, interval);
 			}
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class beep interval to %.2f", iClient, fInterval);
-			CPrintToChat(iClient, "%t", "Menu_ChangedBeepInterval", fInterval);
+			LogAction(client, -1, "\"%L\" changed rocket class beep interval to %.2f", client, interval);
+			CPrintToChat(client, "%t", "Menu_ChangedBeepInterval", interval);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_CritChance :
 		{
-			float fChance = StringToFloat(strArgs);
+			float fChance = StringToFloat(args);
 			
-			TFDB_SetRocketClassCritChance(iRocketClass, fChance == -1.0 ? g_eSavedRocketClasses[iRocketClass].CritChance : fChance);
+			TFDB_SetRocketClassCritChance(rocketClass, fChance == -1.0 ? g_eSavedRocketClasses[rocketClass].CritChance : fChance);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class critical chance to %.2f", iClient, fChance);
-			CPrintToChat(iClient, "%t", "Menu_ChangedCritChance", fChance);
+			LogAction(client, -1, "\"%L\" changed rocket class critical chance to %.2f", client, fChance);
+			CPrintToChat(client, "%t", "Menu_ChangedCritChance", fChance);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_Damage :
 		{
-			float fDamage = StringToFloat(strArgs);
+			float damage = StringToFloat(args);
 			
-			TFDB_SetRocketClassDamage(iRocketClass, fDamage == -1.0 ? g_eSavedRocketClasses[iRocketClass].Damage : fDamage);
+			TFDB_SetRocketClassDamage(rocketClass, damage == -1.0 ? g_eSavedRocketClasses[rocketClass].Damage : damage);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class damage to %.2f", iClient, fDamage);
-			CPrintToChat(iClient, "%t", "Menu_ChangedDamage", fDamage);
+			LogAction(client, -1, "\"%L\" changed rocket class damage to %.2f", client, damage);
+			CPrintToChat(client, "%t", "Menu_ChangedDamage", damage);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_DamageIncrement :
 		{
-			float fDamage = StringToFloat(strArgs);
+			float damage = StringToFloat(args);
 			
-			TFDB_SetRocketClassDamageIncrement(iRocketClass, fDamage == -1.0 ? g_eSavedRocketClasses[iRocketClass].DamageIncrement : fDamage);
+			TFDB_SetRocketClassDamageIncrement(rocketClass, damage == -1.0 ? g_eSavedRocketClasses[rocketClass].DamageIncrement : damage);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class damage increment to %.2f", iClient, fDamage);
-			CPrintToChat(iClient, "%t", "Menu_ChangedDamageIncrement", fDamage);
+			LogAction(client, -1, "\"%L\" changed rocket class damage increment to %.2f", client, damage);
+			CPrintToChat(client, "%t", "Menu_ChangedDamageIncrement", damage);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_Speed :
 		{
-			float fSpeed = StringToFloat(strArgs);
+			float speed = StringToFloat(args);
 			
-			TFDB_SetRocketClassSpeed(iRocketClass, fSpeed == -1.0 ? g_eSavedRocketClasses[iRocketClass].Speed : fSpeed);
+			TFDB_SetRocketClassSpeed(rocketClass, speed == -1.0 ? g_eSavedRocketClasses[rocketClass].Speed : speed);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class speed to %.2f", iClient, fSpeed);
-			CPrintToChat(iClient, "%t", "Menu_ChangedSpeed", fSpeed);
+			LogAction(client, -1, "\"%L\" changed rocket class speed to %.2f", client, speed);
+			CPrintToChat(client, "%t", "Menu_ChangedSpeed", speed);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_SpeedIncrement :
 		{
-			float fSpeed = StringToFloat(strArgs);
+			float speed = StringToFloat(args);
 			
-			TFDB_SetRocketClassSpeedIncrement(iRocketClass, fSpeed == -1.0 ? g_eSavedRocketClasses[iRocketClass].SpeedIncrement : fSpeed);
+			TFDB_SetRocketClassSpeedIncrement(rocketClass, speed == -1.0 ? g_eSavedRocketClasses[rocketClass].SpeedIncrement : speed);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class speed increment to %.2f", iClient, fSpeed);
-			CPrintToChat(iClient, "%t", "Menu_ChangedSpeedIncrement", fSpeed);
+			LogAction(client, -1, "\"%L\" changed rocket class speed increment to %.2f", client, speed);
+			CPrintToChat(client, "%t", "Menu_ChangedSpeedIncrement", speed);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_SpeedLimit :
 		{
-			float fSpeed = StringToFloat(strArgs);
+			float speed = StringToFloat(args);
 			
-			if (fSpeed == -1.0)
+			if (speed == -1.0)
 			{
-				g_eSavedRocketClasses[iRocketClass].Flags & RocketFlag_IsSpeedLimited ?
-				TFDB_SetRocketClassFlags(iRocketClass, TFDB_GetRocketClassFlags(iRocketClass) | RocketFlag_IsSpeedLimited) :
-				TFDB_SetRocketClassFlags(iRocketClass, TFDB_GetRocketClassFlags(iRocketClass) & ~RocketFlag_IsSpeedLimited);
+				g_eSavedRocketClasses[rocketClass].Flags & RocketFlag_IsSpeedLimited ?
+				TFDB_SetRocketClassFlags(rocketClass, TFDB_GetRocketClassFlags(rocketClass) | RocketFlag_IsSpeedLimited) :
+				TFDB_SetRocketClassFlags(rocketClass, TFDB_GetRocketClassFlags(rocketClass) & ~RocketFlag_IsSpeedLimited);
 				
-				TFDB_SetRocketClassSpeedLimit(iRocketClass, g_eSavedRocketClasses[iRocketClass].SpeedLimit);
+				TFDB_SetRocketClassSpeedLimit(rocketClass, g_eSavedRocketClasses[rocketClass].SpeedLimit);
 			}
-			else if (fSpeed == 0.0)
+			else if (speed == 0.0)
 			{
-				TFDB_SetRocketClassFlags(iRocketClass, TFDB_GetRocketClassFlags(iRocketClass) & ~RocketFlag_IsSpeedLimited);
+				TFDB_SetRocketClassFlags(rocketClass, TFDB_GetRocketClassFlags(rocketClass) & ~RocketFlag_IsSpeedLimited);
 			}
 			else
 			{
-				TFDB_SetRocketClassFlags(iRocketClass, TFDB_GetRocketClassFlags(iRocketClass) | RocketFlag_IsSpeedLimited);
-				TFDB_SetRocketClassSpeedLimit(iRocketClass, fSpeed);
+				TFDB_SetRocketClassFlags(rocketClass, TFDB_GetRocketClassFlags(rocketClass) | RocketFlag_IsSpeedLimited);
+				TFDB_SetRocketClassSpeedLimit(rocketClass, speed);
 			}
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class speed limit to %.2f", iClient, fSpeed);
-			CPrintToChat(iClient, "%t", "Menu_ChangedSpeedLimit", fSpeed);
+			LogAction(client, -1, "\"%L\" changed rocket class speed limit to %.2f", client, speed);
+			CPrintToChat(client, "%t", "Menu_ChangedSpeedLimit", speed);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_TurnRate :
 		{
-			float fTurnRate = StringToFloat(strArgs);
+			float turnRate = StringToFloat(args);
 			
-			TFDB_SetRocketClassTurnRate(iRocketClass, fTurnRate == -1.0 ? g_eSavedRocketClasses[iRocketClass].TurnRate : fTurnRate);
+			TFDB_SetRocketClassTurnRate(rocketClass, turnRate == -1.0 ? g_eSavedRocketClasses[rocketClass].TurnRate : turnRate);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class turn rate to %.2f", iClient, fTurnRate);
-			CPrintToChat(iClient, "%t", "Menu_ChangedTurnRate", fTurnRate);
+			LogAction(client, -1, "\"%L\" changed rocket class turn rate to %.2f", client, turnRate);
+			CPrintToChat(client, "%t", "Menu_ChangedTurnRate", turnRate);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_TurnRateIncrement :
 		{
-			float fTurnRate = StringToFloat(strArgs);
+			float turnRate = StringToFloat(args);
 			
-			TFDB_SetRocketClassTurnRateIncrement(iRocketClass, fTurnRate == -1.0 ? g_eSavedRocketClasses[iRocketClass].TurnRateIncrement : fTurnRate);
+			TFDB_SetRocketClassTurnRateIncrement(rocketClass, turnRate == -1.0 ? g_eSavedRocketClasses[rocketClass].TurnRateIncrement : turnRate);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class turn rate increment to %.2f", iClient, fTurnRate);
-			CPrintToChat(iClient, "%t", "Menu_ChangedTurnRateIncrement", fTurnRate);
+			LogAction(client, -1, "\"%L\" changed rocket class turn rate increment to %.2f", client, turnRate);
+			CPrintToChat(client, "%t", "Menu_ChangedTurnRateIncrement", turnRate);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_TurnRateLimit :
 		{
-			float fTurnRate = StringToFloat(strArgs);
+			float turnRate = StringToFloat(args);
 			
-			if (fTurnRate == -1.0)
+			if (turnRate == -1.0)
 			{
-				g_eSavedRocketClasses[iRocketClass].Flags & RocketFlag_IsTRLimited ?
-				TFDB_SetRocketClassFlags(iRocketClass, TFDB_GetRocketClassFlags(iRocketClass) | RocketFlag_IsTRLimited) :
-				TFDB_SetRocketClassFlags(iRocketClass, TFDB_GetRocketClassFlags(iRocketClass) & ~RocketFlag_IsTRLimited);
+				g_eSavedRocketClasses[rocketClass].Flags & RocketFlag_IsTRLimited ?
+				TFDB_SetRocketClassFlags(rocketClass, TFDB_GetRocketClassFlags(rocketClass) | RocketFlag_IsTRLimited) :
+				TFDB_SetRocketClassFlags(rocketClass, TFDB_GetRocketClassFlags(rocketClass) & ~RocketFlag_IsTRLimited);
 				
-				TFDB_SetRocketClassTurnRateLimit(iRocketClass, g_eSavedRocketClasses[iRocketClass].TurnRateLimit);
+				TFDB_SetRocketClassTurnRateLimit(rocketClass, g_eSavedRocketClasses[rocketClass].TurnRateLimit);
 			}
-			else if (fTurnRate == 0.0)
+			else if (turnRate == 0.0)
 			{
-				TFDB_SetRocketClassFlags(iRocketClass, TFDB_GetRocketClassFlags(iRocketClass) & ~RocketFlag_IsTRLimited);
+				TFDB_SetRocketClassFlags(rocketClass, TFDB_GetRocketClassFlags(rocketClass) & ~RocketFlag_IsTRLimited);
 			}
 			else
 			{
-				TFDB_SetRocketClassFlags(iRocketClass, TFDB_GetRocketClassFlags(iRocketClass) | RocketFlag_IsTRLimited);
-				TFDB_SetRocketClassTurnRateLimit(iRocketClass, fTurnRate);
+				TFDB_SetRocketClassFlags(rocketClass, TFDB_GetRocketClassFlags(rocketClass) | RocketFlag_IsTRLimited);
+				TFDB_SetRocketClassTurnRateLimit(rocketClass, turnRate);
 			}
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class turn rate limit to %.2f", iClient, fTurnRate);
-			CPrintToChat(iClient, "%t", "Menu_ChangedTurnRateLimit", fTurnRate);
+			LogAction(client, -1, "\"%L\" changed rocket class turn rate limit to %.2f", client, turnRate);
+			CPrintToChat(client, "%t", "Menu_ChangedTurnRateLimit", turnRate);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_ElevationRate :
 		{
-			float fElevation = StringToFloat(strArgs);
+			float fElevation = StringToFloat(args);
 			
-			TFDB_SetRocketClassElevationRate(iRocketClass, fElevation == -1.0 ? g_eSavedRocketClasses[iRocketClass].ElevationRate : fElevation);
+			TFDB_SetRocketClassElevationRate(rocketClass, fElevation == -1.0 ? g_eSavedRocketClasses[rocketClass].ElevationRate : fElevation);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class elevation rate to %.2f", iClient, fElevation);
-			CPrintToChat(iClient, "%t", "Menu_ChangedElevationRate", fElevation);
+			LogAction(client, -1, "\"%L\" changed rocket class elevation rate to %.2f", client, fElevation);
+			CPrintToChat(client, "%t", "Menu_ChangedElevationRate", fElevation);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_ElevationLimit :
 		{
-			float fElevation = StringToFloat(strArgs);
+			float fElevation = StringToFloat(args);
 			
-			TFDB_SetRocketClassElevationLimit(iRocketClass, fElevation == -1.0 ? g_eSavedRocketClasses[iRocketClass].ElevationLimit : fElevation);
+			TFDB_SetRocketClassElevationLimit(rocketClass, fElevation == -1.0 ? g_eSavedRocketClasses[rocketClass].ElevationLimit : fElevation);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class elevation limit to %.2f", iClient, fElevation);
-			CPrintToChat(iClient, "%t", "Menu_ChangedElevationLimit", fElevation);
+			LogAction(client, -1, "\"%L\" changed rocket class elevation limit to %.2f", client, fElevation);
+			CPrintToChat(client, "%t", "Menu_ChangedElevationLimit", fElevation);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_RocketsModifier :
 		{
-			float fModifier = StringToFloat(strArgs);
+			float modifier = StringToFloat(args);
 			
-			TFDB_SetRocketClassRocketsModifier(iRocketClass, fModifier == -1.0 ? g_eSavedRocketClasses[iRocketClass].RocketsModifier : fModifier);
+			TFDB_SetRocketClassRocketsModifier(rocketClass, modifier == -1.0 ? g_eSavedRocketClasses[rocketClass].RocketsModifier : modifier);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class fired rockets modifier to %.2f", iClient, fModifier);
-			CPrintToChat(iClient, "%t", "Menu_ChangedRocketsModifier", fModifier);
+			LogAction(client, -1, "\"%L\" changed rocket class fired rockets modifier to %.2f", client, modifier);
+			CPrintToChat(client, "%t", "Menu_ChangedRocketsModifier", modifier);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_PlayerModifier :
 		{
-			float fModifier = StringToFloat(strArgs);
+			float modifier = StringToFloat(args);
 			
-			TFDB_SetRocketClassPlayerModifier(iRocketClass, fModifier == -1.0 ? g_eSavedRocketClasses[iRocketClass].PlayerModifier : fModifier);
+			TFDB_SetRocketClassPlayerModifier(rocketClass, modifier == -1.0 ? g_eSavedRocketClasses[rocketClass].PlayerModifier : modifier);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class player count modifier to %.2f", iClient, fModifier);
-			CPrintToChat(iClient, "%t", "Menu_ChangedPlayerModifier", fModifier);
+			LogAction(client, -1, "\"%L\" changed rocket class player count modifier to %.2f", client, modifier);
+			CPrintToChat(client, "%t", "Menu_ChangedPlayerModifier", modifier);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_ControlDelay :
 		{
-			float fDelay = StringToFloat(strArgs);
+			float fDelay = StringToFloat(args);
 			
-			TFDB_SetRocketClassControlDelay(iRocketClass, fDelay == -1.0 ? g_eSavedRocketClasses[iRocketClass].ControlDelay : fDelay);
+			TFDB_SetRocketClassControlDelay(rocketClass, fDelay == -1.0 ? g_eSavedRocketClasses[rocketClass].ControlDelay : fDelay);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class control delay to %.2f", iClient, fDelay);
-			CPrintToChat(iClient, "%t", "Menu_ChangedControlDelay", fDelay);
+			LogAction(client, -1, "\"%L\" changed rocket class control delay to %.2f", client, fDelay);
+			CPrintToChat(client, "%t", "Menu_ChangedControlDelay", fDelay);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_TargetWeight :
 		{
-			float fWeight = StringToFloat(strArgs);
+			float fWeight = StringToFloat(args);
 			
-			TFDB_SetRocketClassTargetWeight(iRocketClass, fWeight == -1.0 ? g_eSavedRocketClasses[iRocketClass].TargetWeight : fWeight);
+			TFDB_SetRocketClassTargetWeight(rocketClass, fWeight == -1.0 ? g_eSavedRocketClasses[rocketClass].TargetWeight : fWeight);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class target weight to %.2f", iClient, fWeight);
-			CPrintToChat(iClient, "%t", "Menu_ChangedTargetWeight", fWeight);
+			LogAction(client, -1, "\"%L\" changed rocket class target weight to %.2f", client, fWeight);
+			CPrintToChat(client, "%t", "Menu_ChangedTargetWeight", fWeight);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_MaxBounces :
 		{
-			int iBounces = StringToInt(strArgs);
+			int iBounces = StringToInt(args);
 			
-			TFDB_SetRocketClassMaxBounces(iRocketClass, iBounces == -1 ? g_eSavedRocketClasses[iRocketClass].MaxBounces : iBounces);
+			TFDB_SetRocketClassMaxBounces(rocketClass, iBounces == -1 ? g_eSavedRocketClasses[rocketClass].MaxBounces : iBounces);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class maximum bounces to %i", iClient, iBounces);
-			CPrintToChat(iClient, "%t", "Menu_ChangedMaxBounces", iBounces);
+			LogAction(client, -1, "\"%L\" changed rocket class maximum bounces to %i", client, iBounces);
+			CPrintToChat(client, "%t", "Menu_ChangedMaxBounces", iBounces);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case RocketClassMenu_BounceScale :
 		{
-			float fScale = StringToFloat(strArgs);
+			float fScale = StringToFloat(args);
 			
-			TFDB_SetRocketClassBounceScale(iRocketClass, fScale == -1.0 ? g_eSavedRocketClasses[iRocketClass].BounceScale : fScale);
+			TFDB_SetRocketClassBounceScale(rocketClass, fScale == -1.0 ? g_eSavedRocketClasses[rocketClass].BounceScale : fScale);
 			
-			LogAction(iClient, -1, "\"%L\" changed rocket class bounce scale to %.2f", iClient, fScale);
-			CPrintToChat(iClient, "%t", "Menu_ChangedBounceScale", fScale);
+			LogAction(client, -1, "\"%L\" changed rocket class bounce scale to %.2f", client, fScale);
+			CPrintToChat(client, "%t", "Menu_ChangedBounceScale", fScale);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
@@ -1809,66 +1809,66 @@ public Action OnClientSayCommand(int iClient, const char[] strCommand, const cha
 	{
 		case SpawnerClassMenu_MaxRockets :
 		{
-			int iCount = StringToInt(strArgs);
+			int iCount = StringToInt(args);
 			
-			for (int iIndex = 0; iIndex < TFDB_GetSpawnersCount(); iIndex++)
+			for (int index = 0; index < TFDB_GetSpawnersCount(); index++)
 			{
-				TFDB_SetSpawnersMaxRockets(iIndex, iCount == -1 ? g_eSavedSpawnerClasses[iIndex].MaxRockets : iCount);
+				TFDB_SetSpawnersMaxRockets(index, iCount == -1 ? g_eSavedSpawnerClasses[index].MaxRockets : iCount);
 			}
 			
-			LogAction(iClient, -1, "\"%L\" changed spawners maximum rockets to %i", iClient, iCount);
-			CPrintToChat(iClient, "%t", "Menu_ChangedMaxRockets", iCount);
+			LogAction(client, -1, "\"%L\" changed spawners maximum rockets to %i", client, iCount);
+			CPrintToChat(client, "%t", "Menu_ChangedMaxRockets", iCount);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case SpawnerClassMenu_Interval :
 		{
-			float fInterval = StringToFloat(strArgs);
+			float interval = StringToFloat(args);
 			
-			for (int iIndex = 0; iIndex < TFDB_GetSpawnersCount(); iIndex++)
+			for (int index = 0; index < TFDB_GetSpawnersCount(); index++)
 			{
-				TFDB_SetSpawnersInterval(iIndex, fInterval == -1.0 ? g_eSavedSpawnerClasses[iIndex].Interval : fInterval);
+				TFDB_SetSpawnersInterval(index, interval == -1.0 ? g_eSavedSpawnerClasses[index].Interval : interval);
 			}
 			
-			LogAction(iClient, -1, "\"%L\" changed spawners rocket spawn interval to %.2f", iClient, fInterval);
-			CPrintToChat(iClient, "%t", "Menu_ChangedInterval", fInterval);
+			LogAction(client, -1, "\"%L\" changed spawners rocket spawn interval to %.2f", client, interval);
+			CPrintToChat(client, "%t", "Menu_ChangedInterval", interval);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
 		
 		case SpawnerClassMenu_ChancesTable :
 		{
-			int iChances = StringToInt(strArgs);
+			int iChances = StringToInt(args);
 			
-			for (int iIndex = 0; iIndex < TFDB_GetSpawnersCount(); iIndex++)
+			for (int index = 0; index < TFDB_GetSpawnersCount(); index++)
 			{
-				ArrayList hTable = TFDB_GetSpawnersChancesTable(iIndex);
+				ArrayList hTable = TFDB_GetSpawnersChancesTable(index);
 				
-				if (iRocketClass < hTable.Length)
+				if (rocketClass < hTable.Length)
 				{
-					hTable.Set(iRocketClass, iChances == -1 ? g_eSavedSpawnerClasses[iIndex].ChancesTable.Get(iRocketClass) : iChances);
+					hTable.Set(rocketClass, iChances == -1 ? g_eSavedSpawnerClasses[index].ChancesTable.Get(rocketClass) : iChances);
 				}
 				
-				TFDB_SetSpawnersChancesTable(iIndex, hTable);
+				TFDB_SetSpawnersChancesTable(index, hTable);
 				
 				delete hTable;
 			}
 			
-			LogAction(iClient, -1, "\"%L\" changed spawners rocket class chances to %i", iClient, iChances);
-			CPrintToChat(iClient, "%t", "Menu_ChangedChancesTable", iChances);
+			LogAction(client, -1, "\"%L\" changed spawners rocket class chances to %i", client, iChances);
+			CPrintToChat(client, "%t", "Menu_ChangedChancesTable", iChances);
 			
-			g_iClientRocketClassMenu[iClient]  = RocketClassMenu_None;
-			g_iClientSpawnerClassMenu[iClient] = SpawnerClassMenu_None;
-			g_iClientRocketClass[iClient]  = -1;
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
 			
 			return Plugin_Stop;
 		}
@@ -1907,56 +1907,56 @@ void ParseConfigurations(const char[] strConfigFile)
 void ParseClasses(KeyValues kvConfig)
 {
 	char strName[64];
-	char strBuffer[256];
+	char buffer[256];
 	
 	kvConfig.GotoFirstSubKey();
 	do
 	{
-		int iIndex = g_iRocketClassCount;
-		RocketFlags iFlags;
+		int index = g_iRocketClassCount;
+		RocketFlags flags;
 		TrailFlags iTrailFlags;
 		
-		kvConfig.GetSectionName(strName, sizeof(strName));        strcopy(g_eSavedRocketClasses[iIndex].Name, 16, strName);
-		kvConfig.GetString("name", strBuffer, sizeof(strBuffer)); strcopy(g_eSavedRocketClasses[iIndex].LongName, 32, strBuffer);
+		kvConfig.GetSectionName(strName, sizeof(strName));        strcopy(g_eSavedRocketClasses[index].Name, 16, strName);
+		kvConfig.GetString("name", buffer, sizeof(buffer)); strcopy(g_eSavedRocketClasses[index].LongName, 32, buffer);
 		
-		if (kvConfig.GetString("model", strBuffer, sizeof(strBuffer)))
+		if (kvConfig.GetString("model", buffer, sizeof(buffer)))
 		{
-			strcopy(g_eSavedRocketClasses[iIndex].Model, PLATFORM_MAX_PATH, strBuffer);
+			strcopy(g_eSavedRocketClasses[index].Model, PLATFORM_MAX_PATH, buffer);
 			
-			if (g_eSavedRocketClasses[iIndex].Model[0])
+			if (g_eSavedRocketClasses[index].Model[0])
 			{
-				iFlags |= RocketFlag_CustomModel;
+				flags |= RocketFlag_CustomModel;
 				
-				if (kvConfig.GetNum("is animated", 0)) iFlags |= RocketFlag_IsAnimated;
+				if (kvConfig.GetNum("is animated", 0)) flags |= RocketFlag_IsAnimated;
 			}
 		}
 		
-		if (kvConfig.GetString("trail particle", strBuffer, sizeof(strBuffer)))
+		if (kvConfig.GetString("trail particle", buffer, sizeof(buffer)))
 		{
-			strcopy(g_eSavedRocketClasses[iIndex].Trail, sizeof(g_eSavedRocketClasses[].Trail), strBuffer);
+			strcopy(g_eSavedRocketClasses[index].Trail, sizeof(g_eSavedRocketClasses[].Trail), buffer);
 			
-			if (g_eSavedRocketClasses[iIndex].Trail[0])
+			if (g_eSavedRocketClasses[index].Trail[0])
 			{
 				iTrailFlags |= TrailFlag_CustomTrail;
 			}
 		}
 		
-		if (kvConfig.GetString("trail sprite", strBuffer, sizeof(strBuffer)))
+		if (kvConfig.GetString("trail sprite", buffer, sizeof(buffer)))
 		{
-			strcopy(g_eSavedRocketClasses[iIndex].Sprite, PLATFORM_MAX_PATH, strBuffer);
+			strcopy(g_eSavedRocketClasses[index].Sprite, PLATFORM_MAX_PATH, buffer);
 			
-			if (g_eSavedRocketClasses[iIndex].Sprite[0])
+			if (g_eSavedRocketClasses[index].Sprite[0])
 			{
 				iTrailFlags |= TrailFlag_CustomSprite;
 				
-				if (kvConfig.GetString("custom color", strBuffer, sizeof(strBuffer)))
+				if (kvConfig.GetString("custom color", buffer, sizeof(buffer)))
 				{
-					strcopy(g_eSavedRocketClasses[iIndex].SpriteColor, sizeof(g_eSavedRocketClasses[].SpriteColor), strBuffer);
+					strcopy(g_eSavedRocketClasses[index].SpriteColor, sizeof(g_eSavedRocketClasses[].SpriteColor), buffer);
 				}
 				
-				g_eSavedRocketClasses[iIndex].SpriteLifetime   = kvConfig.GetFloat("sprite lifetime");
-				g_eSavedRocketClasses[iIndex].SpriteStartWidth = kvConfig.GetFloat("sprite start width");
-				g_eSavedRocketClasses[iIndex].SpriteEndWidth   = kvConfig.GetFloat("sprite end width");
+				g_eSavedRocketClasses[index].SpriteLifetime   = kvConfig.GetFloat("sprite lifetime");
+				g_eSavedRocketClasses[index].SpriteStartWidth = kvConfig.GetFloat("sprite start width");
+				g_eSavedRocketClasses[index].SpriteEndWidth   = kvConfig.GetFloat("sprite end width");
 			}
 		}
 		
@@ -1967,108 +1967,108 @@ void ParseClasses(KeyValues kvConfig)
 			if (kvConfig.GetNum("replace particles", 0)) iTrailFlags |= TrailFlag_ReplaceParticles;
 		}
 		
-		kvConfig.GetString("behaviour", strBuffer, sizeof(strBuffer), "homing");
+		kvConfig.GetString("behaviour", buffer, sizeof(buffer), "homing");
 		
-		if (StrEqual(strBuffer, "homing"))
+		if (StrEqual(buffer, "homing"))
 		{
-			g_eSavedRocketClasses[iIndex].Behaviour = Behaviour_Homing;
+			g_eSavedRocketClasses[index].Behaviour = Behaviour_Homing;
 		}
-		else if (StrEqual(strBuffer, "legacy homing"))
+		else if (StrEqual(buffer, "legacy homing"))
 		{
-			g_eSavedRocketClasses[iIndex].Behaviour = Behaviour_LegacyHoming;
+			g_eSavedRocketClasses[index].Behaviour = Behaviour_LegacyHoming;
 		}
 		else
 		{
-			g_eSavedRocketClasses[iIndex].Behaviour = Behaviour_Unknown;
+			g_eSavedRocketClasses[index].Behaviour = Behaviour_Unknown;
 		}
 		
 		if (kvConfig.GetNum("play spawn sound", 0) == 1)
 		{
-			iFlags |= RocketFlag_PlaySpawnSound;
+			flags |= RocketFlag_PlaySpawnSound;
 			
-			if (kvConfig.GetString("spawn sound", g_eSavedRocketClasses[iIndex].SpawnSound, PLATFORM_MAX_PATH) && g_eSavedRocketClasses[iIndex].SpawnSound[0])
+			if (kvConfig.GetString("spawn sound", g_eSavedRocketClasses[index].SpawnSound, PLATFORM_MAX_PATH) && g_eSavedRocketClasses[index].SpawnSound[0])
 			{
-				iFlags |= RocketFlag_CustomSpawnSound;
+				flags |= RocketFlag_CustomSpawnSound;
 			}
 		}
 		
 		if (kvConfig.GetNum("play beep sound", 0) == 1)
 		{
-			iFlags |= RocketFlag_PlayBeepSound;
-			g_eSavedRocketClasses[iIndex].BeepInterval = kvConfig.GetFloat("beep interval", 0.5);
+			flags |= RocketFlag_PlayBeepSound;
+			g_eSavedRocketClasses[index].BeepInterval = kvConfig.GetFloat("beep interval", 0.5);
 			
-			if (kvConfig.GetString("beep sound", g_eSavedRocketClasses[iIndex].BeepSound, PLATFORM_MAX_PATH) && g_eSavedRocketClasses[iIndex].BeepSound[0])
+			if (kvConfig.GetString("beep sound", g_eSavedRocketClasses[index].BeepSound, PLATFORM_MAX_PATH) && g_eSavedRocketClasses[index].BeepSound[0])
 			{
-				iFlags |= RocketFlag_CustomBeepSound;
+				flags |= RocketFlag_CustomBeepSound;
 			}
 		}
 		
 		if (kvConfig.GetNum("play alert sound", 0) == 1)
 		{
-			iFlags |= RocketFlag_PlayAlertSound;
+			flags |= RocketFlag_PlayAlertSound;
 			
-			if (kvConfig.GetString("alert sound", g_eSavedRocketClasses[iIndex].AlertSound, PLATFORM_MAX_PATH) && g_eSavedRocketClasses[iIndex].AlertSound[0])
+			if (kvConfig.GetString("alert sound", g_eSavedRocketClasses[index].AlertSound, PLATFORM_MAX_PATH) && g_eSavedRocketClasses[index].AlertSound[0])
 			{
-				iFlags |= RocketFlag_CustomAlertSound;
+				flags |= RocketFlag_CustomAlertSound;
 			}
 		}
 		
-		if (kvConfig.GetNum("elevate on deflect", 1) == 1) iFlags |= RocketFlag_ElevateOnDeflect;
-		if (kvConfig.GetNum("neutral rocket", 0) == 1)     iFlags |= RocketFlag_IsNeutral;
-		if (kvConfig.GetNum("keep direction", 0) == 1)     iFlags |= RocketFlag_KeepDirection;
-		if (kvConfig.GetNum("teamless deflects", 0) == 1)  iFlags |= RocketFlag_TeamlessHits;
-		if (kvConfig.GetNum("reset bounces", 0) == 1)      iFlags |= RocketFlag_ResetBounces;
-		if (kvConfig.GetNum("no bounce drags", 0) == 1)    iFlags |= RocketFlag_NoBounceDrags;
-		if (kvConfig.GetNum("can be stolen", 0) == 1)      iFlags |= RocketFlag_CanBeStolen;
-		if (kvConfig.GetNum("steal team check", 0) == 1)   iFlags |= RocketFlag_StealTeamCheck;
+		if (kvConfig.GetNum("elevate on deflect", 1) == 1) flags |= RocketFlag_ElevateOnDeflect;
+		if (kvConfig.GetNum("neutral rocket", 0) == 1)     flags |= RocketFlag_IsNeutral;
+		if (kvConfig.GetNum("keep direction", 0) == 1)     flags |= RocketFlag_KeepDirection;
+		if (kvConfig.GetNum("teamless deflects", 0) == 1)  flags |= RocketFlag_TeamlessHits;
+		if (kvConfig.GetNum("reset bounces", 0) == 1)      flags |= RocketFlag_ResetBounces;
+		if (kvConfig.GetNum("no bounce drags", 0) == 1)    flags |= RocketFlag_NoBounceDrags;
+		if (kvConfig.GetNum("can be stolen", 0) == 1)      flags |= RocketFlag_CanBeStolen;
+		if (kvConfig.GetNum("steal team check", 0) == 1)   flags |= RocketFlag_StealTeamCheck;
 		
-		g_eSavedRocketClasses[iIndex].Damage            = kvConfig.GetFloat("damage");
-		g_eSavedRocketClasses[iIndex].DamageIncrement   = kvConfig.GetFloat("damage increment");
-		g_eSavedRocketClasses[iIndex].CritChance        = kvConfig.GetFloat("critical chance");
-		g_eSavedRocketClasses[iIndex].Speed             = kvConfig.GetFloat("speed");
-		g_eSavedRocketClasses[iIndex].SpeedIncrement    = kvConfig.GetFloat("speed increment");
+		g_eSavedRocketClasses[index].Damage            = kvConfig.GetFloat("damage");
+		g_eSavedRocketClasses[index].DamageIncrement   = kvConfig.GetFloat("damage increment");
+		g_eSavedRocketClasses[index].CritChance        = kvConfig.GetFloat("critical chance");
+		g_eSavedRocketClasses[index].Speed             = kvConfig.GetFloat("speed");
+		g_eSavedRocketClasses[index].SpeedIncrement    = kvConfig.GetFloat("speed increment");
 		
-		if ((g_eSavedRocketClasses[iIndex].SpeedLimit = kvConfig.GetFloat("speed limit")) != 0.0)
+		if ((g_eSavedRocketClasses[index].SpeedLimit = kvConfig.GetFloat("speed limit")) != 0.0)
 		{
-			iFlags |= RocketFlag_IsSpeedLimited;
+			flags |= RocketFlag_IsSpeedLimited;
 		}
 		
-		g_eSavedRocketClasses[iIndex].TurnRate          = kvConfig.GetFloat("turn rate");
-		g_eSavedRocketClasses[iIndex].TurnRateIncrement = kvConfig.GetFloat("turn rate increment");
+		g_eSavedRocketClasses[index].TurnRate          = kvConfig.GetFloat("turn rate");
+		g_eSavedRocketClasses[index].TurnRateIncrement = kvConfig.GetFloat("turn rate increment");
 		
-		if ((g_eSavedRocketClasses[iIndex].TurnRateLimit = kvConfig.GetFloat("turn rate limit")) != 0.0)
+		if ((g_eSavedRocketClasses[index].TurnRateLimit = kvConfig.GetFloat("turn rate limit")) != 0.0)
 		{
-			iFlags |= RocketFlag_IsTRLimited;
+			flags |= RocketFlag_IsTRLimited;
 		}
 		
-		g_eSavedRocketClasses[iIndex].ElevationRate     = kvConfig.GetFloat("elevation rate");
-		g_eSavedRocketClasses[iIndex].ElevationLimit    = kvConfig.GetFloat("elevation limit");
-		g_eSavedRocketClasses[iIndex].ControlDelay      = kvConfig.GetFloat("control delay");
-		g_eSavedRocketClasses[iIndex].BounceScale       = kvConfig.GetFloat("bounce scale", 1.0);
-		g_eSavedRocketClasses[iIndex].PlayerModifier    = kvConfig.GetFloat("no. players modifier");
-		g_eSavedRocketClasses[iIndex].RocketsModifier   = kvConfig.GetFloat("no. rockets modifier");
-		g_eSavedRocketClasses[iIndex].TargetWeight      = kvConfig.GetFloat("direction to target weight");
-		g_eSavedRocketClasses[iIndex].MaxBounces        = kvConfig.GetNum("max bounces");
+		g_eSavedRocketClasses[index].ElevationRate     = kvConfig.GetFloat("elevation rate");
+		g_eSavedRocketClasses[index].ElevationLimit    = kvConfig.GetFloat("elevation limit");
+		g_eSavedRocketClasses[index].ControlDelay      = kvConfig.GetFloat("control delay");
+		g_eSavedRocketClasses[index].BounceScale       = kvConfig.GetFloat("bounce scale", 1.0);
+		g_eSavedRocketClasses[index].PlayerModifier    = kvConfig.GetFloat("no. players modifier");
+		g_eSavedRocketClasses[index].RocketsModifier   = kvConfig.GetFloat("no. rockets modifier");
+		g_eSavedRocketClasses[index].TargetWeight      = kvConfig.GetFloat("direction to target weight");
+		g_eSavedRocketClasses[index].MaxBounces        = kvConfig.GetNum("max bounces");
 		
-		DataPack hCmds = null;
+		DataPack cmds = null;
 		
-		kvConfig.GetString("on spawn", strBuffer, sizeof(strBuffer));
-		if ((hCmds = ParseCommands(strBuffer)) != null) { iFlags |= RocketFlag_OnSpawnCmd; g_eSavedRocketClasses[iIndex].CmdsOnSpawn = hCmds; }
+		kvConfig.GetString("on spawn", buffer, sizeof(buffer));
+		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnSpawnCmd; g_eSavedRocketClasses[index].CmdsOnSpawn = cmds; }
 		
-		kvConfig.GetString("on deflect", strBuffer, sizeof(strBuffer));
-		if ((hCmds = ParseCommands(strBuffer)) != null) { iFlags |= RocketFlag_OnDeflectCmd; g_eSavedRocketClasses[iIndex].CmdsOnDeflect = hCmds; }
+		kvConfig.GetString("on deflect", buffer, sizeof(buffer));
+		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnDeflectCmd; g_eSavedRocketClasses[index].CmdsOnDeflect = cmds; }
 		
-		kvConfig.GetString("on kill", strBuffer, sizeof(strBuffer));
-		if ((hCmds = ParseCommands(strBuffer)) != null) { iFlags |= RocketFlag_OnKillCmd; g_eSavedRocketClasses[iIndex].CmdsOnKill = hCmds; }
+		kvConfig.GetString("on kill", buffer, sizeof(buffer));
+		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnKillCmd; g_eSavedRocketClasses[index].CmdsOnKill = cmds; }
 		
-		kvConfig.GetString("on explode", strBuffer, sizeof(strBuffer));
-		if ((hCmds = ParseCommands(strBuffer)) != null) { iFlags |= RocketFlag_OnExplodeCmd; g_eSavedRocketClasses[iIndex].CmdsOnExplode = hCmds; }
+		kvConfig.GetString("on explode", buffer, sizeof(buffer));
+		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnExplodeCmd; g_eSavedRocketClasses[index].CmdsOnExplode = cmds; }
 		
-		kvConfig.GetString("on no target", strBuffer, sizeof(strBuffer));
-		if ((hCmds = ParseCommands(strBuffer)) != null) { iFlags |= RocketFlag_OnNoTargetCmd; g_eSavedRocketClasses[iIndex].CmdsOnNoTarget = hCmds; }
+		kvConfig.GetString("on no target", buffer, sizeof(buffer));
+		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnNoTargetCmd; g_eSavedRocketClasses[index].CmdsOnNoTarget = cmds; }
 		
-		g_eSavedRocketClasses[iIndex].Flags = iFlags;
-		g_eSavedRocketClasses[iIndex].TFlags = iTrailFlags;
+		g_eSavedRocketClasses[index].Flags = flags;
+		g_eSavedRocketClasses[index].TFlags = iTrailFlags;
 		g_iRocketClassCount++;
 	}
 	while (kvConfig.GotoNextKey());
@@ -2078,23 +2078,23 @@ void ParseClasses(KeyValues kvConfig)
 
 void ParseSpawners(KeyValues kvConfig)
 {
-	char strBuffer[256];
+	char buffer[256];
 	kvConfig.GotoFirstSubKey();
 	
 	do
 	{
-		int iIndex = g_iSpawnersCount;
+		int index = g_iSpawnersCount;
 		
-		kvConfig.GetSectionName(strBuffer, sizeof(strBuffer)); strcopy(g_eSavedSpawnerClasses[iIndex].Name, 32, strBuffer);
-		g_eSavedSpawnerClasses[iIndex].MaxRockets = kvConfig.GetNum("max rockets", 1);
-		g_eSavedSpawnerClasses[iIndex].Interval   = kvConfig.GetFloat("interval", 1.0);
+		kvConfig.GetSectionName(buffer, sizeof(buffer)); strcopy(g_eSavedSpawnerClasses[index].Name, 32, buffer);
+		g_eSavedSpawnerClasses[index].MaxRockets = kvConfig.GetNum("max rockets", 1);
+		g_eSavedSpawnerClasses[index].Interval   = kvConfig.GetFloat("interval", 1.0);
 		
-		g_eSavedSpawnerClasses[iIndex].ChancesTable = new ArrayList();
+		g_eSavedSpawnerClasses[index].ChancesTable = new ArrayList();
 		
 		for (int iClassIndex = 0; iClassIndex < g_iRocketClassCount; iClassIndex++)
 		{
-			FormatEx(strBuffer, sizeof(strBuffer), "%s%%", g_eSavedRocketClasses[iClassIndex].Name);
-			g_eSavedSpawnerClasses[iIndex].ChancesTable.Push(kvConfig.GetNum(strBuffer, 0));
+			FormatEx(buffer, sizeof(buffer), "%s%%", g_eSavedRocketClasses[iClassIndex].Name);
+			g_eSavedSpawnerClasses[index].ChancesTable.Push(kvConfig.GetNum(buffer, 0));
 		}
 		
 		g_iSpawnersCount++;
@@ -2127,55 +2127,55 @@ DataPack ParseCommands(char[] strLine)
 	return hDataPack;
 }
 
-void EmitRocketSound(RocketSound iSound, int iClass, int iEntity, int iTarget, RocketFlags iFlags)
+void EmitRocketSound(RocketSound iSound, int classIndex, int entity, int target, RocketFlags flags)
 {
 	switch (iSound)
 	{
 		case RocketSound_Spawn:
 		{
-			if (TestFlags(iFlags, RocketFlag_PlaySpawnSound))
+			if (TestFlags(flags, RocketFlag_PlaySpawnSound))
 			{
-				if (TestFlags(iFlags, RocketFlag_CustomSpawnSound))
+				if (TestFlags(flags, RocketFlag_CustomSpawnSound))
 				{
 					char strRocketClassSpawnSound[PLATFORM_MAX_PATH];
-					TFDB_GetRocketClassSpawnSound(iClass, strRocketClassSpawnSound, sizeof(strRocketClassSpawnSound));
-					EmitSoundToAll(strRocketClassSpawnSound, iEntity);
+					TFDB_GetRocketClassSpawnSound(classIndex, strRocketClassSpawnSound, sizeof(strRocketClassSpawnSound));
+					EmitSoundToAll(strRocketClassSpawnSound, entity);
 				}
 				else
 				{
-					EmitSoundToAll(SOUND_DEFAULT_SPAWN, iEntity);
+					EmitSoundToAll(SOUND_DEFAULT_SPAWN, entity);
 				}
 			}
 		}
 		case RocketSound_Beep:
 		{
-			if (TestFlags(iFlags, RocketFlag_PlayBeepSound))
+			if (TestFlags(flags, RocketFlag_PlayBeepSound))
 			{
-				if (TestFlags(iFlags, RocketFlag_CustomBeepSound))
+				if (TestFlags(flags, RocketFlag_CustomBeepSound))
 				{
 					char strRocketClassBeepSound [PLATFORM_MAX_PATH];
-					TFDB_GetRocketClassBeepSound(iClass, strRocketClassBeepSound, sizeof(strRocketClassBeepSound));
-					EmitSoundToAll(strRocketClassBeepSound, iEntity);
+					TFDB_GetRocketClassBeepSound(classIndex, strRocketClassBeepSound, sizeof(strRocketClassBeepSound));
+					EmitSoundToAll(strRocketClassBeepSound, entity);
 				}
 				else
 				{
-					EmitSoundToAll(SOUND_DEFAULT_BEEP, iEntity);
+					EmitSoundToAll(SOUND_DEFAULT_BEEP, entity);
 				}
 			}
 		}
 		case RocketSound_Alert:
 		{
-			if (TestFlags(iFlags, RocketFlag_PlayAlertSound))
+			if (TestFlags(flags, RocketFlag_PlayAlertSound))
 			{
-				if (TestFlags(iFlags, RocketFlag_CustomAlertSound))
+				if (TestFlags(flags, RocketFlag_CustomAlertSound))
 				{
 					char strRocketClassAlertSound[PLATFORM_MAX_PATH];
-					TFDB_GetRocketClassBeepSound(iClass, strRocketClassAlertSound, sizeof(strRocketClassAlertSound));
-					EmitSoundToClient(iTarget, strRocketClassAlertSound);
+					TFDB_GetRocketClassAlertSound(classIndex, strRocketClassAlertSound, sizeof(strRocketClassAlertSound));
+					EmitSoundToClient(target, strRocketClassAlertSound);
 				}
 				else
 				{
-					EmitSoundToClient(iTarget, SOUND_DEFAULT_ALERT, _, _, _, _, 0.5);
+					EmitSoundToClient(target, SOUND_DEFAULT_ALERT, _, _, _, _, 0.5);
 				}
 			}
 		}
@@ -2207,59 +2207,59 @@ char[] BehaviourToString(BehaviourTypes iBehaviour)
 	return strBehaviour;
 }
 
-bool IsRocketClassMenuDisabled(RocketClassMenu iOption)
+bool IsRocketClassMenuDisabled(RocketClassMenu option)
 {
-	return iOption == RocketClassMenu_Name           ||
-	       iOption == RocketClassMenu_LongName       ||
-	       iOption == RocketClassMenu_Model          ||
-	       iOption == RocketClassMenu_Trail          ||
-	       iOption == RocketClassMenu_Sprite         ||
-	       iOption == RocketClassMenu_SpawnSound     ||
-	       iOption == RocketClassMenu_BeepSound      ||
-	       iOption == RocketClassMenu_AlertSound     ||
-	       iOption == RocketClassMenu_CmdsOnSpawn    ||
-	       iOption == RocketClassMenu_CmdsOnDeflect  ||
-	       iOption == RocketClassMenu_CmdsOnKill     ||
-	       iOption == RocketClassMenu_CmdsOnExplode  ||
-	       iOption == RocketClassMenu_CmdsOnNoTarget ||
+	return option == RocketClassMenu_Name           ||
+	       option == RocketClassMenu_LongName       ||
+	       option == RocketClassMenu_Model          ||
+	       option == RocketClassMenu_Trail          ||
+	       option == RocketClassMenu_Sprite         ||
+	       option == RocketClassMenu_SpawnSound     ||
+	       option == RocketClassMenu_BeepSound      ||
+	       option == RocketClassMenu_AlertSound     ||
+	       option == RocketClassMenu_CmdsOnSpawn    ||
+	       option == RocketClassMenu_CmdsOnDeflect  ||
+	       option == RocketClassMenu_CmdsOnKill     ||
+	       option == RocketClassMenu_CmdsOnExplode  ||
+	       option == RocketClassMenu_CmdsOnNoTarget ||
 	       (!TrailsLoaded &&
-	       (iOption == RocketClassMenu_SpriteColor    ||
-	        iOption == RocketClassMenu_SpriteEndWidth ||
-	        iOption == RocketClassMenu_SpriteLifetime ||
-	        iOption == RocketClassMenu_SpriteStartWidth));
+	       (option == RocketClassMenu_SpriteColor    ||
+	        option == RocketClassMenu_SpriteEndWidth ||
+	        option == RocketClassMenu_SpriteLifetime ||
+	        option == RocketClassMenu_SpriteStartWidth));
 }
 
 // https://github.com/JoinedSenses/SM-JSLib/blob/main/jslib.inc
 
-stock void HexToRGB(const char[] strHex, int iRGB[3])
+stock void HexToRGB(const char[] hex, int rgb[3])
 {
-	IntToRGB(StringToInt(strHex, 16), iRGB);
+	IntToRGB(StringToInt(hex, 16), rgb);
 }
 
-stock void IntToRGB(int iValue, int iRGB[3])
+stock void IntToRGB(int iValue, int rgb[3])
 {
-	iRGB[0] = ((iValue >> 16) & 0xFF);
-	iRGB[1] = ((iValue >>  8) & 0xFF);
-	iRGB[2] = ((iValue      ) & 0xFF);
+	rgb[0] = ((iValue >> 16) & 0xFF);
+	rgb[1] = ((iValue >>  8) & 0xFF);
+	rgb[2] = ((iValue      ) & 0xFF);
 }
 
-stock void RGBToHex(const int iRGB[3], char[] strHex, int iSize)
+stock void RGBToHex(const int rgb[3], char[] hex, int iSize)
 {
-	FormatEx(strHex, iSize, "%06X", RGBToInt(iRGB));
+	FormatEx(hex, iSize, "%06X", RGBToInt(rgb));
 }
 
-stock int RGBToInt(const int iRGB[3])
+stock int RGBToInt(const int rgb[3])
 {
-	return ((iRGB[0] & 0xFF) << 16) |
-	       ((iRGB[1] & 0xFF) <<  8) |
-	       ((iRGB[2] & 0xFF)      );
+	return ((rgb[0] & 0xFF) << 16) |
+	       ((rgb[1] & 0xFF) <<  8) |
+	       ((rgb[2] & 0xFF)      );
 }
 
 void Internal_DestroyRocketClasses()
 {
-	for (int iIndex = 0; iIndex < g_iRocketClassCount; iIndex++)
+	for (int index = 0; index < g_iRocketClassCount; index++)
 	{
-		g_eSavedRocketClasses[iIndex].Destroy();
+		g_eSavedRocketClasses[index].Destroy();
 	}
 	
 	g_iRocketClassCount = 0;
@@ -2267,9 +2267,9 @@ void Internal_DestroyRocketClasses()
 
 void Internal_DestroySpawners()
 {
-	for (int iIndex = 0; iIndex < g_iSpawnersCount; iIndex++)
+	for (int index = 0; index < g_iSpawnersCount; index++)
 	{
-		g_eSavedSpawnerClasses[iIndex].Destroy();
+		g_eSavedSpawnerClasses[index].Destroy();
 	}
 	
 	g_iSpawnersCount  = 0;

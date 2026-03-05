@@ -131,6 +131,7 @@ enum struct eRocketSteal
 #define PARTICLE_NUKE_4         "fireSmokeExplosion3"
 #define PARTICLE_NUKE_5         "fireSmokeExplosion4"
 #define PARTICLE_NUKE_COLLUMN   "fireSmoke_collumnP"
+#define PARTICLE_ROCKET_TRAIL   "rockettrail"
 #define PARTICLE_NUKE_1_ANGLES  view_as<float>({270.0, 0.0, 0.0})
 #define PARTICLE_NUKE_2_ANGLES  PARTICLE_NUKE_1_ANGLES
 #define PARTICLE_NUKE_3_ANGLES  PARTICLE_NUKE_1_ANGLES

@@ -11,10 +11,10 @@
 #include <tfdb>
 
 #define PLUGIN_NAME        "[TFDB] Anti-Sniping & Anti-Teamkilling"
-#define PLUGIN_AUTHOR      "x07x08"
+#define PLUGIN_AUTHOR      "x07x08, Silorak"
 #define PLUGIN_DESCRIPTION "Blocks snipes and teamkills."
-#define PLUGIN_VERSION     "1.2.2"
-#define PLUGIN_URL         "https://github.com/x07x08/TF2-Dodgeball-Modified"
+#define PLUGIN_VERSION     "2.2.0"
+#define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball-Modified"
 
 ConVar CvarHookDamage;
 ConVar CvarHookCollision;
@@ -35,49 +35,49 @@ public void OnPluginStart()
 	
 	if (!TFDB_IsDodgeballEnabled()) return;
 	
-	for (int iClient = 1; iClient <= MaxClients; iClient++)
+	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(iClient)) continue;
+		if (!IsClientInGame(client)) continue;
 		
-		SDKHook(iClient, SDKHook_OnTakeDamage, OnPlayerTakeDamage);
+		SDKHook(client, SDKHook_OnTakeDamage, OnPlayerTakeDamage);
 	}
 }
 
-public void OnClientPutInServer(int iClient)
+public void OnClientPutInServer(int client)
 {
 	if (!TFDB_IsDodgeballEnabled()) return;
 	
-	SDKHook(iClient, SDKHook_OnTakeDamage, OnPlayerTakeDamage);
+	SDKHook(client, SDKHook_OnTakeDamage, OnPlayerTakeDamage);
 }
 
-public Action OnPlayerTakeDamage(int iVictim, int &iAttacker, int &iInflictor, float &fDamage, int &iDamageType)
+public Action OnPlayerTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damageType)
 {
 	if (!CvarHookDamage.BoolValue) return Plugin_Continue;
 	
-	int iIndex = TFDB_FindRocketByEntity(iInflictor);
+	int index = TFDB_FindRocketByEntity(inflictor);
 	
-	if (iIndex == -1) return Plugin_Continue;
+	if (index == -1) return Plugin_Continue;
 	
-	int iTarget = EntRefToEntIndex(TFDB_GetRocketTarget(iIndex));
+	int target = EntRefToEntIndex(TFDB_GetRocketTarget(index));
 	
-	if (!(IsValidClient(iTarget) && (iVictim != iTarget))) return Plugin_Continue;
+	if (!(IsValidClient(target) && (victim != target))) return Plugin_Continue;
 	
-	fDamage = 0.0;
+	damage = 0.0;
 	
 	return Plugin_Changed;
 }
 
-public Action CH_PassFilter(int iEntity1, int iEntity2, bool &bResult)
+public Action CH_PassFilter(int entity1, int entity2, bool &result)
 {
 	if (!TFDB_IsDodgeballEnabled() || !CvarHookCollision.BoolValue) return Plugin_Continue;
 	
-	int iIndex1 = TFDB_FindRocketByEntity(iEntity1);
-	int iIndex2 = TFDB_FindRocketByEntity(iEntity2);
+	int index1 = TFDB_FindRocketByEntity(entity1);
+	int index2 = TFDB_FindRocketByEntity(entity2);
 	
-	if (((iIndex1 != -1) && (EntRefToEntIndex(TFDB_GetRocketTarget(iIndex1)) != iEntity2))
-	    || ((iIndex2 != -1) && (EntRefToEntIndex(TFDB_GetRocketTarget(iIndex2)) != iEntity1)))
+	if (((index1 != -1) && (EntRefToEntIndex(TFDB_GetRocketTarget(index1)) != entity2))
+	    || ((index2 != -1) && (EntRefToEntIndex(TFDB_GetRocketTarget(index2)) != entity1)))
 	{
-		bResult = false;
+		result = false;
 		
 		return Plugin_Changed;
 	}
@@ -85,10 +85,10 @@ public Action CH_PassFilter(int iEntity1, int iEntity2, bool &bResult)
 	return Plugin_Continue;
 }
 
-stock bool IsValidClient(int iClient, bool bAlive = false)
+stock bool IsValidClient(int client, bool alive = false)
 {
-	return iClient >= 1 &&
-	       iClient <= MaxClients &&
-	       IsClientInGame(iClient) &&
-	       (!bAlive || IsPlayerAlive(iClient));
+	return client >= 1 &&
+	       client <= MaxClients &&
+	       IsClientInGame(client) &&
+	       (!alive || IsPlayerAlive(client));
 }

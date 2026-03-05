@@ -8,7 +8,7 @@
 #include <clientprefs> // Include for cookie functions
 #include <multicolors> // Include for colored chat and translations
 
-#define PLUGIN_VERSION "2.0"
+#define PLUGIN_VERSION "2.2.0"
 
 public Plugin myinfo =
 {
@@ -166,7 +166,7 @@ void StartDisplayTimer()
 		return;
 	}
 	// Create a repeating timer that calls DisplayHud every 0.1 seconds.
-	DisplayTimer = CreateTimer(0.1, DisplayHud, _, TIMER_REPEAT);
+	DisplayTimer = CreateTimer(0.1, DisplayHud, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
 /**

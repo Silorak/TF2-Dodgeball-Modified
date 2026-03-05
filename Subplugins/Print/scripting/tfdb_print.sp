@@ -7,7 +7,7 @@
 #define PLUGIN_NAME        "[TFDB] Print & replace client indexes"
 #define PLUGIN_AUTHOR      "x07x08 & Silorak"
 #define PLUGIN_DESCRIPTION "Does what it says"
-#define PLUGIN_VERSION     "1.1.3"
+#define PLUGIN_VERSION     "2.2.0"
 #define PLUGIN_URL         "https://github.com/x07x08/TF2-Dodgeball-Modified"
 
 char CmdBuffer[255];
@@ -36,11 +36,11 @@ public void OnPluginStart()
 	RegAdminCmd("tf_dodgeball_phrase_c", CmdPrintPhraseClient, ADMFLAG_CHAT, "Prints a translation phrase to a client");
 }
 
-public Action CmdPrintMessage(int iClient, int iArgs)
+public Action CmdPrintMessage(int client, int cmdArgs)
 {
-	if (!(iArgs >= 1))
+	if (!(cmdArgs >= 1))
 	{
-		ReplyToCommand(iClient, "Usage : tf_dodgeball_print <text>");
+		ReplyToCommand(client, "Usage : tf_dodgeball_print <text>");
 		
 		return Plugin_Handled;
 	}
@@ -48,213 +48,213 @@ public Action CmdPrintMessage(int iClient, int iArgs)
 	GetCmdArgString(CmdBuffer, sizeof(CmdBuffer));
 	TrimString(CmdBuffer);
 	
-	int iNumStrings = ExplodeString(CmdBuffer, "##", ExplodeBuffer, sizeof(ExplodeBuffer), sizeof(ExplodeBuffer[]));
-	int iIndex;
+	int numStrings = ExplodeString(CmdBuffer, "##", ExplodeBuffer, sizeof(ExplodeBuffer), sizeof(ExplodeBuffer[]));
+	int index;
 	
-	for (int iPos = 0; iPos < iNumStrings; iPos++)
+	for (int pos = 0; pos < numStrings; pos++)
 	{
-		if (!ExplodeBuffer[iPos][0]) continue;
+		if (!ExplodeBuffer[pos][0]) continue;
 		
-		if ((StringToIntEx(ExplodeBuffer[iPos], iIndex) == strlen(ExplodeBuffer[iPos])) &&
-		    ((iIndex >= 1) && (iIndex <= MaxClients) && IsClientInGame(iIndex)))
+		if ((StringToIntEx(ExplodeBuffer[pos], index) == strlen(ExplodeBuffer[pos])) &&
+		    ((index >= 1) && (index <= MaxClients) && IsClientInGame(index)))
 		{
-			FormatEx(ExplodeBuffer[iPos], sizeof(ExplodeBuffer[]), "%N", iIndex);
+			FormatEx(ExplodeBuffer[pos], sizeof(ExplodeBuffer[]), "%N", index);
 		}
 	}
 	
-	ImplodeStrings(ExplodeBuffer, iNumStrings, "", CmdBuffer, sizeof(CmdBuffer));
+	ImplodeStrings(ExplodeBuffer, numStrings, "", CmdBuffer, sizeof(CmdBuffer));
 	
 	CPrintToChatAll(CmdBuffer);
 	
 	return Plugin_Handled;
 }
 
-public Action CmdPrintMessageClient(int iClient, int iArgs)
+public Action CmdPrintMessageClient(int client, int cmdArgs)
 {
-	if (!(iArgs >= 2))
+	if (!(cmdArgs >= 2))
 	{
-		ReplyToCommand(iClient, "Usage : tf_dodgeball_print_c <client> <text>");
+		ReplyToCommand(client, "Usage : tf_dodgeball_print_c <client> <text>");
 		
 		return Plugin_Handled;
 	}
 	
-	char strBuffer[8];
+	char buffer[8];
 	
 	GetCmdArgString(CmdBuffer, sizeof(CmdBuffer));
 	
-	int iLength = BreakString(CmdBuffer, strBuffer, sizeof(strBuffer));
-	int iTarget = StringToInt(strBuffer);
+	int length = BreakString(CmdBuffer, buffer, sizeof(buffer));
+	int target = StringToInt(buffer);
 	
-	TrimString(CmdBuffer[iLength]);
+	TrimString(CmdBuffer[length]);
 	
-	int iNumStrings = ExplodeString(CmdBuffer[iLength], "##", ExplodeBuffer, sizeof(ExplodeBuffer), sizeof(ExplodeBuffer[]));
-	int iIndex;
+	int numStrings = ExplodeString(CmdBuffer[length], "##", ExplodeBuffer, sizeof(ExplodeBuffer), sizeof(ExplodeBuffer[]));
+	int index;
 	
-	for (int iPos = 0; iPos < iNumStrings; iPos++)
+	for (int pos = 0; pos < numStrings; pos++)
 	{
-		if (!ExplodeBuffer[iPos][0]) continue;
+		if (!ExplodeBuffer[pos][0]) continue;
 		
-		if ((StringToIntEx(ExplodeBuffer[iPos], iIndex) == strlen(ExplodeBuffer[iPos])) &&
-		    ((iIndex >= 1) && (iIndex <= MaxClients) && IsClientInGame(iIndex)))
+		if ((StringToIntEx(ExplodeBuffer[pos], index) == strlen(ExplodeBuffer[pos])) &&
+		    ((index >= 1) && (index <= MaxClients) && IsClientInGame(index)))
 		{
-			FormatEx(ExplodeBuffer[iPos], sizeof(ExplodeBuffer[]), "%N", iIndex);
+			FormatEx(ExplodeBuffer[pos], sizeof(ExplodeBuffer[]), "%N", index);
 		}
 	}
 	
-	ImplodeStrings(ExplodeBuffer, iNumStrings, "", CmdBuffer[iLength], sizeof(CmdBuffer));
+	ImplodeStrings(ExplodeBuffer, numStrings, "", CmdBuffer[length], sizeof(CmdBuffer));
 	
-	if ((iTarget >= 1) && (iTarget <= MaxClients) && IsClientInGame(iTarget))
+	if ((target >= 1) && (target <= MaxClients) && IsClientInGame(target))
 	{
-		CPrintToChat(iTarget, CmdBuffer[iLength]);
+		CPrintToChat(target, CmdBuffer[length]);
 	}
 	
 	return Plugin_Handled;
 }
 
-public Action CmdPrintPhrase(int iClient, int iArgs)
+public Action CmdPrintPhrase(int client, int cmdArgs)
 {
-	char strPhrase[48];
+	char phrase[48];
 	
 	GetCmdArgString(CmdBuffer, sizeof(CmdBuffer)); TrimString(CmdBuffer);
 	
-	int iMatches = BracketsPattern.MatchAll(CmdBuffer);
+	int matches = BracketsPattern.MatchAll(CmdBuffer);
 	
-	if (!(iMatches >= 1))
+	if (!(matches >= 1))
 	{
-		ReplyToCommand(iClient, "Usage : tf_dodgeball_phrase <phrase> <args> (phrase and args must be surrounded by []) (phrase arguments must be separated by a comma [,])");
+		ReplyToCommand(client, "Usage : tf_dodgeball_phrase <phrase> <args> (phrase and args must be surrounded by []) (phrase arguments must be separated by a comma [,])");
 		
 		return Plugin_Handled;
 	}
 	
 	any aArgs[32];
 	
-	BracketsPattern.GetSubString(0, strPhrase, sizeof(strPhrase), 0); TrimString(strPhrase);
+	BracketsPattern.GetSubString(0, phrase, sizeof(phrase), 0); TrimString(phrase);
 	
-	if (iMatches == 2)
+	if (matches == 2)
 	{
 		BracketsPattern.GetSubString(0, CmdBuffer, sizeof(CmdBuffer), 1);
 		
-		int iStrings = ExplodeString(CmdBuffer, ",", ExplodeBuffer, sizeof(ExplodeBuffer), sizeof(ExplodeBuffer[]));
+		int strings = ExplodeString(CmdBuffer, ",", ExplodeBuffer, sizeof(ExplodeBuffer), sizeof(ExplodeBuffer[]));
 		
-		for (int iIndex = 0; iIndex < iStrings; iIndex++)
+		for (int index = 0; index < strings; index++)
 		{
-			TrimString(ExplodeBuffer[iIndex]);
+			TrimString(ExplodeBuffer[index]);
 			
-			if ((StringToIntEx(ExplodeBuffer[iIndex], aArgs[iIndex]) == strlen(ExplodeBuffer[iIndex])) ||
-			    (StringToFloatEx(ExplodeBuffer[iIndex], aArgs[iIndex]) == strlen(ExplodeBuffer[iIndex])))
+			if ((StringToIntEx(ExplodeBuffer[index], aArgs[index]) == strlen(ExplodeBuffer[index])) ||
+			    (StringToFloatEx(ExplodeBuffer[index], aArgs[index]) == strlen(ExplodeBuffer[index])))
 			{
-				ExplodeBuffer[iIndex] = "\0";
+				ExplodeBuffer[index] = "\0";
 			}
 		}
 	}
 	
-	PrintPhrase(strPhrase, ExplodeBuffer, aArgs, true);
+	PrintPhrase(phrase, ExplodeBuffer, aArgs, true);
 	
 	return Plugin_Handled;
 }
 
-public Action CmdPrintPhraseClient(int iClient, int iArgs)
+public Action CmdPrintPhraseClient(int client, int cmdArgs)
 {
-	char strPhrase[48], strTarget[8];
+	char phrase[48], targetStr[8];
 	
 	GetCmdArgString(CmdBuffer, sizeof(CmdBuffer)); TrimString(CmdBuffer);
 	
-	int iMatches = BracketsPattern.MatchAll(CmdBuffer);
+	int matches = BracketsPattern.MatchAll(CmdBuffer);
 	
-	if (!(iMatches >= 2))
+	if (!(matches >= 2))
 	{
-		ReplyToCommand(iClient, "Usage : tf_dodgeball_phrase_c <client> <phrase> <args> (client, phrase and args must be surrounded by []) (phrase arguments must be separated by a comma [,])");
+		ReplyToCommand(client, "Usage : tf_dodgeball_phrase_c <client> <phrase> <args> (client, phrase and args must be surrounded by []) (phrase arguments must be separated by a comma [,])");
 		
 		return Plugin_Handled;
 	}
 	
 	any aArgs[32];
 	
-	BracketsPattern.GetSubString(0, strTarget, sizeof(strTarget), 0); TrimString(strTarget);
-	BracketsPattern.GetSubString(0, strPhrase, sizeof(strPhrase), 1); TrimString(strPhrase);
+	BracketsPattern.GetSubString(0, targetStr, sizeof(targetStr), 0); TrimString(targetStr);
+	BracketsPattern.GetSubString(0, phrase, sizeof(phrase), 1); TrimString(phrase);
 	
-	int iTarget = StringToInt(strTarget);
+	int target = StringToInt(targetStr);
 	
-	if (iMatches == 3)
+	if (matches == 3)
 	{
 		BracketsPattern.GetSubString(0, CmdBuffer, sizeof(CmdBuffer), 2);
 		
-		int iStrings = ExplodeString(CmdBuffer, ",", ExplodeBuffer, sizeof(ExplodeBuffer), sizeof(ExplodeBuffer[]));
+		int strings = ExplodeString(CmdBuffer, ",", ExplodeBuffer, sizeof(ExplodeBuffer), sizeof(ExplodeBuffer[]));
 		
-		for (int iIndex = 0; iIndex < iStrings; iIndex++)
+		for (int index = 0; index < strings; index++)
 		{
-			TrimString(ExplodeBuffer[iIndex]);
+			TrimString(ExplodeBuffer[index]);
 			
-			if ((StringToIntEx(ExplodeBuffer[iIndex], aArgs[iIndex]) == strlen(ExplodeBuffer[iIndex])) ||
-			    (StringToFloatEx(ExplodeBuffer[iIndex], aArgs[iIndex]) == strlen(ExplodeBuffer[iIndex])))
+			if ((StringToIntEx(ExplodeBuffer[index], aArgs[index]) == strlen(ExplodeBuffer[index])) ||
+			    (StringToFloatEx(ExplodeBuffer[index], aArgs[index]) == strlen(ExplodeBuffer[index])))
 			{
-				ExplodeBuffer[iIndex] = "\0";
+				ExplodeBuffer[index] = "\0";
 			}
 		}
 	}
 	
-	if ((iTarget >= 1) && (iTarget <= MaxClients) && IsClientInGame(iTarget))
+	if ((target >= 1) && (target <= MaxClients) && IsClientInGame(target))
 	{
-		PrintPhrase(strPhrase, ExplodeBuffer, aArgs, false, iTarget);
+		PrintPhrase(phrase, ExplodeBuffer, aArgs, false, target);
 	}
 	
 	return Plugin_Handled;
 }
 
-void PrintPhrase(const char[] strPhrase, const char strArgs[32][255], const any aArgs[32], bool bAll, int iClient = -1)
+void PrintPhrase(const char[] phrase, const char args[32][255], const any aArgs[32], bool isAll, int client = -1)
 {
 	// Use SetGlobalTransTarget + Format with %T to properly handle
 	// dynamic translation arguments without heap overflow.
 	// Maximum phrase args in tfdb.phrases.txt is 5, so 8 slots is plenty.
 	
-	if (bAll)
+	if (isAll)
 	{
 		for (int i = 1; i <= MaxClients; i++)
 		{
 			if (!IsClientInGame(i) || IsFakeClient(i)) continue;
 			
-			char strBuffer[512];
+			char buffer[512];
 			SetGlobalTransTarget(i);
-			FormatEx(strBuffer, sizeof(strBuffer), "%T", strPhrase, i,
-			         HBC(strArgs, aArgs, 0), HBC(strArgs, aArgs, 1),
-			         HBC(strArgs, aArgs, 2), HBC(strArgs, aArgs, 3),
-			         HBC(strArgs, aArgs, 4), HBC(strArgs, aArgs, 5),
-			         HBC(strArgs, aArgs, 6), HBC(strArgs, aArgs, 7));
+			FormatEx(buffer, sizeof(buffer), "%T", phrase, i,
+			         HBC(args, aArgs, 0), HBC(args, aArgs, 1),
+			         HBC(args, aArgs, 2), HBC(args, aArgs, 3),
+			         HBC(args, aArgs, 4), HBC(args, aArgs, 5),
+			         HBC(args, aArgs, 6), HBC(args, aArgs, 7));
 			
-			CPrintToChat(i, strBuffer);
+			CPrintToChat(i, buffer);
 		}
 	}
 	else
 	{
-		char strBuffer[512];
-		SetGlobalTransTarget(iClient);
-		FormatEx(strBuffer, sizeof(strBuffer), "%T", strPhrase, iClient,
-		         HBC(strArgs, aArgs, 0), HBC(strArgs, aArgs, 1),
-		         HBC(strArgs, aArgs, 2), HBC(strArgs, aArgs, 3),
-		         HBC(strArgs, aArgs, 4), HBC(strArgs, aArgs, 5),
-		         HBC(strArgs, aArgs, 6), HBC(strArgs, aArgs, 7));
+		char buffer[512];
+		SetGlobalTransTarget(client);
+		FormatEx(buffer, sizeof(buffer), "%T", phrase, client,
+		         HBC(args, aArgs, 0), HBC(args, aArgs, 1),
+		         HBC(args, aArgs, 2), HBC(args, aArgs, 3),
+		         HBC(args, aArgs, 4), HBC(args, aArgs, 5),
+		         HBC(args, aArgs, 6), HBC(args, aArgs, 7));
 		
-		CPrintToChat(iClient, strBuffer);
+		CPrintToChat(client, buffer);
 	}
 }
 
 // Returns either the numeric value or the string as any[].
 // SM 1.12 requires any[] return type — cannot coerce char[] to any scalar.
 // With only 8 calls instead of 29, this fits comfortably in default heap.
-any[] HBC(const char[][] strArgs, const any[] aArgs, int iIndex)
+any[] HBC(const char[][] args, const any[] aArgs, int index)
 {
 	static any aResult[256];
 	
-	if (!strArgs[iIndex][0])
+	if (!args[index][0])
 	{
-		aResult[0] = aArgs[iIndex];
+		aResult[0] = aArgs[index];
 		return aResult;
 	}
 	
 	int i;
-	for (i = 0; i < 255 && strArgs[iIndex][i]; i++)
+	for (i = 0; i < 255 && args[index][i]; i++)
 	{
-		aResult[i] = view_as<any>(strArgs[iIndex][i]);
+		aResult[i] = view_as<any>(args[index][i]);
 	}
 	aResult[i] = 0;
 	return aResult;

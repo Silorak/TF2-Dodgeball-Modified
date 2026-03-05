@@ -7,9 +7,9 @@
 #include <tfdb>
 
 #define PLUGIN_NAME        "[TFDB] Votes"
-#define PLUGIN_AUTHOR      "x07x08"
+#define PLUGIN_AUTHOR      "x07x08, Silorak"
 #define PLUGIN_DESCRIPTION "Various rocket votes."
-#define PLUGIN_VERSION     "1.1.0"
+#define PLUGIN_VERSION     "2.2.0"
 #define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball-Modified"
 
 int g_iSpawnersCount;
@@ -78,12 +78,12 @@ public void OnPluginStart()
 	
 	if (!TFDB_IsDodgeballEnabled()) return;
 	
-	char strMapName[64]; GetCurrentMap(strMapName, sizeof(strMapName));
-	GetMapDisplayName(strMapName, strMapName, sizeof(strMapName));
-	char strMapFile[PLATFORM_MAX_PATH]; FormatEx(strMapFile, sizeof(strMapFile), "%s.cfg", strMapName);
+	char mapName[64]; GetCurrentMap(mapName, sizeof(mapName));
+	GetMapDisplayName(mapName, mapName, sizeof(mapName));
+	char mapFile[PLATFORM_MAX_PATH]; FormatEx(mapFile, sizeof(mapFile), "%s.cfg", mapName);
 	
 	TFDB_OnRocketsConfigExecuted("general.cfg");
-	TFDB_OnRocketsConfigExecuted(strMapFile);
+	TFDB_OnRocketsConfigExecuted(mapFile);
 }
 
 public void OnMapEnd()
@@ -109,7 +109,7 @@ public void OnMapEnd()
 	g_iSpawnersCount = 0;
 }
 
-public void TFDB_OnRocketsConfigExecuted(const char[] strConfigFile)
+public void TFDB_OnRocketsConfigExecuted(const char[] configFile)
 {
 	if (!Loaded)
 	{
@@ -130,33 +130,33 @@ public void TFDB_OnRocketsConfigExecuted(const char[] strConfigFile)
 		Loaded = true;
 	}
 	
-	if (strcmp(strConfigFile, "general.cfg") == 0)
+	if (strcmp(configFile, "general.cfg") == 0)
 	{
 		g_iSpawnersCount = 0;
 	}
 	
-	ParseConfigurations(strConfigFile);
+	ParseConfigurations(configFile);
 }
 
-public Action CmdVoteBounce(int iClient, int iArgs)
+public Action CmdVoteBounce(int client, int args)
 {
-	if (iClient == 0)
+	if (client == 0)
 	{
-		ReplyToCommand(iClient, "Command is in-game only.");
+		ReplyToCommand(client, "Command is in-game only.");
 		
 		return Plugin_Handled;
 	}
 	
 	if (!TFDB_IsDodgeballEnabled())
 	{
-		CReplyToCommand(iClient, "%t", "Command_Disabled");
+		CReplyToCommand(client, "%t", "Command_Disabled");
 		
 		return Plugin_Handled;
 	}
 	
 	if (IsVoteInProgress())
 	{
-		CReplyToCommand(iClient, "%t", "Dodgeball_FFAVote_Conflict");
+		CReplyToCommand(client, "%t", "Dodgeball_FFAVote_Conflict");
 		
 		return Plugin_Handled;
 	}
@@ -171,7 +171,7 @@ public Action CmdVoteBounce(int iClient, int iArgs)
 	}
 	else
 	{
-		CReplyToCommand(iClient, "%t", "Dodgeball_BounceVote_Cooldown",
+		CReplyToCommand(client, "%t", "Dodgeball_BounceVote_Cooldown",
 		                RoundToCeil((LastVoteBounceTime + CvarVoteBounceTimeout.FloatValue) - GetGameTime()));
 	}
 	
@@ -183,61 +183,61 @@ void StartBounceVote()
 	char strMode[16];
 	strMode = !BounceEnabled ? "Enable" : "Disable";
 	
-	Menu hMenu = new Menu(VoteMenuHandler);
-	hMenu.VoteResultCallback = VoteBounceResultHandler;
+	Menu menu = new Menu(VoteMenuHandler);
+	menu.VoteResultCallback = VoteBounceResultHandler;
 	
-	hMenu.SetTitle("%s no rocket bounce mode?", strMode);
+	menu.SetTitle("%s no rocket bounce mode?", strMode);
 	
-	hMenu.AddItem("0", "Yes");
-	hMenu.AddItem("1", "No");
+	menu.AddItem("0", "Yes");
+	menu.AddItem("1", "No");
 	
-	int iTotal;
-	int[] iClients = new int[MaxClients];
+	int total;
+	int[] clients = new int[MaxClients];
 	
-	for (int iClient = 1; iClient <= MaxClients; iClient++)
+	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(iClient) || IsFakeClient(iClient) || GetClientTeam(iClient) <= 1)
+		if (!IsClientInGame(client) || IsFakeClient(client) || GetClientTeam(client) <= 1)
 		{
 			continue;
 		}
 		
-		iClients[iTotal++] = iClient;
+		clients[total++] = client;
 	}
 	
-	hMenu.DisplayVote(iClients, iTotal, CvarVoteBounceDuration.IntValue);
+	menu.DisplayVote(clients, total, CvarVoteBounceDuration.IntValue);
 }
 
-public int VoteMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1, int iParam2)
+public int VoteMenuHandler(Menu menu, MenuAction iMenuActions, int iParam1, int iParam2)
 {
 	switch (iMenuActions)
 	{
 		case MenuAction_End :
 		{
-			delete hMenu;
+			delete menu;
 		}
 	}
 	
 	return 0;
 }
 
-public void VoteBounceResultHandler(Menu hMenu,
+public void VoteBounceResultHandler(Menu menu,
                                     int iNumVotes,
                                     int iNumClients,
                                     const int[][] iClientInfo,
-                                    int iNumItems,
-                                    const int[][] iItemInfo)
+                                    int numItems,
+                                    const int[][] itemInfo)
 {
-	int iWinnerIndex = 0;
+	int winnerIndex = 0;
 	
-	if (iNumItems > 1 &&
-	    (iItemInfo[0][VOTEINFO_ITEM_VOTES] == iItemInfo[1][VOTEINFO_ITEM_VOTES]))
+	if (numItems > 1 &&
+	    (itemInfo[0][VOTEINFO_ITEM_VOTES] == itemInfo[1][VOTEINFO_ITEM_VOTES]))
 	{
-		iWinnerIndex = GetRandomInt(0, 1);
+		winnerIndex = GetRandomInt(0, 1);
 	}
 	
-	char strWinner[8]; hMenu.GetItem(iItemInfo[iWinnerIndex][VOTEINFO_ITEM_INDEX], strWinner, sizeof(strWinner));
+	char winner[8]; menu.GetItem(itemInfo[winnerIndex][VOTEINFO_ITEM_INDEX], winner, sizeof(winner));
 	
-	if (StrEqual(strWinner, "0"))
+	if (StrEqual(winner, "0"))
 	{
 		ToggleBounce();
 	}
@@ -263,11 +263,11 @@ void EnableBounce()
 {
 	BounceEnabled = true;
 	
-	for (int iIndex = 0; iIndex < MAX_ROCKETS; iIndex++)
+	for (int index = 0; index < MAX_ROCKETS; index++)
 	{
-		if (!TFDB_IsValidRocket(iIndex)) continue;
+		if (!TFDB_IsValidRocket(index)) continue;
 		
-		TFDB_SetRocketBounces(iIndex, TFDB_GetRocketClassMaxBounces(TFDB_GetRocketClass(iIndex)));
+		TFDB_SetRocketBounces(index, TFDB_GetRocketClassMaxBounces(TFDB_GetRocketClass(index)));
 	}
 	
 	CPrintToChatAll("%t", "Dodgeball_BounceVote_Enabled");
@@ -277,35 +277,35 @@ void DisableBounce()
 {
 	BounceEnabled = false;
 	
-	for (int iIndex = 0; iIndex < MAX_ROCKETS; iIndex++)
+	for (int index = 0; index < MAX_ROCKETS; index++)
 	{
-		if (!TFDB_IsValidRocket(iIndex)) continue;
+		if (!TFDB_IsValidRocket(index)) continue;
 		
-		TFDB_SetRocketBounces(iIndex, 0);
+		TFDB_SetRocketBounces(index, 0);
 	}
 	
 	CPrintToChatAll("%t", "Dodgeball_BounceVote_Disabled");
 }
 
-public Action CmdVoteClass(int iClient, int iArgs)
+public Action CmdVoteClass(int client, int args)
 {
-	if (iClient == 0)
+	if (client == 0)
 	{
-		ReplyToCommand(iClient, "Command is in-game only.");
+		ReplyToCommand(client, "Command is in-game only.");
 		
 		return Plugin_Handled;
 	}
 	
 	if (!TFDB_IsDodgeballEnabled())
 	{
-		CReplyToCommand(iClient, "%t", "Command_Disabled");
+		CReplyToCommand(client, "%t", "Command_Disabled");
 		
 		return Plugin_Handled;
 	}
 	
 	if (IsVoteInProgress())
 	{
-		CReplyToCommand(iClient, "%t", "Dodgeball_FFAVote_Conflict");
+		CReplyToCommand(client, "%t", "Dodgeball_FFAVote_Conflict");
 		
 		return Plugin_Handled;
 	}
@@ -320,7 +320,7 @@ public Action CmdVoteClass(int iClient, int iArgs)
 	}
 	else
 	{
-		CReplyToCommand(iClient, "%t", "Dodgeball_ClassVote_Cooldown",
+		CReplyToCommand(client, "%t", "Dodgeball_ClassVote_Cooldown",
 		                RoundToCeil((LastVoteClassTime + CvarVoteClassTimeout.FloatValue) - GetGameTime()));
 	}
 	
@@ -329,63 +329,63 @@ public Action CmdVoteClass(int iClient, int iArgs)
 
 void StartClassVote()
 {
-	Menu hMenu = new Menu(VoteMenuHandler);
-	hMenu.VoteResultCallback = VoteClassResultHandler;
+	Menu menu = new Menu(VoteMenuHandler);
+	menu.VoteResultCallback = VoteClassResultHandler;
 	
-	hMenu.SetTitle("Change main rocket class?");
+	menu.SetTitle("Change main rocket class?");
 	
 	if (MainRocketClass != -1)
 	{
-		hMenu.AddItem("-1", "Reset the spawn chances");
+		menu.AddItem("-1", "Reset the spawn chances");
 	}
 	
-	char strClass[8], strRocketClassLongName[32];
+	char strClass[8], rocketLongName[32];
 	
-	for (int iClass = 0; iClass < TFDB_GetRocketClassCount(); iClass++)
+	for (int classIndex = 0; classIndex < TFDB_GetRocketClassCount(); classIndex++)
 	{
-		IntToString(iClass, strClass, sizeof(strClass));
-		TFDB_GetRocketClassLongName(iClass, strRocketClassLongName, sizeof(strRocketClassLongName));
+		IntToString(classIndex, strClass, sizeof(strClass));
+		TFDB_GetRocketClassLongName(classIndex, rocketLongName, sizeof(rocketLongName));
 		
-		hMenu.AddItem(strClass, strRocketClassLongName, ITEMDRAW_DEFAULT);
+		menu.AddItem(strClass, rocketLongName, ITEMDRAW_DEFAULT);
 	}
 	
-	int iTotal;
-	int[] iClients = new int[MaxClients];
+	int total;
+	int[] clients = new int[MaxClients];
 	
-	for (int iClient = 1; iClient <= MaxClients; iClient++)
+	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(iClient) || IsFakeClient(iClient) || GetClientTeam(iClient) <= 1)
+		if (!IsClientInGame(client) || IsFakeClient(client) || GetClientTeam(client) <= 1)
 		{
 			continue;
 		}
 		
-		iClients[iTotal++] = iClient;
+		clients[total++] = client;
 	}
 	
-	hMenu.DisplayVote(iClients, iTotal, CvarVoteClassDuration.IntValue);
+	menu.DisplayVote(clients, total, CvarVoteClassDuration.IntValue);
 }
 
-public void VoteClassResultHandler(Menu hMenu,
+public void VoteClassResultHandler(Menu menu,
                                    int iNumVotes,
                                    int iNumClients,
                                    const int[][] iClientInfo,
-                                   int iNumItems,
-                                   const int[][] iItemInfo)
+                                   int numItems,
+                                   const int[][] itemInfo)
 {
-	int iWinnerIndex = 0;
+	int winnerIndex = 0;
 	int iClassCount = TFDB_GetRocketClassCount();
 	
 	if (MainRocketClass != -1) iClassCount++;
 	
-	bool bEqual = AreVotesEqual(iItemInfo, iClassCount);
+	bool isEqual = AreVotesEqual(itemInfo, iClassCount);
 	
-	if (bEqual) iWinnerIndex = GetRandomInt(0, (iClassCount - 1));
+	if (isEqual) winnerIndex = GetRandomInt(0, (iClassCount - 1));
 	
-	char strWinner[8], strClassLongName[32];
+	char winner[8], strClassLongName[32];
 	
-	hMenu.GetItem(iItemInfo[iWinnerIndex][VOTEINFO_ITEM_INDEX], strWinner, sizeof(strWinner), _, strClassLongName, sizeof(strClassLongName));
+	menu.GetItem(itemInfo[winnerIndex][VOTEINFO_ITEM_INDEX], winner, sizeof(winner), _, strClassLongName, sizeof(strClassLongName));
 	
-	MainRocketClass = StringToInt(strWinner);
+	MainRocketClass = StringToInt(winner);
 	
 	if (MainRocketClass == -1)
 	{
@@ -399,25 +399,25 @@ public void VoteClassResultHandler(Menu hMenu,
 	TFDB_DestroyRockets();
 }
 
-public Action CmdVoteCount(int iClient, int iArgs)
+public Action CmdVoteCount(int client, int args)
 {
-	if (iClient == 0)
+	if (client == 0)
 	{
-		ReplyToCommand(iClient, "Command is in-game only.");
+		ReplyToCommand(client, "Command is in-game only.");
 		
 		return Plugin_Handled;
 	}
 	
 	if (!TFDB_IsDodgeballEnabled())
 	{
-		CReplyToCommand(iClient, "%t", "Command_Disabled");
+		CReplyToCommand(client, "%t", "Command_Disabled");
 		
 		return Plugin_Handled;
 	}
 	
 	if (IsVoteInProgress())
 	{
-		CReplyToCommand(iClient, "%t", "Dodgeball_FFAVote_Conflict");
+		CReplyToCommand(client, "%t", "Dodgeball_FFAVote_Conflict");
 		
 		return Plugin_Handled;
 	}
@@ -432,7 +432,7 @@ public Action CmdVoteCount(int iClient, int iArgs)
 	}
 	else
 	{
-		CReplyToCommand(iClient, "%t", "Dodgeball_CountVote_Cooldown",
+		CReplyToCommand(client, "%t", "Dodgeball_CountVote_Cooldown",
 		                RoundToCeil((LastVoteCountTime + CvarVoteCountTimeout.FloatValue) - GetGameTime()));
 	}
 	
@@ -441,61 +441,61 @@ public Action CmdVoteCount(int iClient, int iArgs)
 
 void StartCountVote()
 {
-	Menu hMenu = new Menu(VoteMenuHandler);
-	hMenu.VoteResultCallback = VoteCountResultHandler;
+	Menu menu = new Menu(VoteMenuHandler);
+	menu.VoteResultCallback = VoteCountResultHandler;
 	
-	hMenu.SetTitle("Change rockets count?");
+	menu.SetTitle("Change rockets count?");
 	
 	if (RocketsCount != -1)
 	{
-		hMenu.AddItem("-1", "Reset rockets count");
+		menu.AddItem("-1", "Reset rockets count");
 	}
 	
-	hMenu.AddItem("0", "One rocket");
-	hMenu.AddItem("1", "Two rockets");
-	hMenu.AddItem("2", "Three rockets");
-	hMenu.AddItem("3", "Four rockets");
-	hMenu.AddItem("4", "Five rockets");
+	menu.AddItem("0", "One rocket");
+	menu.AddItem("1", "Two rockets");
+	menu.AddItem("2", "Three rockets");
+	menu.AddItem("3", "Four rockets");
+	menu.AddItem("4", "Five rockets");
 	
-	int iTotal;
-	int[] iClients = new int[MaxClients];
+	int total;
+	int[] clients = new int[MaxClients];
 	
-	for (int iClient = 1; iClient <= MaxClients; iClient++)
+	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(iClient) || IsFakeClient(iClient) || GetClientTeam(iClient) <= 1)
+		if (!IsClientInGame(client) || IsFakeClient(client) || GetClientTeam(client) <= 1)
 		{
 			continue;
 		}
 		
-		iClients[iTotal++] = iClient;
+		clients[total++] = client;
 	}
 	
-	hMenu.DisplayVote(iClients, iTotal, CvarVoteCountDuration.IntValue);
+	menu.DisplayVote(clients, total, CvarVoteCountDuration.IntValue);
 }
 
-public void VoteCountResultHandler(Menu hMenu,
+public void VoteCountResultHandler(Menu menu,
                                    int iNumVotes,
                                    int iNumClients,
                                    const int[][] iClientInfo,
-                                   int iNumItems,
-                                   const int[][] iItemInfo)
+                                   int numItems,
+                                   const int[][] itemInfo)
 {
-	int iWinnerIndex = 0;
+	int winnerIndex = 0;
 	int iVotesCount = 5;
 	
 	if (RocketsCount != -1) iVotesCount++;
 	
-	bool bEqual = AreVotesEqual(iItemInfo, iVotesCount);
+	bool isEqual = AreVotesEqual(itemInfo, iVotesCount);
 	
-	if (bEqual) iWinnerIndex = GetRandomInt(0, (iVotesCount - 1));
+	if (isEqual) winnerIndex = GetRandomInt(0, (iVotesCount - 1));
 	
-	char strWinner[8]; hMenu.GetItem(iItemInfo[iWinnerIndex][VOTEINFO_ITEM_INDEX], strWinner, sizeof(strWinner));
+	char winner[8]; menu.GetItem(itemInfo[winnerIndex][VOTEINFO_ITEM_INDEX], winner, sizeof(winner));
 	
-	RocketsCount = StringToInt(strWinner);
+	RocketsCount = StringToInt(winner);
 	
-	for (int iIndex = 0; iIndex < TFDB_GetSpawnersCount(); iIndex++)
+	for (int index = 0; index < TFDB_GetSpawnersCount(); index++)
 	{
-		TFDB_SetSpawnersMaxRockets(iIndex, RocketsCount == -1 ? SavedMaxRockets[iIndex] : (RocketsCount + 1));
+		TFDB_SetSpawnersMaxRockets(index, RocketsCount == -1 ? SavedMaxRockets[index] : (RocketsCount + 1));
 	}
 	
 	if (RocketsCount == -1)
@@ -508,32 +508,32 @@ public void VoteCountResultHandler(Menu hMenu,
 	}
 }
 
-public Action CmdVotePreset(int iClient, int iArgs)
+public Action CmdVotePreset(int client, int args)
 {
-	if (iClient == 0)
+	if (client == 0)
 	{
-		ReplyToCommand(iClient, "Command is in-game only.");
+		ReplyToCommand(client, "Command is in-game only.");
 		
 		return Plugin_Handled;
 	}
 	
 	if (!TFDB_IsDodgeballEnabled())
 	{
-		CReplyToCommand(iClient, "%t", "Command_Disabled");
+		CReplyToCommand(client, "%t", "Command_Disabled");
 		
 		return Plugin_Handled;
 	}
 	
 	if (IsVoteInProgress())
 	{
-		CReplyToCommand(iClient, "%t", "Dodgeball_FFAVote_Conflict");
+		CReplyToCommand(client, "%t", "Dodgeball_FFAVote_Conflict");
 		
 		return Plugin_Handled;
 	}
 	
 	if (TFDB_GetPresetCount() == 0)
 	{
-		CReplyToCommand(iClient, "%t", "Dodgeball_PresetVote_NoPresets");
+		CReplyToCommand(client, "%t", "Dodgeball_PresetVote_NoPresets");
 		
 		return Plugin_Handled;
 	}
@@ -548,7 +548,7 @@ public Action CmdVotePreset(int iClient, int iArgs)
 	}
 	else
 	{
-		CReplyToCommand(iClient, "%t", "Dodgeball_PresetVote_Cooldown",
+		CReplyToCommand(client, "%t", "Dodgeball_PresetVote_Cooldown",
 		                RoundToCeil((LastVotePresetTime + CvarVotePresetTimeout.FloatValue) - GetGameTime()));
 	}
 	
@@ -557,58 +557,58 @@ public Action CmdVotePreset(int iClient, int iArgs)
 
 void StartPresetVote()
 {
-	Menu hMenu = new Menu(VoteMenuHandler);
-	hMenu.VoteResultCallback = VotePresetResultHandler;
+	Menu menu = new Menu(VoteMenuHandler);
+	menu.VoteResultCallback = VotePresetResultHandler;
 	
-	hMenu.SetTitle("Select gameplay preset:");
+	menu.SetTitle("Select gameplay preset:");
 	
 	int iPresetCount = TFDB_GetPresetCount();
 	for (int i = 0; i < iPresetCount; i++)
 	{
-		char strIndex[8], strName[64];
-		IntToString(i, strIndex, sizeof(strIndex));
-		TFDB_GetPresetName(i, strName, sizeof(strName));
-		hMenu.AddItem(strIndex, strName);
+		char indexStr[8], name[64];
+		IntToString(i, indexStr, sizeof(indexStr));
+		TFDB_GetPresetName(i, name, sizeof(name));
+		menu.AddItem(indexStr, name);
 	}
 	
-	int iTotal;
-	int[] iClients = new int[MaxClients];
+	int total;
+	int[] clients = new int[MaxClients];
 	
-	for (int iClient = 1; iClient <= MaxClients; iClient++)
+	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(iClient) || IsFakeClient(iClient) || GetClientTeam(iClient) <= 1)
+		if (!IsClientInGame(client) || IsFakeClient(client) || GetClientTeam(client) <= 1)
 		{
 			continue;
 		}
 		
-		iClients[iTotal++] = iClient;
+		clients[total++] = client;
 	}
 	
-	hMenu.DisplayVote(iClients, iTotal, CvarVotePresetDuration.IntValue);
+	menu.DisplayVote(clients, total, CvarVotePresetDuration.IntValue);
 }
 
-public void VotePresetResultHandler(Menu hMenu,
+public void VotePresetResultHandler(Menu menu,
                                     int iNumVotes,
                                     int iNumClients,
                                     const int[][] iClientInfo,
-                                    int iNumItems,
-                                    const int[][] iItemInfo)
+                                    int numItems,
+                                    const int[][] itemInfo)
 {
-	int iWinnerIndex = 0;
+	int winnerIndex = 0;
 	
-	bool bEqual = AreVotesEqual(iItemInfo, iNumItems);
+	bool isEqual = AreVotesEqual(itemInfo, numItems);
 	
-	if (bEqual) iWinnerIndex = GetRandomInt(0, (iNumItems - 1));
+	if (isEqual) winnerIndex = GetRandomInt(0, (numItems - 1));
 	
-	char strWinner[8]; hMenu.GetItem(iItemInfo[iWinnerIndex][VOTEINFO_ITEM_INDEX], strWinner, sizeof(strWinner));
+	char winner[8]; menu.GetItem(itemInfo[winnerIndex][VOTEINFO_ITEM_INDEX], winner, sizeof(winner));
 	
-	int iPreset = StringToInt(strWinner);
+	int iPreset = StringToInt(winner);
 	
 	if (TFDB_ApplyPreset(iPreset))
 	{
-		char strName[64];
-		TFDB_GetPresetName(iPreset, strName, sizeof(strName));
-		CPrintToChatAll("%t", "Dodgeball_PresetVote_Applied", strName);
+		char name[64];
+		TFDB_GetPresetName(iPreset, name, sizeof(name));
+		CPrintToChatAll("%t", "Dodgeball_PresetVote_Applied", name);
 	}
 }
 
@@ -640,43 +640,43 @@ public Action VotePresetTimeoutCallback(Handle hTimer)
 	return Plugin_Continue;
 }
 
-public Action TFDB_OnRocketCreatedPre(int iIndex, int &iClass, RocketFlags &iFlags)
+public Action TFDB_OnRocketCreatedPre(int index, int &classIndex, RocketFlags &iFlags)
 {
 	if (MainRocketClass == -1) return Plugin_Continue;
 	
-	iClass = MainRocketClass;
+	classIndex = MainRocketClass;
 	iFlags = TFDB_GetRocketClassFlags(MainRocketClass);
 	
 	return Plugin_Changed;
 }
 
-public void TFDB_OnRocketCreated(int iIndex)
+public void TFDB_OnRocketCreated(int index, int entity)
 {
 	if (!BounceEnabled) return;
 	
-	TFDB_SetRocketBounces(iIndex, TFDB_GetRocketClassMaxBounces(TFDB_GetRocketClass(iIndex)));
+	TFDB_SetRocketBounces(index, TFDB_GetRocketClassMaxBounces(TFDB_GetRocketClass(index)));
 }
 
-void ParseConfigurations(const char[] strConfigFile)
+void ParseConfigurations(const char[] configFile)
 {
-	char strPath[PLATFORM_MAX_PATH];
+	char path[PLATFORM_MAX_PATH];
 	char strFileName[PLATFORM_MAX_PATH];
-	FormatEx(strFileName, sizeof(strFileName), "configs/dodgeball/%s", strConfigFile);
-	BuildPath(Path_SM, strPath, sizeof(strPath), strFileName);
+	FormatEx(strFileName, sizeof(strFileName), "configs/dodgeball/%s", configFile);
+	BuildPath(Path_SM, path, sizeof(path), strFileName);
 	
-	if (!FileExists(strPath, true)) return;
+	if (!FileExists(path, true)) return;
 	
 	KeyValues kvConfig = new KeyValues("TF2_Dodgeball");
 	
-	if (kvConfig.ImportFromFile(strPath) == false) SetFailState("Error while parsing the configuration file.");
+	if (kvConfig.ImportFromFile(path) == false) SetFailState("Error while parsing the configuration file.");
 	
 	kvConfig.GotoFirstSubKey();
 	
 	do
 	{
-		char strSection[64]; kvConfig.GetSectionName(strSection, sizeof(strSection));
+		char section[64]; kvConfig.GetSectionName(section, sizeof(section));
 		
-		if (StrEqual(strSection, "spawners")) ParseSpawners(kvConfig);
+		if (StrEqual(section, "spawners")) ParseSpawners(kvConfig);
 	}
 	while (kvConfig.GotoNextKey());
 	
@@ -689,9 +689,9 @@ void ParseSpawners(KeyValues kvConfig)
 	
 	do
 	{
-		int iIndex = g_iSpawnersCount;
+		int index = g_iSpawnersCount;
 		
-		SavedMaxRockets[iIndex] = kvConfig.GetNum("max rockets", 1);
+		SavedMaxRockets[index] = kvConfig.GetNum("max rockets", 1);
 		
 		g_iSpawnersCount++;
 	}
@@ -704,9 +704,9 @@ bool AreVotesEqual(const int[][] iVoteItems, int iSize)
 {
 	int iFirst = iVoteItems[0][VOTEINFO_ITEM_VOTES];
 	
-	for (int iIndex = 1; iIndex < iSize; iIndex++)
+	for (int index = 1; index < iSize; index++)
 	{
-		if (iVoteItems[iIndex][VOTEINFO_ITEM_VOTES] != iFirst) return false;
+		if (iVoteItems[index][VOTEINFO_ITEM_VOTES] != iFirst) return false;
 	}
 	
 	return true;

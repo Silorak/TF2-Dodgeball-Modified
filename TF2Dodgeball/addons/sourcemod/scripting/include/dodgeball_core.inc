@@ -78,6 +78,13 @@ void EnableDodgeBall()
 	PrecacheParticle(PARTICLE_NUKE_4);
 	PrecacheParticle(PARTICLE_NUKE_5);
 	PrecacheParticle(PARTICLE_NUKE_COLLUMN);
+	PrecacheParticle(PARTICLE_ROCKET_TRAIL);
+
+	// Initialize trail refs to invalid
+	for (int i = 0; i < MAX_ROCKETS; i++)
+	{
+		RocketTrailRef[i] = INVALID_ENT_REFERENCE;
+	}
 
 	for (int i = 0; i < RocketClassCount; i++)
 	{

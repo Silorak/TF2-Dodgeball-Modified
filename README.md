@@ -46,7 +46,8 @@ built on the shoulders of community giants.
 <td>
 
 ### 🧩 Modular Architecture
-- **11 Optional Subplugins** — Enable only what you need
+- **9 Optional Subplugins** — Enable only what you need
+- **Built-in Features** — Push prevention, noblock, target lock, trail fix
 - **Powerful API** — 130+ natives for addon developers
 - **Rich Forward System** — Hook into every game event
 
@@ -93,17 +94,17 @@ built on the shoulders of community giants.
 
 | Module | Description |
 |--------|-------------|
-| **AirblastPrevention** | Prevents airblast griefing |
 | **AntiSnipe** | Blocks long-distance rocket interference |
-| **AntiSwitch** | Prevents weapon switching exploits |
 | **ExtraEvents** | Additional event hooks for customization |
 | **FFA** | Free-for-all mode support |
+| **Guardian** | Guardian mode — one powered player vs all |
 | **Menu** | In-game admin menu for settings |
-| **NoBlock** | Player collision toggle |
 | **Print** | Enhanced chat messages |
 | **Speedometer** | Real-time rocket speed display |
 | **Trails** | Visual rocket trail effects |
 | **Votes** | Player voting system |
+
+> **Note:** Push prevention, noblock, and target lock are now built into the core plugin and configured via `general.cfg`. The old AirblastPrevention, NoBlock, and AntiSwitch subplugins have been removed.
 
 ---
 
@@ -112,9 +113,10 @@ built on the shoulders of community giants.
 | Dependency | Required For | Download |
 |------------|--------------|----------|
 | **CollisionHook** | Anti Snipe Module | [AlliedModders](https://forums.alliedmods.net/showthread.php?t=197815) |
+| **TF2Attributes** | Guardian Module | [GitHub](https://github.com/FlaminSarge/tf2attributes) |
 | **Nuke Model** | Nuke explosion effects | [AlliedModders](https://forums.alliedmods.net/showpost.php?p=2180141&postcount=350) |
 
-> ⚠️ Both dependencies are **optional** — only install if using the feature.
+> ⚠️ All dependencies are **optional** — only install if using the corresponding feature.
 
 ---
 

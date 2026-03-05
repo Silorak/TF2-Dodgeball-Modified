@@ -19,7 +19,7 @@
 // *********************************************************************************
 #define PLUGIN_NAME             "[TF2] Dodgeball"
 #define PLUGIN_AUTHOR           "Damizean, x07x08 continued by Silorak"
-#define PLUGIN_VERSION          "2.1.0"
+#define PLUGIN_VERSION          "2.2.0"
 #define PLUGIN_CONTACT          "https://github.com/Silorak/TF2-Dodgeball-Modified"
 
 enum Musics
@@ -49,6 +49,13 @@ ConVar CvarNoTargetRedirectDamage;
 ConVar CvarStealMessage;
 ConVar CvarDelayMessage;
 
+// -----<<< Built-in Features (cfg-controlled) >>>-----
+bool UsePushPrevention;
+bool UsePushPreventionToggle;
+bool UseNoBlock;
+bool UseTargetLock;
+bool UseTargetLockBotOnly;
+
 
 
 // -----<<< Gameplay >>>-----
@@ -68,6 +75,16 @@ int    LastStealer;
 int    DamageOffset;
 
 eRocketSteal StealInfo[MAXPLAYERS + 1];
+
+// -----<<< Push Prevention >>>-----
+// FL_NOTARGET prevents airblast from pushing other players.
+// Per-client toggle so players can opt out via !ab.
+bool PushPreventionEnabled[MAXPLAYERS + 1];
+
+// -----<<< Target Lock >>>-----
+// Stores the last target a player deflected a rocket towards.
+// Used to prevent target switching on subsequent deflects.
+int LockedTarget[MAXPLAYERS + 1];
 
 // -----<<< Configuration >>>-----
 bool MusicEnabled;
@@ -100,7 +117,13 @@ int         RocketBounces[MAX_ROCKETS];
 bool        RocketHomingPaused[MAX_ROCKETS];
 bool        RocketIsDragPause[MAX_ROCKETS];     // true = drag pause (per-frame unpause), false = bounce pause (timer unpause)
 float       RocketDragPauseEnd[MAX_ROCKETS];    // GetGameTime() when drag pause should end
+int         RocketTrailRef[MAX_ROCKETS];        // EntRef to our server-side trail (INVALID_ENT_REFERENCE if none)
 int         RocketCount;
+
+// -----<<< Trail Management >>>-----
+// When true, a trail subplugin is loaded and handles its own trails.
+// Core will still kill engine trails on deflect, but won't create replacements.
+bool TrailPluginLoaded;
 
 // Classes
 char           RocketClassName[MAX_ROCKET_CLASSES][16];
@@ -171,17 +194,17 @@ float PresetSpawnInterval[MAX_PRESETS];
 int   PresetCount;
 
 // -----<<< Forward handles >>>-----
-Handle ForwardOnRocketCreated;
-Handle ForwardOnRocketCreatedPre;
-Handle ForwardOnRocketDeflect;
-Handle ForwardOnRocketDeflectPre;
-Handle ForwardOnRocketSteal;
-Handle ForwardOnRocketNoTarget;
-Handle ForwardOnRocketDelay;
-Handle ForwardOnRocketBounce;
-Handle ForwardOnRocketBouncePre;
-Handle ForwardOnRocketsConfigExecuted;
-Handle ForwardOnRocketStateChanged;
+GlobalForward ForwardOnRocketCreated;
+GlobalForward ForwardOnRocketCreatedPre;
+GlobalForward ForwardOnRocketDeflect;
+GlobalForward ForwardOnRocketDeflectPre;
+GlobalForward ForwardOnRocketSteal;
+GlobalForward ForwardOnRocketNoTarget;
+GlobalForward ForwardOnRocketDelay;
+GlobalForward ForwardOnRocketBounce;
+GlobalForward ForwardOnRocketBouncePre;
+GlobalForward ForwardOnRocketsConfigExecuted;
+GlobalForward ForwardOnRocketStateChanged;
 
 // *********************************************************************************
 // PLUGIN LOGIC (INCLUDES)
@@ -226,6 +249,8 @@ public void OnPluginStart()
 	CvarStealMessage = CreateConVar("tf_dodgeball_sp_message", "1", "Display the steal message(s)?", _, true, 0.0, true, 1.0);
 	CvarDelayMessage = CreateConVar("tf_dodgeball_dp_message", "1", "Display the delay message(s)?", _, true, 0.0, true, 1.0);
 
+	// Built-in features are loaded from general.cfg in ParseGeneral().
+
 
 
 	SpawnersTrie = new StringMap();
@@ -239,7 +264,7 @@ public void OnPluginStart()
 	RegisterCommands();
 }
 
-public APLRes AskPluginLoad2(Handle hMyself, bool bLate, char[] strError, int iErrMax)
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 {
 	CreateNative("TFDB_IsValidRocket", Native_IsValidRocket);
 	CreateNative("TFDB_FindRocketByEntity", Native_FindRocketByEntity);
@@ -418,6 +443,21 @@ public void OnConfigsExecuted()
 public void OnMapEnd()
 {
 	DisableDodgeBall();
+}
+
+public void OnLibraryAdded(const char[] name)
+{
+	if (StrEqual(name, "tfdbtrails")) TrailPluginLoaded = true;
+}
+
+public void OnLibraryRemoved(const char[] name)
+{
+	if (StrEqual(name, "tfdbtrails")) TrailPluginLoaded = false;
+}
+
+public void OnAllPluginsLoaded()
+{
+	TrailPluginLoaded = LibraryExists("tfdbtrails");
 }
 
 void Forward_OnRocketCreated(int index, int entity)

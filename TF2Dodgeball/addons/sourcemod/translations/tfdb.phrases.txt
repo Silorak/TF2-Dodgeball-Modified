@@ -641,4 +641,79 @@
 		"#format"	"{1:s}"
 		"en"		"[{olive}TFDB{default}] Preset changed to {community}{1}{default}."
 	}
+	
+	// ---- Guardian subplugin phrases ----
+	
+	"Guardian_Disabled"
+	{
+		"en"		"[{olive}TFDB{default}] Guardian mode is {red}disabled{default}."
+	}
+	
+	"Guardian_Selected"
+	{
+		"#format"	"{1:N},{2:s}"
+		"en"		"[{olive}TFDB{default}] {red}{1}{default} is now the {darkmagenta}Guardian{default} ({community}{2}{default})!"
+	}
+	
+	"Guardian_Died"
+	{
+		"#format"	"{1:N}"
+		"en"		"[{olive}TFDB{default}] The {darkmagenta}Guardian{default} {red}{1}{default} has fallen!"
+	}
+	
+	"Guardian_Disconnected"
+	{
+		"#format"	"{1:N}"
+		"en"		"[{olive}TFDB{default}] The {darkmagenta}Guardian{default} {red}{1}{default} has disconnected."
+	}
+	
+	"Guardian_Removed"
+	{
+		"#format"	"{1:N}"
+		"en"		"[{olive}TFDB{default}] The {darkmagenta}Guardian{default} {red}{1}{default} has been removed by an admin."
+	}
+	
+	"Guardian_Forced"
+	{
+		"#format"	"{1:N}"
+		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} will be the {darkmagenta}Guardian{default} next round."
+	}
+	
+	"Guardian_ClassForced"
+	{
+		"#format"	"{1:s}"
+		"en"		"[{olive}TFDB{default}] Guardian class set to {community}{1}{default} for next round."
+	}
+	
+	"Guardian_TeamBlocked"
+	{
+		"en"		"[{olive}TFDB{default}] You cannot join the {steelblue}Guardian{default}'s team."
+	}
+	
+	"Guardian_RageActivated"
+	{
+		"#format"	"{1:N}"
+		"en"		"[{olive}TFDB{default}] {red}{1}{default} activated {darkmagenta}RAGE{default}! Airblast powered up!"
+	}
+	
+	"Guardian_SprintActivated"
+	{
+		"#format"	"{1:N}"
+		"en"		"[{olive}TFDB{default}] {red}{1}{default} activated {community}SPRINT{default}! Speed boosted!"
+	}
+	
+	"Guardian_BlockedBot"
+	{
+		"en"		"[{olive}TFDB{default}] {red}Guardian mode unavailable{default} — bots are active."
+	}
+	
+	"Guardian_BlockedFFA"
+	{
+		"en"		"[{olive}TFDB{default}] {red}Guardian mode unavailable{default} — FFA is active."
+	}
+	
+	"Guardian_BotJoined"
+	{
+		"en"		"[{olive}TFDB{default}] {red}Guardian disabled{default} — a bot joined the server."
+	}
 }
