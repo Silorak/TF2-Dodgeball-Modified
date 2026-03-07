@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🚀 TF2 Dodgeball Modified
+# 🚀 TF2 Dodgeball
 
 [![GitHub release](https://img.shields.io/github/v/release/Silorak/TF2-Dodgeball-Modified?style=for-the-badge&logo=github&color=blue)](https://github.com/Silorak/TF2-Dodgeball-Modified/releases/latest)
 [![GitHub issues](https://img.shields.io/github/issues/Silorak/TF2-Dodgeball-Modified?style=for-the-badge&logo=github)](https://github.com/Silorak/TF2-Dodgeball-Modified/issues)
