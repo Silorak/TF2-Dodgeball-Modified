@@ -105,7 +105,14 @@ void CreateRocket(int spawnerEntity, int spawnerClass, int team, int rocketClass
 	// Kill the engine's default trail and attach a server-controlled replacement.
 	// Must happen after DispatchSpawn (which creates the engine trail) and before
 	// the forward (so subplugins see a clean state).
-	InitRocketTrail(index, entity);
+	InitRocketTrail(entity);
+
+	// Safety: the engine may write m_hEffectEntity a frame after DispatchSpawn.
+	// Schedule a follow-up kill to catch any late engine trail.
+	DataPack spawnPack = new DataPack();
+	spawnPack.WriteCell(index);
+	spawnPack.WriteCell(EntIndexToEntRef(entity));
+	RequestFrame(Frame_PostSpawnTrailFix, spawnPack);
 
 	Forward_OnRocketCreated(index, entity);
 }
@@ -118,8 +125,6 @@ void CreateRocket(int spawnerEntity, int spawnerClass, int team, int rocketClass
 void DestroyRocket(int index)
 {
 	if (!IsValidRocket(index)) return;
-
-	KillServerTrail(index);
 
 	int entity = EntRefToEntIndex(RocketEntity[index]);
 	if (entity != INVALID_ENT_REFERENCE)
@@ -143,17 +148,16 @@ void DestroyRockets()
 }
 
 // ============================================================================
-// Trail Management
+// Engine Trail Cleanup
 //
 // TF2's engine creates a new trail particle (info_particle_system) every time
 // a rocket is deflected, storing it in m_hEffectEntity. The previous trail is
 // orphaned — still rendering, still consuming resources. After 100+ deflects
 // this causes FPS drops and client crashes.
 //
-// Fix: on creation and after each deflect, kill the engine's trail via
-// m_hEffectEntity and attach a single server-controlled replacement trail.
-// If a trail subplugin (tfdb_trails) is loaded, skip the replacement —
-// the subplugin manages its own visuals.
+// We kill these engine-created trails on spawn and after each deflect.
+// The client renders its own trail from rockettrail.pcf automatically —
+// that's the intended visual. For custom trails, use the tfdb_trails subplugin.
 // ============================================================================
 
 /**
@@ -176,77 +180,20 @@ void KillEngineTrail(int entity)
 }
 
 /**
- * Kills the server-side replacement trail for a rocket (by internal index).
- *
- * @param index    The rocket's internal index.
- */
-void KillServerTrail(int index)
-{
-	int ref = RocketTrailRef[index];
-	if (ref == INVALID_ENT_REFERENCE) return;
-
-	int particle = EntRefToEntIndex(ref);
-	if (particle != -1 && IsValidEntity(particle))
-	{
-		AcceptEntityInput(particle, "Stop");
-		RemoveEntity(particle);
-	}
-
-	RocketTrailRef[index] = INVALID_ENT_REFERENCE;
-}
-
-/**
- * Attaches a server-controlled trail particle to a rocket.
- * Only called when no trail subplugin is loaded.
+ * Kills the engine's default trail on a newly created rocket.
  *
  * @param index     The rocket's internal index.
  * @param entity    The rocket entity index.
  */
-void AttachServerTrail(int index, int entity)
-{
-	if (!IsValidEntity(entity)) return;
-
-	int particle = CreateEntityByName("info_particle_system");
-	if (particle == -1) return;
-
-	float pos[3];
-	GetEntPropVector(entity, Prop_Send, "m_vecOrigin", pos);
-
-	DispatchKeyValue(particle, "effect_name", PARTICLE_ROCKET_TRAIL);
-	DispatchKeyValueVector(particle, "origin", pos);
-	DispatchSpawn(particle);
-	ActivateEntity(particle);
-	AcceptEntityInput(particle, "Start");
-
-	SetVariantString("!activator");
-	AcceptEntityInput(particle, "SetParent", entity, particle, 0);
-
-	RocketTrailRef[index] = EntIndexToEntRef(particle);
-}
-
-/**
- * Initializes trail for a newly created rocket.
- * Kills the engine's default trail and attaches a server-side replacement
- * (unless a trail subplugin handles trails).
- *
- * @param index     The rocket's internal index.
- * @param entity    The rocket entity index.
- */
-void InitRocketTrail(int index, int entity)
+void InitRocketTrail(int entity)
 {
 	KillEngineTrail(entity);
-	RocketTrailRef[index] = INVALID_ENT_REFERENCE;
-
-	if (!TrailPluginLoaded)
-	{
-		AttachServerTrail(index, entity);
-	}
 }
 
 /**
- * RequestFrame callback — kills the engine's newly stacked trail after deflect
- * and refreshes the server-side replacement.
- * Uses a DataPack to pass both the rocket internal index and entity ref safely.
+ * RequestFrame callback — kills the engine's newly stacked trail after deflect.
+ * The engine writes m_hEffectEntity during Deflected(), which hasn't finished
+ * when the object_deflected event fires.
  *
  * @param pack    DataPack containing rocket index and entity ref.
  */
@@ -260,19 +207,30 @@ void Frame_PostDeflectTrailFix(DataPack pack)
 	int entity = EntRefToEntIndex(entityRef);
 	if (entity == -1 || !IsValidEntity(entity)) return;
 	if (!IsValidRocket(index)) return;
-
-	// Verify this rocket index still references the same entity
 	if (RocketEntity[index] != entityRef) return;
 
-	// Kill the engine trail the deflect just created
 	KillEngineTrail(entity);
+}
 
-	// Refresh our server-side trail (if no trail subplugin)
-	if (!TrailPluginLoaded)
-	{
-		KillServerTrail(index);
-		AttachServerTrail(index, entity);
-	}
+/**
+ * RequestFrame callback — kills any engine trail created after DispatchSpawn.
+ * The engine may write m_hEffectEntity a frame after spawn.
+ *
+ * @param pack    DataPack containing rocket index and entity ref.
+ */
+void Frame_PostSpawnTrailFix(DataPack pack)
+{
+	pack.Reset();
+	int index     = pack.ReadCell();
+	int entityRef = pack.ReadCell();
+	delete pack;
+
+	int entity = EntRefToEntIndex(entityRef);
+	if (entity == -1 || !IsValidEntity(entity)) return;
+	if (!IsValidRocket(index)) return;
+	if (RocketEntity[index] != entityRef) return;
+
+	KillEngineTrail(entity);
 }
 
 /**

@@ -252,8 +252,8 @@ stock void PlayParticle(float position[3], float angles[3], char[] particleName,
 	DispatchKeyValue(entity, "effect_name", particleName);
 	ActivateEntity(entity);
 	AcceptEntityInput(entity, "Start");
-	CreateTimer(effectTime, StopParticle, EntIndexToEntRef(entity));
-	CreateTimer(lifeTime, KillParticle, EntIndexToEntRef(entity));
+	CreateTimer(effectTime, StopParticle, EntIndexToEntRef(entity), TIMER_FLAG_NO_MAPCHANGE);
+	CreateTimer(lifeTime, KillParticle, EntIndexToEntRef(entity), TIMER_FLAG_NO_MAPCHANGE);
 }
 
 /**

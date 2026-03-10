@@ -117,13 +117,7 @@ int         RocketBounces[MAX_ROCKETS];
 bool        RocketHomingPaused[MAX_ROCKETS];
 bool        RocketIsDragPause[MAX_ROCKETS];     // true = drag pause (per-frame unpause), false = bounce pause (timer unpause)
 float       RocketDragPauseEnd[MAX_ROCKETS];    // GetGameTime() when drag pause should end
-int         RocketTrailRef[MAX_ROCKETS];        // EntRef to our server-side trail (INVALID_ENT_REFERENCE if none)
 int         RocketCount;
-
-// -----<<< Trail Management >>>-----
-// When true, a trail subplugin is loaded and handles its own trails.
-// Core will still kill engine trails on deflect, but won't create replacements.
-bool TrailPluginLoaded;
 
 // Classes
 char           RocketClassName[MAX_ROCKET_CLASSES][16];
@@ -443,21 +437,6 @@ public void OnConfigsExecuted()
 public void OnMapEnd()
 {
 	DisableDodgeBall();
-}
-
-public void OnLibraryAdded(const char[] name)
-{
-	if (StrEqual(name, "tfdbtrails")) TrailPluginLoaded = true;
-}
-
-public void OnLibraryRemoved(const char[] name)
-{
-	if (StrEqual(name, "tfdbtrails")) TrailPluginLoaded = false;
-}
-
-public void OnAllPluginsLoaded()
-{
-	TrailPluginLoaded = LibraryExists("tfdbtrails");
 }
 
 void Forward_OnRocketCreated(int index, int entity)

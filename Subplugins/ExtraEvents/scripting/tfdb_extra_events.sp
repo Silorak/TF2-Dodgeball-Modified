@@ -188,9 +188,9 @@ public Action OnTouch(int entity, int other)
 	touchInfo.WriteCell(EntIndexToEntRef(GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity")));
 	touchInfo.WriteCell(TFDB_GetRocketTarget(index));
 	touchInfo.WriteCell(EntIndexToEntRef(TFDB_GetLastDeadClient()));
-	touchInfo.WriteCell(TFDB_GetRocketSpeed(index));
+	touchInfo.WriteFloat(TFDB_GetRocketSpeed(index));
 	touchInfo.WriteCell(TFDB_GetRocketEventDeflections(index));
-	touchInfo.WriteCell(TFDB_GetRocketMphSpeed(index));
+	touchInfo.WriteFloat(TFDB_GetRocketMphSpeed(index));
 	touchInfo.WriteCell(((other > 0) && (other <= MaxClients)) ? GetClientUserId(other) : -1);
 	
 	RequestFrame(TouchRequestFrame, touchInfo);
@@ -207,9 +207,9 @@ public void TouchRequestFrame(DataPack touchInfo)
 	int owner           = EntRefToEntIndex(touchInfo.ReadCell());
 	int target          = EntRefToEntIndex(touchInfo.ReadCell());
 	int lastDead        = EntRefToEntIndex(touchInfo.ReadCell());
-	float speed         = touchInfo.ReadCell();
+	float speed         = touchInfo.ReadFloat();
 	int numDeflections  = touchInfo.ReadCell();
-	float mphSpeed      = touchInfo.ReadCell();
+	float mphSpeed      = touchInfo.ReadFloat();
 	
 	int other           = touchInfo.ReadCell();
 	

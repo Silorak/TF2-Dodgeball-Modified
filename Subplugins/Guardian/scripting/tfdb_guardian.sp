@@ -68,6 +68,7 @@ int           guardianClient;
 int           activeClassIndex;
 int           guardianMaxHP;
 int           guardianCurrentHP;
+bool          botMessageShown;
 
 // Admin force for next round
 int           forcedClient  = -1;
@@ -340,9 +341,16 @@ bool CanActivateGuardian()
 
 	if (HasActiveBots())
 	{
-		CPrintToChatAll("%t", "Guardian_BlockedBot");
+		if (!botMessageShown)
+		{
+			CPrintToChatAll("%t", "Guardian_BlockedBot");
+			botMessageShown = true;
+		}
 		return false;
 	}
+
+	// Bots are gone — reset so the message shows again if bots rejoin
+	botMessageShown = false;
 
 	if (IsFFAActive())
 	{
@@ -563,7 +571,9 @@ public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
 	{
 		if (GetClientTeam(client) == view_as<int>(TFTeam_Blue))
 		{
+			SetEntProp(client, Prop_Send, "m_lifeState", 2);
 			ChangeClientTeam(client, view_as<int>(TFTeam_Red));
+			SetEntProp(client, Prop_Send, "m_lifeState", 0);
 			TF2_RespawnPlayer(client);
 			CPrintToChat(client, "%t", "Guardian_TeamBlocked");
 		}
@@ -593,7 +603,9 @@ public Action Timer_ForceRed(Handle timer, any userId)
 	{
 		if (GetClientTeam(client) == view_as<int>(TFTeam_Blue))
 		{
+			SetEntProp(client, Prop_Send, "m_lifeState", 2);
 			ChangeClientTeam(client, view_as<int>(TFTeam_Red));
+			SetEntProp(client, Prop_Send, "m_lifeState", 0);
 
 			if (IsPlayerAlive(client))
 			{
@@ -654,10 +666,13 @@ void ActivateGuardian(int client, int classIndex)
 	sprintParticleRef  = INVALID_ENT_REFERENCE;
 	normalSpeed        = 0.0;
 
-	// Move to BLU
+	// Move to BLU — use m_lifeState workaround to prevent player_death from firing,
+	// which would trigger CleanupGuardian and strip all buffs before they're applied.
 	if (GetClientTeam(client) != view_as<int>(TFTeam_Blue))
 	{
+		SetEntProp(client, Prop_Send, "m_lifeState", 2);
 		ChangeClientTeam(client, view_as<int>(TFTeam_Blue));
+		SetEntProp(client, Prop_Send, "m_lifeState", 0);
 		TF2_RespawnPlayer(client);
 	}
 
@@ -668,6 +683,11 @@ void ActivateGuardian(int client, int classIndex)
 
 	// Hook damage for HP tracking
 	SDKHook(client, SDKHook_OnTakeDamage, OnGuardianDamage);
+
+	// Hook GetMaxHealth so the engine knows our custom max HP.
+	// Without this, TF2 thinks max health is 175 (Pyro base) and drains
+	// anything above that as overheal. This is how VSH/boss plugins solve it.
+	SDKHook(client, SDKHook_GetMaxHealth, OnGetGuardianMaxHealth);
 
 	// Announce
 	EmitSoundToAll(SOUND_SELECTED);
@@ -680,7 +700,9 @@ void ActivateGuardian(int client, int classIndex)
 
 		if (GetClientTeam(i) == view_as<int>(TFTeam_Blue))
 		{
+			SetEntProp(i, Prop_Send, "m_lifeState", 2);
 			ChangeClientTeam(i, view_as<int>(TFTeam_Red));
+			SetEntProp(i, Prop_Send, "m_lifeState", 0);
 			TF2_RespawnPlayer(i);
 		}
 	}
@@ -702,10 +724,13 @@ void CleanupGuardian(bool respawn)
 	{
 		SetEntProp(client, Prop_Send, "m_bGlowEnabled", 0);
 		SDKUnhook(client, SDKHook_OnTakeDamage, OnGuardianDamage);
+		SDKUnhook(client, SDKHook_GetMaxHealth, OnGetGuardianMaxHealth);
 
 		if (respawn && IsPlayerAlive(client))
 		{
+			SetEntProp(client, Prop_Send, "m_lifeState", 2);
 			ChangeClientTeam(client, view_as<int>(TFTeam_Red));
+			SetEntProp(client, Prop_Send, "m_lifeState", 0);
 			TF2_RespawnPlayer(client);
 		}
 	}
@@ -714,6 +739,8 @@ void CleanupGuardian(bool respawn)
 
 	guardianActive = false;
 	guardianClient = 0;
+	guardianCurrentHP = 0;
+	guardianMaxHP     = 0;
 
 	StopUpdateTimer();
 }
@@ -761,6 +788,19 @@ public Action OnGuardianDamage(int victim, int &attacker, int &inflictor, float 
 	UpdateBossHealthBar();
 
 	return Plugin_Continue;
+}
+
+/**
+ * SDKHook_GetMaxHealth callback — tells the engine the Guardian's true max health.
+ * Without this, TF2 treats health above 175 (Pyro base) as overheal and drains it.
+ * Returning Plugin_Changed with the custom max health prevents the drain entirely.
+ */
+public Action OnGetGuardianMaxHealth(int client, int &maxhealth)
+{
+	if (!guardianActive || client != guardianClient) return Plugin_Continue;
+
+	maxhealth = guardianMaxHP;
+	return Plugin_Changed;
 }
 
 // ============================================================================

@@ -248,10 +248,13 @@ public void OnObjectDeflected(Event event, char[] eventName, bool dontBroadcast)
 		SetEntProp(entity, Prop_Send, "m_iTeamNum", 1, 1);
 	}
 
-	// Trail fix: the engine creates a new trail particle on every deflect,
-	// stacking on top of the previous one. Schedule cleanup for next frame
-	// (the engine writes the new trail to m_hEffectEntity during Deflected(),
-	// which hasn't finished when this event fires).
+	// Engine trail cleanup: TF2 creates a new m_hEffectEntity trail on every
+	// deflect, stacking them. Kill it to prevent FPS drops at 100+ deflects.
+	// The client renders its own rockettrail.pcf trail automatically.
+	KillEngineTrail(entity);
+
+	// The engine writes m_hEffectEntity during Deflected(), which hasn't
+	// finished when this event fires. Schedule cleanup for next frame.
 	DataPack pack = new DataPack();
 	pack.WriteCell(index);
 	pack.WriteCell(EntIndexToEntRef(entity));
