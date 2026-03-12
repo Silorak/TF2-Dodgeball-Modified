@@ -209,7 +209,7 @@ public void OnPluginStart()
 {
 	LoadTranslations("tfdb.phrases.txt");
 	
-	RegConsoleCmd("sm_tfdb", CmdDodgeballMenu, "Dodgeball admin menu.");
+	RegAdminCmd("sm_tfdb", CmdDodgeballMenu, ADMFLAG_CONFIG, "Dodgeball admin menu.");
 	
 	CvarSayHookTimeout = CreateConVar("tf_dodgeball_sayhook_timeout", "15.0", "Chat hook time span", _, true, 0.0);
 	

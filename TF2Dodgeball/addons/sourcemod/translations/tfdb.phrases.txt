@@ -685,6 +685,11 @@
 		"en"		"[{olive}TFDB{default}] Guardian class set to {community}{1}{default} for next round."
 	}
 	
+	"Guardian_NextRoundWarning"
+	{
+		"en"		"[{olive}TFDB{default}] The {darkmagenta}Guardian{default} will awaken next round! Prepare yourselves!"
+	}
+	
 	"Guardian_TeamBlocked"
 	{
 		"en"		"[{olive}TFDB{default}] You cannot join the {steelblue}Guardian{default}'s team."
@@ -700,6 +705,24 @@
 	{
 		"#format"	"{1:N}"
 		"en"		"[{olive}TFDB{default}] {red}{1}{default} activated {community}SPRINT{default}! Speed boosted!"
+	}
+	
+	"Guardian_PounceActivated"
+	{
+		"#format"	"{1:N}"
+		"en"		"[{olive}TFDB{default}] {red}{1}{default} activated {darkmagenta}POUNCE{default}! They leaped forward!"
+	}
+	
+	"Guardian_ChargeActivated"
+	{
+		"#format"	"{1:N}"
+		"en"		"[{olive}TFDB{default}] {red}{1}{default} activated {community}CHARGE{default}! Massive speed boost!"
+	}
+	
+	"Guardian_SlowActivated"
+	{
+		"#format"	"{1:N}"
+		"en"		"[{olive}TFDB{default}] {red}{1}{default} activated {darkorange}SLOW{default}! Slowed down nearby enemies!"
 	}
 	
 	"Guardian_BlockedBot"
