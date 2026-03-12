@@ -65,6 +65,12 @@ void PopulateSpawnPoints()
 		char name[32]; GetEntPropString(entity, Prop_Data, "m_iName", name, sizeof(name));
 		if ((StrContains(name, "rocket_spawn_red") != -1) || (StrContains(name, "tf_dodgeball_red") != -1))
 		{
+			if (SpawnPointsRedCount >= MAX_SPAWN_POINTS)
+			{
+				LogError("Reached maximum RED spawn points (%d). Remaining points will be ignored.", MAX_SPAWN_POINTS);
+				continue;
+			}
+
 			int index = FindSpawnerByName(name);
 			if (index == -1) index = DefaultRedSpawner;
 			SpawnPointsRedClass [SpawnPointsRedCount] = index;
@@ -74,6 +80,12 @@ void PopulateSpawnPoints()
 
 		if ((StrContains(name, "rocket_spawn_blu") != -1) || (StrContains(name, "tf_dodgeball_blu") != -1))
 		{
+			if (SpawnPointsBluCount >= MAX_SPAWN_POINTS)
+			{
+				LogError("Reached maximum BLU spawn points (%d). Remaining points will be ignored.", MAX_SPAWN_POINTS);
+				continue;
+			}
+
 			int index = FindSpawnerByName(name);
 			if (index == -1) index = DefaultBluSpawner;
 
@@ -457,6 +469,13 @@ void ParseClasses(KeyValues config)
 		RocketClassBounceVerticalScale[index] = config.GetFloat("bounce vertical ratio", 1.0);
 		RocketClassBounceMaxVerticalSpeed[index] = config.GetFloat("bounce max vertical speed", 0.0);
 		RocketClassDragPauseDuration[index] = config.GetFloat("drag pause duration", 0.1);
+		float tickInterval = GetTickInterval();
+		int dragTicks = 0;
+		if (tickInterval > 0.0 && RocketClassDragPauseDuration[index] > 0.0)
+		{
+			dragTicks = RoundToCeil(RocketClassDragPauseDuration[index] / tickInterval);
+		}
+		RocketClassDragPauseTicks[index] = dragTicks;
 		
 		DataPack cmds = null;
 		config.GetString("on spawn", buffer, sizeof(buffer));
@@ -494,6 +513,12 @@ void ParseSpawners(KeyValues config)
 	config.GotoFirstSubKey();
 	do
 	{
+		if (SpawnersCount >= MAX_SPAWNER_CLASSES)
+		{
+			LogError("Reached maximum spawner classes (%d). Remaining spawners will be ignored.", MAX_SPAWNER_CLASSES);
+			break;
+		}
+
 		int index = SpawnersCount;
 
 		config.GetSectionName(buffer, sizeof(buffer)); strcopy(SpawnersName[index], 32, buffer);

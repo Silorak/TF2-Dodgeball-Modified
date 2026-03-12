@@ -58,6 +58,12 @@ enum RocketClassMenu
 	RocketClassMenu_CmdsOnNoTarget,
 	RocketClassMenu_MaxBounces,
 	RocketClassMenu_BounceScale,
+	RocketClassMenu_OrbitTightness,
+	RocketClassMenu_MaxSpeed,
+	RocketClassMenu_MaxDeflections,
+	RocketClassMenu_BounceVerticalScale,
+	RocketClassMenu_BounceMaxVerticalSpeed,
+	RocketClassMenu_DragPauseDuration,
 	SizeOfRocketClassMenu
 };
 
@@ -111,6 +117,12 @@ enum struct RocketClass
 	DataPack       CmdsOnNoTarget;
 	int            MaxBounces;
 	float          BounceScale;
+	float          OrbitTightness;
+	float          MaxSpeed;
+	int            MaxDeflections;
+	float          BounceVerticalScale;
+	float          BounceMaxVerticalSpeed;
+	float          DragPauseDuration;
 	
 	void Destroy()
 	{
@@ -185,7 +197,13 @@ char strRocketClassMenu[view_as<int>(SizeOfRocketClassMenu) - 1][] =
 	"Explode commands",
 	"No target commands",
 	"Maximum bounces",
-	"Bounce scale"
+	"Bounce scale",
+	"Orbit tightness",
+	"Max speed",
+	"Max deflections",
+	"Bounce vertical ratio",
+	"Bounce max vertical speed",
+	"Drag pause duration"
 };
 
 char strSpawnerClassMenu[view_as<int>(SizeOfSpawnerClassMenu) - 1][] =
@@ -315,6 +333,7 @@ void DisplayDodgeballMenu(int client)
 	menu.AddItem("2", "Spawner classes", ITEMDRAW_DEFAULT);
 	menu.AddItem("3", "Refresh configuration file", ITEMDRAW_DEFAULT);
 	menu.AddItem("4", "Destroy active rockets", ITEMDRAW_DEFAULT);
+	menu.AddItem("5", "Apply preset", ITEMDRAW_DEFAULT);
 	
 	menu.Display(client, MENU_TIME_FOREVER);
 }
@@ -377,6 +396,11 @@ public int DodgeballMenuHandler(Menu menu, MenuAction menuActions, int iParam1, 
 					{
 						DisplayDodgeballMenu(iParam1);
 					}
+				}
+
+				case 5 :
+				{
+					DisplayPresetsMenu(iParam1);
 				}
 			}
 		}
@@ -956,6 +980,42 @@ public int RocketClassOptionsMenuHandler(Menu menu, MenuAction menuActions, int 
 					CPrintToChat(iParam1, "%t", "Menu_BounceScale", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
+
+				case RocketClassMenu_OrbitTightness :
+				{
+					CPrintToChat(iParam1, "[TFDB] Type new orbit tightness (seconds-like coefficient).");
+					CPrintToChat(iParam1, "%t", "Menu_Reset");
+				}
+
+				case RocketClassMenu_MaxSpeed :
+				{
+					CPrintToChat(iParam1, "[TFDB] Type new max speed (HU/s).");
+					CPrintToChat(iParam1, "%t", "Menu_Reset");
+				}
+
+				case RocketClassMenu_MaxDeflections :
+				{
+					CPrintToChat(iParam1, "[TFDB] Type new max deflections.");
+					CPrintToChat(iParam1, "%t", "Menu_Reset");
+				}
+
+				case RocketClassMenu_BounceVerticalScale :
+				{
+					CPrintToChat(iParam1, "[TFDB] Type new bounce vertical ratio.");
+					CPrintToChat(iParam1, "%t", "Menu_Reset");
+				}
+
+				case RocketClassMenu_BounceMaxVerticalSpeed :
+				{
+					CPrintToChat(iParam1, "[TFDB] Type new bounce max vertical speed (HU/s).");
+					CPrintToChat(iParam1, "%t", "Menu_Reset");
+				}
+
+				case RocketClassMenu_DragPauseDuration :
+				{
+					CPrintToChat(iParam1, "[TFDB] Type new drag pause duration (seconds).");
+					CPrintToChat(iParam1, "%t", "Menu_Reset");
+				}
 			}
 			
 			g_iClientRocketClassMenu[iParam1]  = option;
@@ -1345,6 +1405,73 @@ public int SpawnerClassChancesMenuHandler(Menu menu, MenuAction menuActions, int
 		}
 	}
 	
+	return 0;
+}
+
+void DisplayPresetsMenu(int client)
+{
+	int presetCount = TFDB_GetPresetCount();
+	if (presetCount <= 0)
+	{
+		CPrintToChat(client, "[TFDB] No presets loaded.");
+		DisplayDodgeballMenu(client);
+		return;
+	}
+
+	Menu menu = new Menu(PresetsMenuHandler);
+	menu.SetTitle("Apply preset:");
+	menu.ExitBackButton = true;
+
+	char presetIndex[8];
+	char presetName[128];
+	for (int i = 0; i < presetCount; i++)
+	{
+		IntToString(i, presetIndex, sizeof(presetIndex));
+		TFDB_GetPresetName(i, presetName, sizeof(presetName));
+		menu.AddItem(presetIndex, presetName, ITEMDRAW_DEFAULT);
+	}
+
+	menu.Display(client, MENU_TIME_FOREVER);
+}
+
+public int PresetsMenuHandler(Menu menu, MenuAction menuActions, int iParam1, int iParam2)
+{
+	switch (menuActions)
+	{
+		case MenuAction_Select :
+		{
+			char presetIndex[8];
+			menu.GetItem(iParam2, presetIndex, sizeof(presetIndex));
+			int preset = StringToInt(presetIndex);
+
+			if (TFDB_ApplyPreset(preset))
+			{
+				char presetName[128];
+				TFDB_GetPresetName(preset, presetName, sizeof(presetName));
+				CPrintToChatAll("[TFDB] %N applied preset: %s", iParam1, presetName);
+			}
+			else
+			{
+				CPrintToChat(iParam1, "[TFDB] Failed to apply preset.");
+			}
+
+			if (IsClientInGame(iParam1) && !IsClientInKickQueue(iParam1))
+			{
+				DisplayPresetsMenu(iParam1);
+			}
+		}
+
+		case MenuAction_Cancel :
+		{
+			if (iParam2 == MenuCancel_ExitBack) { DisplayDodgeballMenu(iParam1); }
+		}
+
+		case MenuAction_End :
+		{
+			delete menu;
+		}
+	}
+
 	return 0;
 }
 
@@ -1803,6 +1930,84 @@ public Action OnClientSayCommand(int client, const char[] strCommand, const char
 			
 			return Plugin_Stop;
 		}
+
+		case RocketClassMenu_OrbitTightness :
+		{
+			float fTightness = StringToFloat(args);
+			TFDB_SetRocketClassOrbitTightness(rocketClass, fTightness == -1.0 ? g_eSavedRocketClasses[rocketClass].OrbitTightness : fTightness);
+			LogAction(client, -1, "\"%L\" changed rocket class orbit tightness to %.3f", client, fTightness);
+			CPrintToChat(client, "[TFDB] Orbit tightness set to %.3f", fTightness);
+
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
+			return Plugin_Stop;
+		}
+
+		case RocketClassMenu_MaxSpeed :
+		{
+			float fMaxSpeed = StringToFloat(args);
+			TFDB_SetRocketClassMaxSpeed(rocketClass, fMaxSpeed == -1.0 ? g_eSavedRocketClasses[rocketClass].MaxSpeed : fMaxSpeed);
+			LogAction(client, -1, "\"%L\" changed rocket class max speed to %.2f", client, fMaxSpeed);
+			CPrintToChat(client, "[TFDB] Max speed set to %.2f", fMaxSpeed);
+
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
+			return Plugin_Stop;
+		}
+
+		case RocketClassMenu_MaxDeflections :
+		{
+			int iMaxDeflections = StringToInt(args);
+			TFDB_SetRocketClassMaxDeflections(rocketClass, iMaxDeflections == -1 ? g_eSavedRocketClasses[rocketClass].MaxDeflections : iMaxDeflections);
+			LogAction(client, -1, "\"%L\" changed rocket class max deflections to %i", client, iMaxDeflections);
+			CPrintToChat(client, "[TFDB] Max deflections set to %i", iMaxDeflections);
+
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
+			return Plugin_Stop;
+		}
+
+		case RocketClassMenu_BounceVerticalScale :
+		{
+			float fRatio = StringToFloat(args);
+			TFDB_SetRocketClassBounceVerticalScale(rocketClass, fRatio == -1.0 ? g_eSavedRocketClasses[rocketClass].BounceVerticalScale : fRatio);
+			LogAction(client, -1, "\"%L\" changed rocket class bounce vertical ratio to %.3f", client, fRatio);
+			CPrintToChat(client, "[TFDB] Bounce vertical ratio set to %.3f", fRatio);
+
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
+			return Plugin_Stop;
+		}
+
+		case RocketClassMenu_BounceMaxVerticalSpeed :
+		{
+			float fMaxVertical = StringToFloat(args);
+			TFDB_SetRocketClassBounceMaxVerticalSpeed(rocketClass, fMaxVertical == -1.0 ? g_eSavedRocketClasses[rocketClass].BounceMaxVerticalSpeed : fMaxVertical);
+			LogAction(client, -1, "\"%L\" changed rocket class bounce max vertical speed to %.2f", client, fMaxVertical);
+			CPrintToChat(client, "[TFDB] Bounce max vertical speed set to %.2f", fMaxVertical);
+
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
+			return Plugin_Stop;
+		}
+
+		case RocketClassMenu_DragPauseDuration :
+		{
+			float fDragDuration = StringToFloat(args);
+			TFDB_SetRocketClassDragPauseDuration(rocketClass, fDragDuration == -1.0 ? g_eSavedRocketClasses[rocketClass].DragPauseDuration : fDragDuration);
+			LogAction(client, -1, "\"%L\" changed rocket class drag pause duration to %.3f", client, fDragDuration);
+			CPrintToChat(client, "[TFDB] Drag pause duration set to %.3f", fDragDuration);
+
+			g_iClientRocketClassMenu[client]  = RocketClassMenu_None;
+			g_iClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			g_iClientRocketClass[client]  = -1;
+			return Plugin_Stop;
+		}
 	}
 	
 	switch (iSpawnerClassOption)
@@ -2045,6 +2250,12 @@ void ParseClasses(KeyValues kvConfig)
 		g_eSavedRocketClasses[index].ElevationLimit    = kvConfig.GetFloat("elevation limit");
 		g_eSavedRocketClasses[index].ControlDelay      = kvConfig.GetFloat("control delay");
 		g_eSavedRocketClasses[index].BounceScale       = kvConfig.GetFloat("bounce scale", 1.0);
+		g_eSavedRocketClasses[index].OrbitTightness    = kvConfig.GetFloat("orbit tightness", 0.0);
+		g_eSavedRocketClasses[index].MaxSpeed          = kvConfig.GetFloat("max speed", 0.0);
+		g_eSavedRocketClasses[index].MaxDeflections    = kvConfig.GetNum("max deflections", 0);
+		g_eSavedRocketClasses[index].BounceVerticalScale = kvConfig.GetFloat("bounce vertical ratio", 1.0);
+		g_eSavedRocketClasses[index].BounceMaxVerticalSpeed = kvConfig.GetFloat("bounce max vertical speed", 0.0);
+		g_eSavedRocketClasses[index].DragPauseDuration = kvConfig.GetFloat("drag pause duration", 0.1);
 		g_eSavedRocketClasses[index].PlayerModifier    = kvConfig.GetFloat("no. players modifier");
 		g_eSavedRocketClasses[index].RocketsModifier   = kvConfig.GetFloat("no. rockets modifier");
 		g_eSavedRocketClasses[index].TargetWeight      = kvConfig.GetFloat("direction to target weight");

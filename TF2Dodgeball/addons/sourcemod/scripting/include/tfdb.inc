@@ -742,6 +742,42 @@ native float TFDB_GetRocketClassBounceScale(int iClass);
 /** Sets the bounce velocity scale factor. */
 native void TFDB_SetRocketClassBounceScale(int iClass, float fScale);
 
+/** Gets the orbit coefficient used when orbit scaling mode is enabled. */
+native float TFDB_GetRocketClassOrbitTightness(int iClass);
+
+/** Sets the orbit coefficient used when orbit scaling mode is enabled. */
+native void TFDB_SetRocketClassOrbitTightness(int iClass, float fTightness);
+
+/** Gets class max speed used by target speed scaling mode. */
+native float TFDB_GetRocketClassMaxSpeed(int iClass);
+
+/** Sets class max speed used by target speed scaling mode. */
+native void TFDB_SetRocketClassMaxSpeed(int iClass, float fMaxSpeed);
+
+/** Gets class max deflections used by target speed scaling mode. */
+native int TFDB_GetRocketClassMaxDeflections(int iClass);
+
+/** Sets class max deflections used by target speed scaling mode. */
+native void TFDB_SetRocketClassMaxDeflections(int iClass, int iMaxDeflections);
+
+/** Gets vertical bounce scale ratio. */
+native float TFDB_GetRocketClassBounceVerticalScale(int iClass);
+
+/** Sets vertical bounce scale ratio. */
+native void TFDB_SetRocketClassBounceVerticalScale(int iClass, float fScale);
+
+/** Gets bounce vertical speed cap (HU/s). */
+native float TFDB_GetRocketClassBounceMaxVerticalSpeed(int iClass);
+
+/** Sets bounce vertical speed cap (HU/s). */
+native void TFDB_SetRocketClassBounceMaxVerticalSpeed(int iClass, float fMaxVerticalSpeed);
+
+/** Gets drag pause duration in seconds. */
+native float TFDB_GetRocketClassDragPauseDuration(int iClass);
+
+/** Sets drag pause duration in seconds. */
+native void TFDB_SetRocketClassDragPauseDuration(int iClass, float fDuration);
+
 // ============ Actions ============
 
 /**
@@ -975,6 +1011,18 @@ public void __pl_TFDB_SetNTVOptional()
 	MarkNativeAsOptional("TFDB_SetRocketClassCmdsOnNoTarget");
 	MarkNativeAsOptional("TFDB_GetRocketClassBounceScale");
 	MarkNativeAsOptional("TFDB_SetRocketClassBounceScale");
+	MarkNativeAsOptional("TFDB_GetRocketClassOrbitTightness");
+	MarkNativeAsOptional("TFDB_SetRocketClassOrbitTightness");
+	MarkNativeAsOptional("TFDB_GetRocketClassMaxSpeed");
+	MarkNativeAsOptional("TFDB_SetRocketClassMaxSpeed");
+	MarkNativeAsOptional("TFDB_GetRocketClassMaxDeflections");
+	MarkNativeAsOptional("TFDB_SetRocketClassMaxDeflections");
+	MarkNativeAsOptional("TFDB_GetRocketClassBounceVerticalScale");
+	MarkNativeAsOptional("TFDB_SetRocketClassBounceVerticalScale");
+	MarkNativeAsOptional("TFDB_GetRocketClassBounceMaxVerticalSpeed");
+	MarkNativeAsOptional("TFDB_SetRocketClassBounceMaxVerticalSpeed");
+	MarkNativeAsOptional("TFDB_GetRocketClassDragPauseDuration");
+	MarkNativeAsOptional("TFDB_SetRocketClassDragPauseDuration");
 	MarkNativeAsOptional("TFDB_CreateRocket");
 	MarkNativeAsOptional("TFDB_DestroyRocket");
 	MarkNativeAsOptional("TFDB_DestroyRockets");

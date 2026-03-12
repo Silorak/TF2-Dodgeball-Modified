@@ -440,6 +440,71 @@ public any Native_SetRocketClassBounceScale(Handle plugin, int numParams) {
 	return 0;
 }
 
+public any Native_GetRocketClassOrbitTightness(Handle plugin, int numParams) {
+	return view_as<any>(RocketClassOrbitTightness[GetNativeCell(1)]);
+}
+
+public any Native_SetRocketClassOrbitTightness(Handle plugin, int numParams) {
+	RocketClassOrbitTightness[GetNativeCell(1)] = GetNativeCell(2);
+	return 0;
+}
+
+public any Native_GetRocketClassMaxSpeed(Handle plugin, int numParams) {
+	return view_as<any>(RocketClassMaxSpeed[GetNativeCell(1)]);
+}
+
+public any Native_SetRocketClassMaxSpeed(Handle plugin, int numParams) {
+	RocketClassMaxSpeed[GetNativeCell(1)] = GetNativeCell(2);
+	return 0;
+}
+
+public any Native_GetRocketClassMaxDeflections(Handle plugin, int numParams) {
+	return RocketClassMaxDeflections[GetNativeCell(1)];
+}
+
+public any Native_SetRocketClassMaxDeflections(Handle plugin, int numParams) {
+	RocketClassMaxDeflections[GetNativeCell(1)] = GetNativeCell(2);
+	return 0;
+}
+
+public any Native_GetRocketClassBounceVerticalScale(Handle plugin, int numParams) {
+	return view_as<any>(RocketClassBounceVerticalScale[GetNativeCell(1)]);
+}
+
+public any Native_SetRocketClassBounceVerticalScale(Handle plugin, int numParams) {
+	RocketClassBounceVerticalScale[GetNativeCell(1)] = GetNativeCell(2);
+	return 0;
+}
+
+public any Native_GetRocketClassBounceMaxVerticalSpeed(Handle plugin, int numParams) {
+	return view_as<any>(RocketClassBounceMaxVerticalSpeed[GetNativeCell(1)]);
+}
+
+public any Native_SetRocketClassBounceMaxVerticalSpeed(Handle plugin, int numParams) {
+	RocketClassBounceMaxVerticalSpeed[GetNativeCell(1)] = GetNativeCell(2);
+	return 0;
+}
+
+public any Native_GetRocketClassDragPauseDuration(Handle plugin, int numParams) {
+	return view_as<any>(RocketClassDragPauseDuration[GetNativeCell(1)]);
+}
+
+public any Native_SetRocketClassDragPauseDuration(Handle plugin, int numParams) {
+	int rocketClass = GetNativeCell(1);
+	float duration = GetNativeCell(2);
+	RocketClassDragPauseDuration[rocketClass] = duration;
+
+	float tickInterval = GetTickInterval();
+	int dragTicks = 0;
+	if (tickInterval > 0.0 && duration > 0.0)
+	{
+		dragTicks = RoundToCeil(duration / tickInterval);
+	}
+	RocketClassDragPauseTicks[rocketClass] = dragTicks;
+
+	return 0;
+}
+
 // *********************************************************************************
 // NATIVES - SPAWNER GETTERS/SETTERS
 // *********************************************************************************

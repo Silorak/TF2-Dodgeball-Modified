@@ -116,7 +116,7 @@ float       LastSpawnTime[MAX_ROCKETS];
 int         RocketBounces[MAX_ROCKETS];
 bool        RocketHomingPaused[MAX_ROCKETS];
 bool        RocketIsDragPause[MAX_ROCKETS];     // true = drag pause (per-frame unpause), false = bounce pause (timer unpause)
-float       RocketDragPauseEnd[MAX_ROCKETS];    // GetGameTime() when drag pause should end
+int         RocketDragPauseEndTick[MAX_ROCKETS]; // GetGameTickCount() when drag pause should end
 int         RocketCount;
 
 // Classes
@@ -157,6 +157,7 @@ int            RocketClassMaxDeflections[MAX_ROCKET_CLASSES];
 float          RocketClassBounceVerticalScale[MAX_ROCKET_CLASSES];
 float          RocketClassBounceMaxVerticalSpeed[MAX_ROCKET_CLASSES];
 float          RocketClassDragPauseDuration[MAX_ROCKET_CLASSES];
+int            RocketClassDragPauseTicks[MAX_ROCKET_CLASSES];
 int            RocketClassCount;
 
 // Spawner classes
@@ -251,7 +252,12 @@ public void OnPluginStart()
 
 	// Cache the SendProp offset for rocket damage once at plugin start.
 	// This is m_iDeflected + 4 bytes, used to set rocket damage via SetEntDataFloat.
-	DamageOffset = FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4;
+	int deflectedOffset = FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected");
+	if (deflectedOffset == -1)
+	{
+		SetFailState("Failed to find sendprop CTFProjectile_Rocket::m_iDeflected");
+	}
+	DamageOffset = deflectedOffset + 4;
 
 	AddTempEntHook("TFExplosion", OnTFExplosion);
 
@@ -388,6 +394,18 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 	CreateNative("TFDB_SetRocketClassCmdsOnNoTarget", Native_SetRocketClassCmdsOnNoTarget);
 	CreateNative("TFDB_GetRocketClassBounceScale", Native_GetRocketClassBounceScale);
 	CreateNative("TFDB_SetRocketClassBounceScale", Native_SetRocketClassBounceScale);
+	CreateNative("TFDB_GetRocketClassOrbitTightness", Native_GetRocketClassOrbitTightness);
+	CreateNative("TFDB_SetRocketClassOrbitTightness", Native_SetRocketClassOrbitTightness);
+	CreateNative("TFDB_GetRocketClassMaxSpeed", Native_GetRocketClassMaxSpeed);
+	CreateNative("TFDB_SetRocketClassMaxSpeed", Native_SetRocketClassMaxSpeed);
+	CreateNative("TFDB_GetRocketClassMaxDeflections", Native_GetRocketClassMaxDeflections);
+	CreateNative("TFDB_SetRocketClassMaxDeflections", Native_SetRocketClassMaxDeflections);
+	CreateNative("TFDB_GetRocketClassBounceVerticalScale", Native_GetRocketClassBounceVerticalScale);
+	CreateNative("TFDB_SetRocketClassBounceVerticalScale", Native_SetRocketClassBounceVerticalScale);
+	CreateNative("TFDB_GetRocketClassBounceMaxVerticalSpeed", Native_GetRocketClassBounceMaxVerticalSpeed);
+	CreateNative("TFDB_SetRocketClassBounceMaxVerticalSpeed", Native_SetRocketClassBounceMaxVerticalSpeed);
+	CreateNative("TFDB_GetRocketClassDragPauseDuration", Native_GetRocketClassDragPauseDuration);
+	CreateNative("TFDB_SetRocketClassDragPauseDuration", Native_SetRocketClassDragPauseDuration);
 	CreateNative("TFDB_CreateRocket", Native_CreateRocket);
 	CreateNative("TFDB_DestroyRocket", Native_DestroyRocket);
 	CreateNative("TFDB_DestroyRockets", Native_DestroyRockets);

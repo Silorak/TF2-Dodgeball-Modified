@@ -70,7 +70,7 @@ void CreateRocket(int spawnerEntity, int spawnerClass, int team, int rocketClass
 	RocketBounces[index]            = 0;
 	RocketHomingPaused[index]       = false;
 	RocketIsDragPause[index]        = false;
-	RocketDragPauseEnd[index]       = 0.0;
+	RocketDragPauseEndTick[index]   = 0;
 	RocketLastDeflectionTime[index] = GetGameTime();
 	RocketLastBeepTime[index]       = GetGameTime();
 	RocketSpeed[index]              = CalculateRocketSpeed(rocketClass, modifier);
@@ -438,17 +438,15 @@ void HomingRocketThink(int index)
 		RocketHomingPaused[index] = true;
 		RocketIsDragPause[index] = true;
 		
-		// Snap drag pause to tick boundary so it ends on a deterministic frame.
-		// GetTickInterval() is the canonical frame duration from SM 1.12 (timers.inc).
-		float tickInterval = GetTickInterval();
-		int pauseTicks = RoundToNearest(RocketClassDragPauseDuration[rocketClass] / tickInterval);
-		RocketDragPauseEnd[index] = GetGameTime() + (pauseTicks * tickInterval);
+		// Drag window is stored as an absolute game tick for deterministic behavior.
+		int pauseTicks = RocketClassDragPauseTicks[rocketClass];
+		RocketDragPauseEndTick[index] = GetGameTickCount() + pauseTicks;
 		
 		Internal_SetRocketState(index, (RocketInstanceState[index] | (RocketState_CanDrag | RocketState_Dragging)));
 	}
 
 	// --- Drag pause expired: process deflection per-frame (allows sub-100ms drag) ---
-	if (RocketHomingPaused[index] && RocketIsDragPause[index] && GetGameTime() >= RocketDragPauseEnd[index])
+	if (RocketHomingPaused[index] && RocketIsDragPause[index] && GetGameTickCount() >= RocketDragPauseEndTick[index])
 	{
 		if (deflectionCount > RocketDeflections[index])
 		{
@@ -753,7 +751,7 @@ int GetRandomRocketClass(int spawnerClass)
 
 	for (int entry = 0; entry < tableSize; entry++)
 	{
-		chancesLower += chancesUpper;
+		chancesLower = chancesUpper;
 		chancesUpper  = chancesLower + table.Get(entry);
 
 		if ((random >= chancesLower) && (random <= chancesUpper))

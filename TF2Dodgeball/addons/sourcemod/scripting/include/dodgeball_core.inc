@@ -56,6 +56,19 @@ void EnableDodgeBall()
 		EventsHooked = true;
 	}
 
+	// Existing clients are not guaranteed to pass through OnClientPutInServer
+	// after mode toggles, so apply WeaponCanUse hook here as well.
+	if (UsePushPrevention)
+	{
+		for (int client = 1; client <= MaxClients; client++)
+		{
+			if (IsClientInGame(client))
+			{
+				SDKHook(client, SDKHook_WeaponCanUse, OnWeaponCanUse);
+			}
+		}
+	}
+
 	AddMultiTargetFilter("@stealer", MLTargetFilterStealer, "last stealer", false);
 	AddMultiTargetFilter("@!stealer", MLTargetFilterStealer, "non last stealer", false);
 
@@ -131,6 +144,15 @@ void DisableDodgeBall()
 		UnhookEvent("teamplay_broadcast_audio", OnBroadcastAudio, EventHookMode_Pre);
 		UnhookEvent("object_deflected", OnObjectDeflected);
 		EventsHooked = false;
+	}
+
+	// Explicitly unhook to keep behavior isolated to active Dodgeball mode.
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (IsClientInGame(client))
+		{
+			SDKUnhook(client, SDKHook_WeaponCanUse, OnWeaponCanUse);
+		}
 	}
 
 	RemoveMultiTargetFilter("@stealer", MLTargetFilterStealer);
