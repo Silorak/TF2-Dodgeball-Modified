@@ -253,7 +253,7 @@ public void OnPlayerTeam(Event event, char[] eventName, bool dontBroadcast)
 public void TFDB_OnRocketCreated(int index, int entity)
 {
 	int classIndex = TFDB_GetRocketClass(index);
-	int team  = GetAnalogueTeam(GetClientTeam(EntRefToEntIndex(TFDB_GetRocketTarget(index))));
+	int team  = GetAnalogueTeam(GetClientTeam(TFDB_GetRocketTarget(index)));
 	TrailFlags flags = RocketClassTrailFlags[classIndex];
 	
 	float position[3], angles[3], fDirection[3];
@@ -563,6 +563,12 @@ void ParseClasses(KeyValues kvConfig)
 	kvConfig.GotoFirstSubKey();
 	do
 	{
+		if (RocketClassCount >= MAX_ROCKET_CLASSES)
+		{
+			LogError("Reached maximum rocket classes (%d). Remaining classes will be ignored.", MAX_ROCKET_CLASSES);
+			break;
+		}
+
 		int index = RocketClassCount;
 		TrailFlags flags;
 		

@@ -689,6 +689,12 @@ void ParseSpawners(KeyValues kvConfig)
 	
 	do
 	{
+		if (g_iSpawnersCount >= MAX_SPAWNER_CLASSES)
+		{
+			LogError("Reached maximum spawner classes (%d). Remaining spawners will be ignored.", MAX_SPAWNER_CLASSES);
+			break;
+		}
+
 		int index = g_iSpawnersCount;
 		
 		SavedMaxRockets[index] = kvConfig.GetNum("max rockets", 1);

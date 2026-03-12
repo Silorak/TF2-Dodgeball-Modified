@@ -3,6 +3,7 @@
 
 #include <sourcemod>
 #include <tf2>
+#include <sdktools_functions>
 #include <multicolors>
 
 #include <tfdb>
@@ -19,8 +20,6 @@ int   BotCount;
 bool  VoteAllowed;
 float LastVoteTime;
 int   OldTeam[MAXPLAYERS + 1];
-
-Address MyWearables;
 
 ConVar CvarDisableOnBot;
 ConVar CvarVoteTimeout;
@@ -44,8 +43,6 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
 	LoadTranslations("tfdb.phrases.txt");
-	
-	MyWearables = view_as<Address>(FindSendPropInfo("CTFPlayer", "m_hMyWearables"));
 	
 	CvarDisableOnBot  = CreateConVar("tf_dodgeball_ffa_bot", "1", "Disable FFA when a bot joins?", _, true, 0.0, true, 1.0);
 	CvarVoteTimeout   = CreateConVar("tf_dodgeball_ffa_timeout", "150", "Vote timeout (in seconds)", _, true, 0.0);
@@ -583,37 +580,29 @@ void ChangeAliveClientTeam(int client, int team)
 	
 	ChangeClientTeam(client, team);
 	SetEntProp(client, Prop_Send, "m_lifeState", lifeState);
-	
-	int wearable;
-	int wearablesCount = GetPlayerWearablesCount(client);
-	Address data = DereferencePointer(GetEntityAddress(client) + MyWearables);
-	
-	for (int index = 0; index < wearablesCount; index++)
+
+	// Safer than raw memory walking: update owned wearable entities by classname.
+	UpdateClientWearablesTeam(client, team);
+}
+
+void UpdateClientWearablesTeam(int client, int team)
+{
+	static const char wearableClassnames[][] =
 	{
-		wearable = LoadEntityHandleFromAddress(data + view_as<Address>(0x04 * index));
-		
-		SetEntProp(wearable, Prop_Send, "m_nSkin", (team == view_as<int>(TFTeam_Blue)) ? 1 : 0);
-		SetEntProp(wearable, Prop_Send, "m_iTeamNum", team);
+		"tf_wearable",
+		"tf_wearable_demoshield",
+		"tf_powerup_bottle"
+	};
+
+	for (int i = 0; i < sizeof(wearableClassnames); i++)
+	{
+		int entity = -1;
+		while ((entity = FindEntityByClassname(entity, wearableClassnames[i])) != -1)
+		{
+			if (GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity") != client) continue;
+
+			SetEntProp(entity, Prop_Send, "m_nSkin", (team == view_as<int>(TFTeam_Blue)) ? 1 : 0);
+			SetEntProp(entity, Prop_Send, "m_iTeamNum", team);
+		}
 	}
-}
-
-/*
-	https://github.com/nosoop/SM-TFUtils/blob/master/scripting/tf2utils.sp
-	https://github.com/nosoop/stocksoup/blob/master/memory.inc
-*/
-
-stock int LoadEntityHandleFromAddress(Address address)
-{
-	return EntRefToEntIndex(LoadFromAddress(address, NumberType_Int32) | (1 << 31));
-}
-
-stock Address DereferencePointer(Address address)
-{
-	// maybe someday we'll do 64-bit addresses
-	return view_as<Address>(LoadFromAddress(address, NumberType_Int32));
-}
-
-int GetPlayerWearablesCount(int client)
-{
-	return GetEntData(client, view_as<int>(MyWearables) + 0x0C);
 }

@@ -58,7 +58,7 @@ public Action OnPlayerTakeDamage(int victim, int &attacker, int &inflictor, floa
 	
 	if (index == -1) return Plugin_Continue;
 	
-	int target = EntRefToEntIndex(TFDB_GetRocketTarget(index));
+	int target = TFDB_GetRocketTarget(index);
 	
 	if (!(IsValidClient(target) && (victim != target))) return Plugin_Continue;
 	
@@ -74,8 +74,8 @@ public Action CH_PassFilter(int entity1, int entity2, bool &result)
 	int index1 = TFDB_FindRocketByEntity(entity1);
 	int index2 = TFDB_FindRocketByEntity(entity2);
 	
-	if (((index1 != -1) && (EntRefToEntIndex(TFDB_GetRocketTarget(index1)) != entity2))
-	    || ((index2 != -1) && (EntRefToEntIndex(TFDB_GetRocketTarget(index2)) != entity1)))
+	if (((index1 != -1) && (TFDB_GetRocketTarget(index1) != entity2))
+	    || ((index2 != -1) && (TFDB_GetRocketTarget(index2) != entity1)))
 	{
 		result = false;
 		

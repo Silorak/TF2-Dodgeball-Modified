@@ -96,6 +96,12 @@ void ParseClasses(KeyValues kvConfig)
 	kvConfig.GotoFirstSubKey();
 	do
 	{
+		if (RocketClassCount >= MAX_ROCKET_CLASSES)
+		{
+			LogError("Reached maximum rocket classes (%d). Remaining classes will be ignored.", MAX_ROCKET_CLASSES);
+			break;
+		}
+
 		int index = RocketClassCount;
 		
 		kvConfig.GetString("on destroyed", buffer, sizeof(buffer));
@@ -187,7 +193,7 @@ public Action OnTouch(int entity, int other)
 	touchInfo.WriteCell(EntIndexToEntRef(entity));
 	touchInfo.WriteCell(EntIndexToEntRef(GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity")));
 	touchInfo.WriteCell(TFDB_GetRocketTarget(index));
-	touchInfo.WriteCell(EntIndexToEntRef(TFDB_GetLastDeadClient()));
+	touchInfo.WriteCell(TFDB_GetLastDeadClient());
 	touchInfo.WriteFloat(TFDB_GetRocketSpeed(index));
 	touchInfo.WriteCell(TFDB_GetRocketEventDeflections(index));
 	touchInfo.WriteFloat(TFDB_GetRocketMphSpeed(index));
@@ -205,8 +211,8 @@ public void TouchRequestFrame(DataPack touchInfo)
 	int rocketClass     = touchInfo.ReadCell();
 	int rocket          = EntRefToEntIndex(touchInfo.ReadCell());
 	int owner           = EntRefToEntIndex(touchInfo.ReadCell());
-	int target          = EntRefToEntIndex(touchInfo.ReadCell());
-	int lastDead        = EntRefToEntIndex(touchInfo.ReadCell());
+	int target          = touchInfo.ReadCell();
+	int lastDead        = touchInfo.ReadCell();
 	float speed         = touchInfo.ReadFloat();
 	int numDeflections  = touchInfo.ReadCell();
 	float mphSpeed      = touchInfo.ReadFloat();

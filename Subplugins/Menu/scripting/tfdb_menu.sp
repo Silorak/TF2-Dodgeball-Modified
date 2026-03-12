@@ -582,7 +582,7 @@ public int RocketTargetMenuHandler(Menu menu, MenuAction menuActions, int iParam
 			int iUserID = StringToInt(buffer);
 			int target = GetClientOfUserId(iUserID);
 			
-			return ((entity == -1) || (target == EntRefToEntIndex(TFDB_GetRocketTarget(index))) ||
+			return ((entity == -1) || (target == TFDB_GetRocketTarget(index)) ||
 			       ((target == GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity")))) ? ITEMDRAW_DISABLED : iStyle;
 		}
 		
@@ -611,7 +611,7 @@ public int RocketTargetMenuHandler(Menu menu, MenuAction menuActions, int iParam
 			{
 				CPrintToChat(iParam1, "%t", "Menu_CannotTarget");
 			}
-			else if (target == EntRefToEntIndex(TFDB_GetRocketTarget(index)))
+			else if (target == TFDB_GetRocketTarget(index))
 			{
 				CPrintToChat(iParam1, "%t", "Menu_SameTarget");
 			}
