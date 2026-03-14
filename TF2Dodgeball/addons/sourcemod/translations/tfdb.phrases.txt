@@ -10,11 +10,6 @@
 		"en"		"[{olive}TFDB{default}] You do not have permission to use this command."
 	}
 	
-	"Command_DBExplosion_Usage"
-	{
-		"en"		"Usage : tf_dodgeball_explosion <client index>"
-	}
-	
 	"Command_DBShockwave_Usage"
 	{
 		"en"		"Usage : tf_dodgeball_shockwave <client index> <damage> <push strength> <radius> <falloff>"
@@ -36,6 +31,11 @@
 		"en"		"[{olive}TFDB{default}] Custom rocket {darkorange}particle{default} trails are now {steelblue}visible{default}."
 	}
 	
+	"Command_DBHideParticles_Usage"
+	{
+		"en"		"[{olive}TFDB{default}] Usage: {darkorange}sm_rockettrails{default} — toggles custom particle trails."
+	}
+	
 	"Command_DBHideSprites_Hidden"
 	{
 		"en"		"[{olive}TFDB{default}] Custom rocket {darkorange}sprite{default} trails are now {steelblue}hidden{default}."
@@ -44,6 +44,11 @@
 	"Command_DBHideSprites_Visible"
 	{
 		"en"		"[{olive}TFDB{default}] Custom rocket {darkorange}sprite{default} trails are now {steelblue}visible{default}."
+	}
+	
+	"Command_DBHideSprites_Usage"
+	{
+		"en"		"[{olive}TFDB{default}] Usage: {darkorange}sm_rocketspritetrails{default} — toggles custom sprite trails."
 	}
 	
 	"DBSteal_Warning_Client"
@@ -127,12 +132,6 @@
 	"Dodgeball_FFABot_Left"
 	{
 		"en"		"[{olive}TFDB{default}] The bot(s) left. {darkmagenta}FFA{default} is now {community}enabled{default}."
-	}
-	
-	"Dodgeball_Death_Message"
-	{
-		"#format"	"{1:N},{2:i}"
-		"en"		"[{olive}TFDB{default}] {burlywood}{1}{default} died to a rocket travelling {red}{2}{default} MpH"
 	}
 	
 	"Dodgeball_Disabled"
@@ -352,18 +351,6 @@
 		"en"		"[{olive}TFDB{default}] Type in chat the new control delay within {darkorange}{1}{default} seconds."
 	}
 	
-	"Menu_DragTimeMin"
-	{
-		"#format"	"{1:i}"
-		"en"		"[{olive}TFDB{default}] Type in chat the new drag time start within {darkorange}{1}{default} seconds."
-	}
-	
-	"Menu_DragTimeMax"
-	{
-		"#format"	"{1:i}"
-		"en"		"[{olive}TFDB{default}] Type in chat the new drag time end within {darkorange}{1}{default} seconds."
-	}
-	
 	"Menu_TargetWeight"
 	{
 		"#format"	"{1:i}"
@@ -520,18 +507,6 @@
 	{
 		"#format"	"{1:.2f}"
 		"en"		"[{olive}TFDB{default}] Changed rocket class control delay to {darkorange}{1}{default}."
-	}
-	
-	"Menu_ChangedDragTimeMin"
-	{
-		"#format"	"{1:.2f}"
-		"en"		"[{olive}TFDB{default}] Changed rocket class drag time start to {darkorange}{1}{default}."
-	}
-	
-	"Menu_ChangedDragTimeMax"
-	{
-		"#format"	"{1:.2f}"
-		"en"		"[{olive}TFDB{default}] Changed rocket class drag time end to {darkorange}{1}{default}."
 	}
 	
 	"Menu_ChangedTargetWeight"

@@ -88,9 +88,9 @@ public void TFDB_OnRocketsConfigExecuted(const char[] strConfigFile)
 	
 	CvarDisableOnBot.AddChangeHook(DisableOnBotCallback);
 	
-	HookEvent("player_team", OnPlayerTeam);
-	HookEvent("player_death", OnPlayerDeath);
-	HookEvent("teamplay_round_start", OnRoundStart);
+	HookEventEx("player_team", OnPlayerTeam);
+	HookEventEx("player_death", OnPlayerDeath);
+	HookEventEx("teamplay_round_start", OnRoundStart);
 	
 	Loaded = true;
 }
@@ -99,9 +99,10 @@ public void OnMapEnd()
 {
 	if (!Loaded) return;
 	
-	UnhookEvent("player_team", OnPlayerTeam);
-	UnhookEvent("player_death", OnPlayerDeath);
-	UnhookEvent("teamplay_round_start", OnRoundStart);
+	Loaded = false;
+	
+	// Do NOT UnhookEvent here — SM auto-cleans on plugin unload.
+	// Manual unhooking causes cascading errors.
 	
 	CvarDisableOnBot.RemoveChangeHook(DisableOnBotCallback);
 	
@@ -112,8 +113,6 @@ public void OnMapEnd()
 	
 	CvarFriendlyFire.RestoreDefault();
 	ExecuteDisableConfig();
-	
-	Loaded = false;
 }
 
 public void OnClientDisconnect(int client)

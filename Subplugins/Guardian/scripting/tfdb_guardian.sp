@@ -102,7 +102,7 @@ Handle        primarySlowPulseTimer   = null;
 Handle        secondarySlowPulseTimer = null;
 
 // Boss HP bar entity
-int           monsterResource = -1;
+int           monsterResource = INVALID_ENT_REFERENCE;
 int           debugBossState  = -1;
 
 // Edge detection for R key per-client
@@ -110,6 +110,10 @@ int           previousButtons[MAXPLAYERS + 1];
 
 // FFA detection
 ConVar        cvarFriendlyFire;
+
+// Cached model indices for beam ring (precached once per map, reused in TriggerSlowPulse)
+int           beamModelIndex  = -1;
+int           haloModelIndex  = -1;
 
 // Surgical Arena Limits
 ConVar        cvUnbalanceLimit;
@@ -154,11 +158,11 @@ public void OnPluginStart()
 
 	hudSync = CreateHudSynchronizer();
 
-	HookEvent("teamplay_round_start", OnRoundStart);
-	HookEvent("teamplay_round_win",   OnRoundWin);
-	HookEvent("player_death",         OnPlayerDeath);
-	HookEvent("player_spawn",         OnPlayerSpawn);
-	HookEvent("player_team",          OnPlayerTeamChange, EventHookMode_Pre);
+	HookEventEx("teamplay_round_start", OnRoundStart);
+	HookEventEx("teamplay_round_win",   OnRoundWin);
+	HookEventEx("player_death",         OnPlayerDeath);
+	HookEventEx("player_spawn",         OnPlayerSpawn);
+	HookEventEx("player_team",          OnPlayerTeamChange, EventHookMode_Pre);
 
 	RegAdminCmd("sm_tfdb_bossstate", Command_BossState, ADMFLAG_CHEATS); // Hidden debug
 	
@@ -169,8 +173,8 @@ public void OnPluginStart()
 
 	AddCommandListener(Listener_BlockGuardianCommands, "kill");
 	AddCommandListener(Listener_BlockGuardianCommands, "explode");
-	AddCommandListener(Listener_BlockGuardianCommands, "jointeam");
-	AddCommandListener(Listener_BlockGuardianCommands, "autoteam");
+	AddCommandListener(Listener_BlockBLUJoin, "jointeam");
+	AddCommandListener(Listener_BlockBLUJoin, "autoteam");
 	AddCommandListener(Listener_BlockGuardianCommands, "spectate");
 	AddCommandListener(Listener_BlockGuardianCommands, "spec");
 	AddCommandListener(Listener_BlockGuardianCommands, "joinclass");
@@ -190,6 +194,47 @@ public Action Listener_BlockGuardianCommands(int client, const char[] command, i
 
 	CPrintToChat(client, "{red}[TFDB] You cannot use '%s' while you are the Guardian!", command);
 	return Plugin_Handled;
+}
+
+// Handles jointeam and autoteam:
+// - Guardian: blocked entirely (cannot leave BLU)
+// - Non-guardian: redirected to RED if trying to join BLU
+public Action Listener_BlockBLUJoin(int client, const char[] command, int argc)
+{
+	if (!guardianActive || client < 1 || client > MaxClients || !IsClientInGame(client))
+	{
+		return Plugin_Continue;
+	}
+
+	// Guardian cannot use jointeam or autoteam at all
+	if (client == guardianClient && IsPlayerAlive(client))
+	{
+		CPrintToChat(client, "{red}[TFDB] You cannot use '%s' while you are the Guardian!", command);
+		return Plugin_Handled;
+	}
+
+	// Non-guardian: block attempts to join BLU, redirect to RED
+	if (strcmp(command, "autoteam", false) == 0)
+	{
+		CPrintToChat(client, "{olive}[TFDB]{default} Guardian round active. Moving you to {red}RED{default}.");
+		FakeClientCommand(client, "jointeam red");
+		return Plugin_Handled;
+	}
+
+	if (strcmp(command, "jointeam", false) == 0 && argc >= 1)
+	{
+		char arg[16];
+		GetCmdArg(1, arg, sizeof(arg));
+
+		if (strcmp(arg, "blue", false) == 0 || strcmp(arg, "3", false) == 0 || strcmp(arg, "auto", false) == 0)
+		{
+			CPrintToChat(client, "{olive}[TFDB]{default} Guardian round active. Moving you to {red}RED{default}.");
+			FakeClientCommand(client, "jointeam red");
+			return Plugin_Handled;
+		}
+	}
+
+	return Plugin_Continue;
 }
 
 // ============================================================================
@@ -229,24 +274,29 @@ public void OnMapStart()
 	PrecacheSound(SOUND_READY, true);
 	PrecacheSound(SOUND_ACTIVATE, true);
 
-	PrecacheModel("materials/sprites/laserbeam.vmt", true);
-	PrecacheModel("materials/sprites/halo01.vmt", true);
+	beamModelIndex = PrecacheModel("materials/sprites/laserbeam.vmt", true);
+	haloModelIndex = PrecacheModel("materials/sprites/halo01.vmt", true);
 
-	monsterResource = FindEntityByClassname(-1, "monster_resource");
+	int ent = FindEntityByClassname(-1, "monster_resource");
 
-	if (monsterResource == -1)
+	if (ent == -1)
 	{
-		monsterResource = CreateEntityByName("monster_resource");
+		ent = CreateEntityByName("monster_resource");
 
-		if (IsValidEntity(monsterResource))
+		if (IsValidEntity(ent))
 		{
-			DispatchSpawn(monsterResource);
+			DispatchSpawn(ent);
 		}
 	}
 
-	if (monsterResource != -1 && IsValidEntity(monsterResource))
+	if (ent != -1 && IsValidEntity(ent))
 	{
-		SetEntProp(monsterResource, Prop_Send, "m_iTeamNum", 2); // Set to RED team
+		monsterResource = EntIndexToEntRef(ent);
+		SetEntProp(ent, Prop_Send, "m_iTeamNum", 2); // Set to RED team
+	}
+	else
+	{
+		monsterResource = INVALID_ENT_REFERENCE;
 	}
 }
 
@@ -255,7 +305,7 @@ public void OnMapEnd()
 	nextRoundIsGuardian = false;
 	debugBossState = -1;
 	ResetAllState();
-	monsterResource = -1;
+	monsterResource = INVALID_ENT_REFERENCE;
 }
 
 public void TFDB_OnRocketsConfigExecuted(const char[] configFile)
@@ -760,41 +810,6 @@ public Action Timer_ForceRed(Handle timer, any userId)
 	return Plugin_Stop;
 }
 
-// Block jointeam to BLU via console command
-public Action OnClientCommand(int client, int args)
-{
-	if (!guardianActive || client <= 0 || client > MaxClients) return Plugin_Continue;
-
-	char cmd[32];
-	GetCmdArg(0, cmd, sizeof(cmd));
-
-	// Redundant suicide block removed (handled by AddCommandListener)
-	
-	if (client != guardianClient)
-	{
-		if (strcmp(cmd, "jointeam", false) == 0 && args >= 1)
-		{
-			char arg[16];
-			GetCmdArg(1, arg, sizeof(arg));
-
-			if (strcmp(arg, "blue", false) == 0 || strcmp(arg, "3", false) == 0 || strcmp(arg, "auto", false) == 0)
-			{
-				CPrintToChat(client, "{olive}[TFDB]{default} The Guardian blocks BLU. Moving you to {red}RED{default} team.");
-				FakeClientCommand(client, "jointeam red");
-				return Plugin_Handled;
-			}
-		}
-		else if (strcmp(cmd, "autoteam", false) == 0)
-		{
-			CPrintToChatAll("{olive}[TFDB]{default} The Guardian blocks BLU. Moving you to {red}RED{default} team.");
-			FakeClientCommand(client, "jointeam red");
-			return Plugin_Handled;
-		}
-	}
-
-	return Plugin_Continue;
-}
-
 // ============================================================================
 //  Activation / Cleanup
 // ============================================================================
@@ -1239,7 +1254,7 @@ void TriggerSlowPulse(int classIdx, bool isPrimary)
 
 	// Draw Visual Ring
 	int color[4] = {100, 150, 255, 128}; // Transparent Blue
-	TE_SetupBeamRingPoint(origin, 10.0, radius, PrecacheModel("materials/sprites/laserbeam.vmt"), PrecacheModel("materials/sprites/halo01.vmt"), 0, 15, 0.4, 3.0, 0.0, color, 10, 0); // Reduced duration to 0.4 for higher pulse rate
+	TE_SetupBeamRingPoint(origin, 10.0, radius, beamModelIndex, haloModelIndex, 0, 15, 0.4, 3.0, 0.0, color, 10, 0); // Reduced duration to 0.4 for higher pulse rate
 	TE_SendToAll();
 
 	for (int i = 1; i <= MaxClients; i++)
@@ -1361,7 +1376,7 @@ public Action Timer_Update(Handle timer)
 
 void UpdateBossHealthBar()
 {
-	if (monsterResource == -1 || !IsValidEntity(monsterResource)) return;
+	if (monsterResource == INVALID_ENT_REFERENCE || !IsValidEntity(monsterResource)) return;
 
 	if (!guardianActive || guardianMaxHP <= 0)
 	{
@@ -1404,7 +1419,7 @@ void UpdateBossHealthBar()
 
 void HideBossHealthBar()
 {
-	if (monsterResource != -1 && IsValidEntity(monsterResource))
+	if (monsterResource != INVALID_ENT_REFERENCE && IsValidEntity(monsterResource))
 	{
 		SetEntProp(monsterResource, Prop_Send, "m_iBossHealthPercentageByte", 0);
 		SetEntProp(monsterResource, Prop_Send, "m_iBossState", 0);

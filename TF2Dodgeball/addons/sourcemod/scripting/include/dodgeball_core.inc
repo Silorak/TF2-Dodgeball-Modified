@@ -131,20 +131,14 @@ void DisableDodgeBall()
 	Music[Music_RoundLose]  =
 	Music[Music_Gameplay]   = false;
 
-	// Only unhook events if they were previously hooked
-	if (EventsHooked)
-	{
-		UnhookEvent("teamplay_round_start", OnRoundStart, EventHookMode_PostNoCopy);
-		UnhookEvent("teamplay_round_active", OnSetupFinished, EventHookMode_PostNoCopy);
-		UnhookEvent("arena_round_start", OnSetupFinished, EventHookMode_PostNoCopy);
-		UnhookEvent("teamplay_round_win", OnRoundEnd, EventHookMode_PostNoCopy);
-		UnhookEvent("player_spawn", OnPlayerSpawn, EventHookMode_Post);
-		UnhookEvent("player_death", OnPlayerDeath, EventHookMode_Pre);
-		UnhookEvent("post_inventory_application", OnPlayerInventory, EventHookMode_Post);
-		UnhookEvent("teamplay_broadcast_audio", OnBroadcastAudio, EventHookMode_Pre);
-		UnhookEvent("object_deflected", OnObjectDeflected);
-		EventsHooked = false;
-	}
+	// Do NOT manually UnhookEvent here. SourceMod automatically cleans up
+	// event hooks when a plugin unloads. Manual unhooking causes cascading
+	// "has no active hook" / "Invalid hook callback" errors when subplugins
+	// (trails, FFA, etc.) unhook shared events first, which aborts this
+	// callback and leaves EventsHooked=true permanently.
+	//
+	// The event callbacks themselves already guard with Enabled/RoundStarted
+	// checks, so leaving hooks active during map transitions is safe.
 
 	// Explicitly unhook to keep behavior isolated to active Dodgeball mode.
 	for (int client = 1; client <= MaxClients; client++)

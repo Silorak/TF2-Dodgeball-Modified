@@ -203,6 +203,12 @@ void StartBounceVote()
 		
 		clients[total++] = client;
 	}
+
+	if (total < 1)
+	{
+		delete menu;
+		return;
+	}
 	
 	menu.DisplayVote(clients, total, CvarVoteBounceDuration.IntValue);
 }
@@ -361,6 +367,12 @@ void StartClassVote()
 		
 		clients[total++] = client;
 	}
+
+	if (total < 1)
+	{
+		delete menu;
+		return;
+	}
 	
 	menu.DisplayVote(clients, total, CvarVoteClassDuration.IntValue);
 }
@@ -468,6 +480,12 @@ void StartCountVote()
 		}
 		
 		clients[total++] = client;
+	}
+
+	if (total < 1)
+	{
+		delete menu;
+		return;
 	}
 	
 	menu.DisplayVote(clients, total, CvarVoteCountDuration.IntValue);
@@ -582,6 +600,12 @@ void StartPresetVote()
 		}
 		
 		clients[total++] = client;
+	}
+
+	if (total < 1)
+	{
+		delete menu;
+		return;
 	}
 	
 	menu.DisplayVote(clients, total, CvarVotePresetDuration.IntValue);

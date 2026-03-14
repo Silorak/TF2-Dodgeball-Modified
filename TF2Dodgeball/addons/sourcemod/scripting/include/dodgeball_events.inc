@@ -518,9 +518,21 @@ public Action CmdTogglePushPrevention(int client, int args)
 		return Plugin_Handled;
 	}
 
-	if (!Enabled || !UsePushPrevention || !UsePushPreventionToggle)
+	if (!Enabled)
 	{
 		CReplyToCommand(client, "%t", "Command_Disabled");
+		return Plugin_Handled;
+	}
+
+	if (!UsePushPrevention)
+	{
+		CReplyToCommand(client, "[TFDB] Push prevention is disabled in general.cfg.");
+		return Plugin_Handled;
+	}
+
+	if (!UsePushPreventionToggle)
+	{
+		CReplyToCommand(client, "[TFDB] Push prevention toggle is disabled in general.cfg.");
 		return Plugin_Handled;
 	}
 

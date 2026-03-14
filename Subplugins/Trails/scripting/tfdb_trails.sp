@@ -115,8 +115,8 @@ public void TFDB_OnRocketsConfigExecuted(const char[] configFile)
 {
 	if (!Loaded)
 	{
-		HookEvent("object_deflected", OnObjectDeflected);
-		HookEvent("player_team", OnPlayerTeam);
+		HookEventEx("object_deflected", OnObjectDeflected);
+		HookEventEx("player_team", OnPlayerTeam);
 		
 		Loaded = true;
 	}
@@ -150,8 +150,11 @@ public void OnMapEnd()
 {
 	if (!Loaded) return;
 	
-	UnhookEvent("object_deflected", OnObjectDeflected);
-	UnhookEvent("player_team", OnPlayerTeam);
+	Loaded = false;
+	
+	// Do NOT UnhookEvent here — SM auto-cleans on plugin unload.
+	// Manual unhooking causes "has no active hook" errors that cascade
+	// into the core dodgeball plugin and permanently break it.
 	
 	for (int index = 0; index < RocketClassCount; index++)
 	{
@@ -159,8 +162,6 @@ public void OnMapEnd()
 	}
 	
 	RocketClassCount = 0;
-	
-	Loaded = false;
 }
 
 public void OnClientDisconnect(int client)
