@@ -60,14 +60,6 @@ stock float GetEntitiesDistance(int ent1, int ent2)
 }
 
 /**
- * Returns the maximum of two float values.
- */
-stock float FMax(float a, float b)
-{
-	return (a > b) ? a : b;
-}
-
-/**
  * Returns the minimum of two float values.
  */
 stock float FMin(float a, float b)

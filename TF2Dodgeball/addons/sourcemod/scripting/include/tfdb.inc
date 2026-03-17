@@ -18,8 +18,7 @@
 //   config are calibrated as "amount per 0.1s" for backwards compatibility.
 //   Per-frame scaling uses GetTickInterval() directly — no derived magic numbers.
 //
-#define FPS_LOGIC_RATE          10.0
-#define FPS_LOGIC_INTERVAL      1.0 / FPS_LOGIC_RATE
+#define FPS_LOGIC_INTERVAL      0.1
 
 /**
  * The base time interval (seconds) that config turn rate / elevation values
@@ -131,7 +130,6 @@ enum struct eRocketSteal
 #define PARTICLE_NUKE_4         "fireSmokeExplosion3"
 #define PARTICLE_NUKE_5         "fireSmokeExplosion4"
 #define PARTICLE_NUKE_COLLUMN   "fireSmoke_collumnP"
-#define PARTICLE_ROCKET_TRAIL   "rockettrail"
 #define PARTICLE_NUKE_1_ANGLES  view_as<float>({270.0, 0.0, 0.0})
 #define PARTICLE_NUKE_2_ANGLES  PARTICLE_NUKE_1_ANGLES
 #define PARTICLE_NUKE_3_ANGLES  PARTICLE_NUKE_1_ANGLES
