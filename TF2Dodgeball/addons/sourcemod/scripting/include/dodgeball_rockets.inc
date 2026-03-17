@@ -127,7 +127,7 @@ void DestroyRocket(int index)
 	if (!IsValidRocket(index)) return;
 
 	int entity = EntRefToEntIndex(RocketEntity[index]);
-	if (entity != INVALID_ENT_REFERENCE)
+	if (entity != INVALID_ENT_REFERENCE && IsValidEntity(entity))
 	{
 		RemoveEntity(entity);
 	}
