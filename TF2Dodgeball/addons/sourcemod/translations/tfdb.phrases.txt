@@ -714,4 +714,61 @@
 	{
 		"en"		"[{olive}TFDB{default}] {red}Guardian disabled{default} — a bot joined the server."
 	}
+
+	// ---- Anti-Cheat subplugin phrases ----
+
+	"AC_Admin_Flagged"
+	{
+		"#format"	"{1:N},{2:i}"
+		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} flagged with suspicion score {red}{2}{default}."
+	}
+
+	"AC_Admin_Kicked"
+	{
+		"#format"	"{1:N},{2:i}"
+		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} was kicked. Score: {red}{2}{default}."
+	}
+
+	"AC_Admin_Banned"
+	{
+		"#format"	"{1:N},{2:i}"
+		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} was banned. Score: {red}{2}{default}."
+	}
+
+	"AC_Kick_Reason"
+	{
+		"en"		"Suspicious activity detected."
+	}
+
+	"AC_Ban_Reason"
+	{
+		"en"		"Auto-airblast cheat detected."
+	}
+
+	"AC_Status_Header"
+	{
+		"en"		"[{olive}TFDB{default}] --- Anti-Cheat Status ---"
+	}
+
+	"AC_Status_Player"
+	{
+		"#format"	"{1:N},{2:i},{3:i},{4:i},{5:i},{6:i},{7:i},{8:i},{9:i},{10:i}"
+		"en"		"{darkorange}{1}{default} | Score:{red}{2}{default} Sil:{3} SB:{4} Sn:{5} MF:{6} PT:{7} CT:{8} FS:{9} TK:{10}"
+	}
+
+	"AC_Status_Clean"
+	{
+		"en"		"[{olive}TFDB{default}] All players are clean."
+	}
+
+	"AC_Reset_Done"
+	{
+		"#format"	"{1:N}"
+		"en"		"[{olive}TFDB{default}] Reset anti-cheat counters for {darkorange}{1}{default}."
+	}
+
+	"AC_Reset_Usage"
+	{
+		"en"		"[{olive}TFDB{default}] Usage: sm_ac_reset <target>"
+	}
 }
