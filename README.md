@@ -2,7 +2,7 @@
 
 # TF2 Dodgeball
 
-[![Version](https://img.shields.io/badge/version-2.2.0-blue?style=for-the-badge)](https://github.com/Silorak/TF2-Dodgeball-Modified/releases)
+[![Version](https://img.shields.io/badge/version-2.3.0-blue?style=for-the-badge)](https://github.com/Silorak/TF2-Dodgeball-Modified/releases)
 [![SourceMod](https://img.shields.io/badge/SourceMod-1.12-orange?style=for-the-badge)](https://www.sourcemod.net/)
 [![License](https://img.shields.io/badge/license-GPL%20v3-green?style=for-the-badge)](LICENSE)
 
@@ -113,7 +113,7 @@ tf/
         └── dodgeball.sp                   ← core source
 ```
 
-> **Don't want a subplugin?** Just delete its `.smx` from `plugins/`. No other files need to change — subplugins detect core via `SharedPlugin` and have no hard dependencies on each other.
+> **Don't want a subplugin?** Move its `.smx` to the `plugins/disabled/` folder. No other files need to change — subplugins detect core via `SharedPlugin` and have no hard dependencies on each other.
 
 ### Quick Install
 
