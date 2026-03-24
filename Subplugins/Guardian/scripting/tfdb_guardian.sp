@@ -108,7 +108,7 @@ Handle        secondarySlowPulseTimer = null;
 int           monsterResource = INVALID_ENT_REFERENCE;
 int           debugBossState  = -1;
 
-// Debug mode - toggled by !dguardian. Also bypasses HasActiveBots() check.
+// Debug mode - toggled by !dguardian (admin only). Spawns bots and treats them as real players to simulate a full game.
 bool          debugMode       = false;
 // Set true during ActivateGuardian's TF2_RespawnPlayer call to suppress death-path cleanup
 bool          guardianActivating = false;
@@ -178,7 +178,7 @@ public void OnPluginStart()
 	HookEventEx("player_team",          OnPlayerTeamChange, EventHookMode_Pre);
 
 	RegAdminCmd("sm_tfdb_bossstate", Command_BossState, ADMFLAG_CHEATS); // Hidden debug
-	RegConsoleCmd("sm_dguardian", Command_DebugGuardian, "Toggle guardian debug output (no access check, testing only).");
+	RegAdminCmd("sm_dguardian", Command_DebugGuardian, ADMFLAG_CHEATS, "Toggle guardian debug output (admin only).");
 	RegConsoleCmd("sm_guardian",  Command_GuardianOptOut, "Toggle opt-out from being selected as Guardian.");
 	
 
@@ -355,7 +355,7 @@ public void OnClientDisconnect(int client)
 
 public void OnClientPostAdminCheck(int client)
 {
-	// Bot joined - disable Guardian if active (skip in debugMode where bots are intentional test targets)
+	// Bot joined mid-guardian - cancel guardian round (skip in debugMode where bots are intentional test fodder)
 	if (IsFakeClient(client) && guardianActive && !debugMode)
 	{
 		CPrintToChatAll("%t", "Guardian_BotJoined");
@@ -1259,7 +1259,6 @@ void ResetAllState(bool preserveQueuedSelection = false)
 public Action Command_DebugGuardian(int client, int args)
 {
 	debugMode    = !debugMode;
-	// debugMode now also controls bot bypass - no separate flag needed
 
 	char who[MAX_NAME_LENGTH];
 	if (client == 0)
@@ -1270,11 +1269,11 @@ public Action Command_DebugGuardian(int client, int args)
 	char state[8];
 	strcopy(state, sizeof(state), debugMode ? "ON" : "OFF");
 
-	PrintToChatAll("[GUARDIAN] Debug mode %s + bot bypass %s (toggled by %s)", state, state, who);
+	PrintToChatAll("[GUARDIAN] Debug mode %s (toggled by %s)", state, who);
 
 	if (debugMode)
 	{
-		// Spawn RED bots so rounds can start solo
+		// Spawn RED bots as test fodder so rounds can start solo
 		ServerCommand("tf_bot_join_after_player 0");
 		ServerCommand("tf_bot_keep_class_after_death 1");
 		ServerCommand("tf_bot_taunt_victim_chance 0");
@@ -1284,9 +1283,9 @@ public Action Command_DebugGuardian(int client, int args)
 
 		LogToFileEx(GUARDIAN_LOG, "");
 		LogToFileEx(GUARDIAN_LOG, "======================================================");
-		LogToFileEx(GUARDIAN_LOG, "  Guardian debug ON + bot bypass ON  (toggled by %s)", who);
+		LogToFileEx(GUARDIAN_LOG, "  Guardian debug ON  (toggled by %s)", who);
 		LogToFileEx(GUARDIAN_LOG, "======================================================");
-		LogToFileEx(GUARDIAN_SEL, "debugMode=true botBypass=true (toggled by %s)", who);
+		LogToFileEx(GUARDIAN_SEL, "debugMode=true (toggled by %s)", who);
 		LogToFileEx(GUARDIAN_LOG, "guardianActive=%d  client=%d  maxHP=%d  currentHP=%d  nextRound=%d",
 			guardianActive, guardianClient, guardianMaxHP, guardianCurrentHP, nextRoundIsGuardian);
 
@@ -1305,11 +1304,15 @@ public Action Command_DebugGuardian(int client, int args)
 	{
 		ServerCommand("tf_bot_kick all");
 
-		LogToFileEx(GUARDIAN_LOG, "------------------------------------------------------");
-		LogToFileEx(GUARDIAN_LOG, "  Guardian debug OFF + bot bypass OFF  (toggled by %s)", who);
-		LogToFileEx(GUARDIAN_LOG, "------------------------------------------------------");
-		LogToFileEx(GUARDIAN_LOG, "");
-		LogToFileEx(GUARDIAN_SEL, "debugMode=false botBypass=false (toggled by %s)", who);
+		// Only write to debug log if it already exists (avoids creating the file just to say "OFF")
+		if (FileExists(GUARDIAN_LOG))
+		{
+			LogToFileEx(GUARDIAN_LOG, "------------------------------------------------------");
+			LogToFileEx(GUARDIAN_LOG, "  Guardian debug OFF  (toggled by %s)", who);
+			LogToFileEx(GUARDIAN_LOG, "------------------------------------------------------");
+			LogToFileEx(GUARDIAN_LOG, "");
+		}
+		LogToFileEx(GUARDIAN_SEL, "debugMode=false (toggled by %s)", who);
 	}
 
 	return Plugin_Handled;
@@ -1520,8 +1523,16 @@ void ActivateAbility(GuardianAbility ability, int slotIdx)
 	}
 
 	DataPack pack;
-	if (slotIdx == 1) primaryTimer = CreateDataTimer(ability.Duration, Timer_PrimaryExpire, pack, TIMER_FLAG_NO_MAPCHANGE);
-	else secondaryTimer = CreateDataTimer(ability.Duration, Timer_SecondaryExpire, pack, TIMER_FLAG_NO_MAPCHANGE);
+	if (slotIdx == 1)
+	{
+		delete primaryTimer; // defensive: prevent handle leak if timer already exists
+		primaryTimer = CreateDataTimer(ability.Duration, Timer_PrimaryExpire, pack, TIMER_FLAG_NO_MAPCHANGE);
+	}
+	else
+	{
+		delete secondaryTimer;
+		secondaryTimer = CreateDataTimer(ability.Duration, Timer_SecondaryExpire, pack, TIMER_FLAG_NO_MAPCHANGE);
+	}
 	if (pack != null) pack.WriteCell(GetClientUserId(guardianClient));
 }
 
@@ -1624,10 +1635,18 @@ public Action Timer_SlowPulse(Handle timer, DataPack pack)
 {
 	if (!guardianActive || !IsClientInGame(guardianClient) || !IsPlayerAlive(guardianClient))
 	{
-		delete primarySlowPulseTimer;
-		primarySlowPulseTimer = null;
-		delete secondarySlowPulseTimer;
-		secondarySlowPulseTimer = null;
+		// One of these handles IS the timer currently executing - only null it.
+		// Plugin_Stop tells the engine to destroy it. Delete the other one safely.
+		if (timer == primarySlowPulseTimer)
+		{
+			primarySlowPulseTimer = null;
+			delete secondarySlowPulseTimer;
+		}
+		else
+		{
+			secondarySlowPulseTimer = null;
+			delete primarySlowPulseTimer;
+		}
 		return Plugin_Stop;
 	}
 
