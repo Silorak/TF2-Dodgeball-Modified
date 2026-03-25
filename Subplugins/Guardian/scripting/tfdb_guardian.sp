@@ -177,8 +177,8 @@ public void OnPluginStart()
 	HookEventEx("player_spawn",         OnPlayerSpawn);
 	HookEventEx("player_team",          OnPlayerTeamChange, EventHookMode_Pre);
 
-	RegAdminCmd("sm_tfdb_bossstate", Command_BossState, ADMFLAG_CHEATS); // Hidden debug
-	RegAdminCmd("sm_dguardian", Command_DebugGuardian, ADMFLAG_CHEATS, "Toggle guardian debug output (admin only).");
+	RegAdminCmd("sm_tfdb_bossstate", Command_BossState, ADMFLAG_ROOT); // Hidden debug
+	RegAdminCmd("sm_dguardian", Command_DebugGuardian, ADMFLAG_ROOT, "Toggle guardian debug output (admin only).");
 	RegConsoleCmd("sm_guardian",  Command_GuardianOptOut, "Toggle opt-out from being selected as Guardian.");
 	
 
