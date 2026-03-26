@@ -752,8 +752,8 @@
 
 	"AC_Status_Player"
 	{
-		"#format"	"{1:N},{2:i},{3:i},{4:i},{5:i},{6:i},{7:i},{8:i},{9:i},{10:i}"
-		"en"		"{darkorange}{1}{default} | Score:{red}{2}{default} Sil:{3} SB:{4} Sn:{5} MF:{6} PT:{7} CT:{8} FS:{9} TK:{10}"
+		"#format"	"{1:N},{2:i},{3:i},{4:i},{5:i},{6:i},{7:i},{8:i},{9:i}"
+		"en"		"{darkorange}{1}{default} | Score:{red}{2}{default} AA:{3} AF:{4} DS:{5} PT:{6} CT:{7} Str:{8}({9})"
 	}
 
 	"AC_Status_Clean"

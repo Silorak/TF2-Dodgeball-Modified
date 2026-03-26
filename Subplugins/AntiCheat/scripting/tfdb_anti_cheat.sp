@@ -1,3 +1,16 @@
+// ============================================================================
+//  TFDB Anti-Cheat
+//  A server-side anti-cheat for TF2 Dodgeball built from reverse-engineering
+//  the Amalgam cheat's auto-airblast, projectile simulation, silent aim,
+//  fake lag, backtrack, and network manipulation systems.
+//
+//  Designed for SourceMod 1.12+, compatible with TF2 Dodgeball 2.2.0.
+//  Integrates with the TFDB forward/native ecosystem when available.
+//
+//  Author: Anti-Cheat Research
+//  License: GPLv3
+// ============================================================================
+
 #pragma semicolon 1
 #pragma newdecls required
 
@@ -23,9 +36,7 @@ int    ACLogLevel;
 int    ACActionThreshold;
 int    ACActionMode;
 int    ACSilentHitsPerPoint;
-int    ACSnapHitsPerPoint;
 int    ACTimingHitsPerPoint;
-int    ACMoveFixHitsPerPoint;
 int    ACDecayAmount;
 char   ACImmunityFlag[4];
 
@@ -45,17 +56,14 @@ char   ACImmunityFlag[4];
 #define TIMING_HISTORY  64
 
 // Ring buffer for movement consistency samples.
-#define MOVE_HISTORY    48
 
 // How many ticks of silence (no angle change at all) we tolerate before
 // flagging a frozen-angle pattern (common with cheat GUIs eating input).
 // Expressed as time, converted to ticks at runtime.
-#define FROZEN_TIME     0.18    // ~12 ticks at 66, ~23 at 128
 
 // Maximum reasonable angular snap in a single tick (degrees).
 // A 180-degree flick in one tick is beyond human limits at any tickrate.
 // The cheat's silent aim regularly produces snaps > 30 degrees.
-#define SNAP_THRESHOLD  40.0
 
 // Perfect airblast timing window. The cheat fires IN_ATTACK2 on the exact
 // tick the rocket enters the deflection sphere (128 hu radius * multiplier).
@@ -65,7 +73,6 @@ char   ACImmunityFlag[4];
 // Movement correction signature: the cheat calls SDK::FixMovement which
 // recomputes forwardmove/sidemove to compensate for silent angle changes.
 // This produces a very specific ratio between movement and view angle.
-#define MOVE_FIX_TOLERANCE 0.01
 
 // ============================================================================
 // Per-client data structures
@@ -85,15 +92,6 @@ enum struct TimingRecord {
     int tick;
 }
 
-enum struct MoveRecord {
-    float forwardmove;
-    float sidemove;
-    float pitch;
-    float yaw;
-    float prevPitch;
-    float prevYaw;
-    int buttons;
-}
 
 // Per-client tracking state
 AngleRecord  AngleHistory[MAXPLAYERS + 1][ANGLE_HISTORY];
@@ -104,21 +102,13 @@ TimingRecord TimingHistory[MAXPLAYERS + 1][TIMING_HISTORY];
 int          TimingIndex[MAXPLAYERS + 1];
 int          TimingSamples[MAXPLAYERS + 1];
 
-MoveRecord   MoveHistory[MAXPLAYERS + 1][MOVE_HISTORY];
-int          MoveIndex[MAXPLAYERS + 1];
-int          MoveSamples[MAXPLAYERS + 1];
 
 // Detection counters - accumulated evidence, not instant bans.
-int   SilentAimDetections[MAXPLAYERS + 1];
-int   SnapAimDetections[MAXPLAYERS + 1];
 int   PerfectTimingDetections[MAXPLAYERS + 1];
-int   MoveFixDetections[MAXPLAYERS + 1];
-int   FrozenAngleDetections[MAXPLAYERS + 1];
-int   AngleSnapbackDetections[MAXPLAYERS + 1];
 int   InhaleExhaleDetections[MAXPLAYERS + 1];  // ConsistentTiming counter
-int   LerpSmoothDetections[MAXPLAYERS + 1];    // AntiCheatCompatibility lerp pattern
 int   DragSnapbackDetections[MAXPLAYERS + 1];  // Post-drag-pause 3-angle snapback (TFDB-specific)
 int   AirblastFacingDetections[MAXPLAYERS + 1]; // Airblast succeeded while not facing rocket
+int   AntiAimDetections[MAXPLAYERS + 1];       // m_angEyeAngles pitch outside [-89, 89]
 int   PerfectStreakScore[MAXPLAYERS + 1];       // Scored streak milestones (not raw count)
 float LastDetectionTime[MAXPLAYERS + 1];
 
@@ -134,27 +124,27 @@ int   LastAirblastTick[MAXPLAYERS + 1];
 bool  JustAirblasted[MAXPLAYERS + 1];
 
 // Angle state for snapback detection
-float PreAttackAngles[MAXPLAYERS + 1][3];
-bool  TrackingSnapback[MAXPLAYERS + 1];
-int   SnapbackStartTick[MAXPLAYERS + 1];
 
 // Previous tick data
 float PrevAngles[MAXPLAYERS + 1][3];
-float PrevMove[MAXPLAYERS + 1][2];
 int   PrevButtons[MAXPLAYERS + 1];
-int   FrozenTicks[MAXPLAYERS + 1];
 
 // Raw (pre-modification) angles from OnPlayerRunCmdPre
 float RawAngles[MAXPLAYERS + 1][3];
 bool  RawAnglesValid[MAXPLAYERS + 1];
 
 // Network anomaly tracking
-int   LastTickCount[MAXPLAYERS + 1];
-int   TickCountAnomalies[MAXPLAYERS + 1];
-int   ChokedCommandRuns[MAXPLAYERS + 1];
 
 // Debug system — per-player verbose logging
-int   DebugTarget = -1;  // Client index being debugged, -1 = none
+// Per-client debug state — supports multiple simultaneous debug targets.
+// Each debugged player gets their own log file named by sanitized SteamID.
+enum struct DebugState {
+    bool   active;                     // Is this client being debug-logged?
+    char   logPath[PLATFORM_MAX_PATH]; // Cached full path to their log file
+    char   steamId[32];                // Cached SteamID for filename
+}
+
+DebugState PlayerDebug[MAXPLAYERS + 1];
 
 // ============================================================================
 // ConVars
@@ -165,9 +155,7 @@ ConVar CvarLogLevel;
 ConVar CvarActionThreshold;
 ConVar CvarAction;
 ConVar CvarSilentThreshold;
-ConVar CvarSnapThreshold;
 ConVar CvarTimingThreshold;
-ConVar CvarMoveFixThreshold;
 ConVar CvarDecayInterval;
 ConVar CvarDecayAmount;
 ConVar CvarImmunityFlag;
@@ -182,10 +170,10 @@ Handle HudSync = INVALID_HANDLE;
 
 public Plugin myinfo = {
     name        = PLUGIN_NAME,
-    author      = "Silorak",
-    description = "Dodgeball anti-cheat",
+    author      = "Anti-Cheat Research",
+    description = "Dodgeball-specific anti-cheat built from Amalgam cheat analysis",
     version     = PLUGIN_VERSION,
-    url         = "https://github.com/Silorak/TF2-Dodgeball"
+    url         = "https://github.com/tfdb-anticheat"
 };
 
 // ============================================================================
@@ -229,7 +217,6 @@ public void OnPluginStart()
         _, true, 1.0, true, 20.0
     );
 
-    CvarSnapThreshold = CreateConVar(
         "tfdb_ac_snap_hits", "4",
         "Angle snap raw detections needed per score point.",
         _, true, 1.0, true, 20.0
@@ -241,7 +228,6 @@ public void OnPluginStart()
         _, true, 1.0, true, 30.0
     );
 
-    CvarMoveFixThreshold = CreateConVar(
         "tfdb_ac_movefix_hits", "6",
         "Movement correction raw detections needed per score point.",
         _, true, 1.0, true, 20.0
@@ -295,9 +281,7 @@ public void OnPluginStart()
     CvarActionThreshold.AddChangeHook(OnConVarChanged);
     CvarAction.AddChangeHook(OnConVarChanged);
     CvarSilentThreshold.AddChangeHook(OnConVarChanged);
-    CvarSnapThreshold.AddChangeHook(OnConVarChanged);
     CvarTimingThreshold.AddChangeHook(OnConVarChanged);
-    CvarMoveFixThreshold.AddChangeHook(OnConVarChanged);
     CvarDecayAmount.AddChangeHook(OnConVarChanged);
     CvarImmunityFlag.AddChangeHook(OnConVarChanged);
 
@@ -444,7 +428,7 @@ public void TFDB_OnRocketDeflect(int index, int entity, int owner)
 
         // Only check when rocket is close (< 300 HU) and we have
         // enough angle history to scan.
-        if (dist < 300.0 && AngleSamples[owner] >= 6)
+        if (dist < 300.0 && AngleSamples[owner] >= 12)
         {
             // Calculate the angle FROM the player TO the rocket
             float dirToRocket[3];
@@ -469,7 +453,7 @@ public void TFDB_OnRocketDeflect(int index, int entity, int owner)
             bool facedRocket = false;
             float bestDelta = 999.0;
 
-            for (int i = 0; i < 6; i++)
+            for (int i = 0; i < 12; i++)
             {
                 int hIdx = (AngleIndex[owner] - 1 - i + ANGLE_HISTORY) % ANGLE_HISTORY;
                 float delta = AngleDelta(
@@ -669,9 +653,7 @@ void CacheAllConVars()
     ACActionThreshold = CvarActionThreshold.IntValue;
     ACActionMode = CvarAction.IntValue;
     ACSilentHitsPerPoint = MaxInt(1, CvarSilentThreshold.IntValue);
-    ACSnapHitsPerPoint = MaxInt(1, CvarSnapThreshold.IntValue);
     ACTimingHitsPerPoint = MaxInt(1, CvarTimingThreshold.IntValue);
-    ACMoveFixHitsPerPoint = MaxInt(1, CvarMoveFixThreshold.IntValue);
     ACDecayAmount = CvarDecayAmount.IntValue;
     CvarImmunityFlag.GetString(ACImmunityFlag, sizeof(ACImmunityFlag));
 }
@@ -690,6 +672,16 @@ public void OnClientPutInServer(int client)
 public void OnClientDisconnect(int client)
 {
     LogSessionSummary(client);
+
+    // Close debug logging if active on this player
+    if (PlayerDebug[client].active)
+    {
+        char name[MAX_NAME_LENGTH];
+        GetClientName(client, name, sizeof(name));
+        LogToFile(PlayerDebug[client].logPath, "=== Debug ended for %s (disconnected) ===", name);
+        PlayerDebug[client].active = false;
+    }
+
     ResetClientState(client);
     SDKUnhook(client, SDKHook_PreThink, OnPreThink);
 }
@@ -700,23 +692,15 @@ void ResetClientState(int client)
     AngleSamples[client]   = 0;
     TimingIndex[client]    = 0;
     TimingSamples[client]  = 0;
-    MoveIndex[client]      = 0;
-    MoveSamples[client]    = 0;
 
-    SilentAimDetections[client]    = 0;
-    SnapAimDetections[client]      = 0;
-    PerfectTimingDetections[client]= 0;
-    MoveFixDetections[client]      = 0;
-    FrozenAngleDetections[client]  = 0;
-    AngleSnapbackDetections[client]= 0;
-    InhaleExhaleDetections[client] = 0;
-    LerpSmoothDetections[client]   = 0;
-    DragSnapbackDetections[client] = 0;
+    PerfectTimingDetections[client]  = 0;
+    InhaleExhaleDetections[client]   = 0;
+    DragSnapbackDetections[client]   = 0;
     AirblastFacingDetections[client] = 0;
-    PerfectStreakScore[client]     = 0;
-    LastDetectionTime[client]      = 0.0;
+    AntiAimDetections[client]        = 0;
+    PerfectStreakScore[client]        = 0;
+    LastDetectionTime[client]        = 0.0;
 
-    // Timing state
     TimingFlagged[client]       = false;
     TimingCooldown[client]      = 0;
     CurrentStreak[client]       = 0;
@@ -725,18 +709,10 @@ void ResetClientState(int client)
     LastAirblastTime[client]  = 0.0;
     LastAirblastTick[client]  = 0;
     JustAirblasted[client]    = false;
-    TrackingSnapback[client]  = false;
-    FrozenTicks[client]       = 0;
-
-    LastTickCount[client]      = 0;
-    TickCountAnomalies[client] = 0;
-    ChokedCommandRuns[client]  = 0;
 
     PrevAngles[client][0] = 0.0;
     PrevAngles[client][1] = 0.0;
     PrevAngles[client][2] = 0.0;
-    PrevMove[client][0]   = 0.0;
-    PrevMove[client][1]   = 0.0;
     PrevButtons[client]   = 0;
 
     RawAnglesValid[client] = false;
@@ -755,21 +731,16 @@ public void OnPlayerRunCmdPre(int client, int buttons, int impulse,
     int cmdnum, int tickcount, int seed, const int mouse[2])
 {
     // ------------------------------------------------------------------
-    // DEBUG LOGGING: Per-tick data for the debug target.
+    // DEBUG LOGGING: Per-tick data for any debug-active player.
     // Must run BEFORE immunity/alive gates — admin debugging themselves
     // has immunity flag which would skip everything below.
+    // Supports multiple simultaneous targets, each with their own log file.
     // ------------------------------------------------------------------
-    if (client == DebugTarget && IsClientInGame(client))
+    if (PlayerDebug[client].active && IsClientInGame(client))
     {
-        char logPath[PLATFORM_MAX_PATH];
-        char dateStr[32];
-        FormatTime(dateStr, sizeof(dateStr), "%m_%d_%Y");
-        BuildPath(Path_SM, logPath, sizeof(logPath),
-            "logs/tfdb_ac/debug_%s.log", dateStr);
-
         bool isAtk2 = (buttons & IN_ATTACK2) != 0;
         bool isAtk1 = (buttons & IN_ATTACK) != 0;
-        LogToFile(logPath,
+        LogToFile(PlayerDebug[client].logPath,
             "cmd=%d p=%.2f y=%.2f atk=%d%d btn=%d tick=%d",
             cmdnum, angles[0], angles[1],
             isAtk1 ? 1 : 0, isAtk2 ? 1 : 0,
@@ -832,22 +803,15 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse,
     }
     RawAnglesValid[client] = false;
 
+
     // ------------------------------------------------------------------
-    // DETECTION 1: Silent Aim / PSilent (Snapback Pattern)
-    //
-    // The cheat's auto-airblast with Redirect sets G::PSilentAngles = true.
-    // It snaps viewangles to face the rocket, fires IN_ATTACK2, then the
-    // engine (via FixMovement) or the next tick restores angles.
-    //
-    // Pattern: angles[t-1] = A, angles[t] = B (big delta), angles[t+1] ≈ A
-    // The cheat's own AntiCheatCompatibility tries to mask this by lerping,
-    // but the 3-frame snapback is still detectable with wider windows.
+    // Record angle history (used by AirblastFacing and DragSnapback
+    // in TFDB_OnRocketDeflect)
     // ------------------------------------------------------------------
 
     bool isAttacking = (buttons & IN_ATTACK2) != 0;
     bool wasAttacking = (PrevButtons[client] & IN_ATTACK2) != 0;
 
-    // Record angle for history
     int idx = AngleIndex[client] % ANGLE_HISTORY;
     AngleHistory[client][idx].pitch = angles[0];
     AngleHistory[client][idx].yaw = angles[1];
@@ -856,263 +820,45 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse,
     AngleIndex[client]++;
     if (AngleSamples[client] < ANGLE_HISTORY) AngleSamples[client]++;
 
-    // Check for snapback pattern across a wider window than the cheat expects
-    if (AngleSamples[client] >= 5 && !anglesModifiedByPlugin)
+    // ------------------------------------------------------------------
+    // DETECTION: AntiAim via m_angEyeAngles
+    //
+    // The cheat's AntiAim adds +360 to pitch or does 180-pitch.
+    // SM clamps CUserCmd angles before OnPlayerRunCmd, so we can't
+    // see it in the usercmd. But the engine sets m_angEyeAngles on
+    // the player entity from the RAW usercmd values. The DataTable
+    // SendProxy clamps for network transmission, but the entity prop
+    // retains the raw value.
+    //
+    // If m_angEyeAngles[0] is outside [-89, 89], the client is using
+    // AntiAim. Zero false positive rate.
+    // ------------------------------------------------------------------
+
+    float eyePitch = GetEntPropFloat(client, Prop_Send, "m_angEyeAngles", 0);
+    if (eyePitch > 89.1 || eyePitch < -89.1)
     {
-        CheckSilentAim(client, isAttacking);
+        AntiAimDetections[client]++;
+        LogDetection(client, "AntiAim",
+            "m_angEyeAngles[0]=%.2f (valid range [-89, 89])",
+            eyePitch);
     }
 
     // ------------------------------------------------------------------
-    // DETECTION 2: Inhuman Angle Snaps
-    //
-    // The cheat's auto-airblast computes: Math::CalcAngle(vEyePos, vOrigin)
-    // and directly sets pCmd->viewangles. Even with AntiCheatCompatibility
-    // smoothing, the angular delta per tick is far beyond human capacity
-    // when rockets approach from the side or behind.
-    //
-    // NOTE: Third-person and custom FOV do NOT affect viewangles in
-    // OnPlayerRunCmd — these are always the player's actual aim direction.
-    // However, wider FOV or thirdperson lets players SEE rockets from
-    // wider angles, so they may legitimately flick further. We account
-    // for this by:
-    //   1. Using a generous base threshold (40 deg/tick)
-    //   2. Reading the player's actual FOV to scale the threshold
-    //   3. Checking for thirdperson camera state
-    // A 40 degree snap in one tick is already
-    // well beyond pro FPS players at any tickrate.
-    // ------------------------------------------------------------------
-
-    float angleDelta = AngleDelta(
-        PrevAngles[client][0], PrevAngles[client][1],
-        angles[0], angles[1]
-    );
-
-    // Scale snap threshold based on player's FOV — wider FOV means
-    // they can see rockets from wider angles and may flick further.
-    // Default TF2 FOV is 75-90. Some servers allow up to 130+.
-    float currentSnapThreshold = SNAP_THRESHOLD;
-    int playerFov = GetEntProp(client, Prop_Send, "m_iFOV");
-    if (playerFov <= 0) playerFov = GetEntProp(client, Prop_Send, "m_iDefaultFOV");
-    if (playerFov <= 0) playerFov = 90;  // Fallback
-
-    // Scale: at FOV 90 use base threshold, at FOV 130 use 1.5x threshold
-    if (playerFov > 90)
-    {
-        currentSnapThreshold *= (float(playerFov) / 90.0);
-    }
-
-    // Also check if player is in thirdperson (m_nForceTauntCam = 1).
-    // Thirdperson gives wider spatial awareness, so increase tolerance.
-    int forceTauntCam = GetEntProp(client, Prop_Send, "m_nForceTauntCam");
-    if (forceTauntCam == 1)
-    {
-        currentSnapThreshold *= 1.3;  // 30% more tolerance for thirdperson
-    }
-
-    if (!anglesModifiedByPlugin && angleDelta > currentSnapThreshold && (isAttacking || wasAttacking))
-    {
-        SnapAimDetections[client]++;
-        LogDetection(client, "SnapAim", "delta=%.1f threshold=%.1f fov=%d tp=%d atk=%d",
-            angleDelta, currentSnapThreshold, playerFov, forceTauntCam, isAttacking);
-    }
-
-    // ------------------------------------------------------------------
-    // DETECTION 3: Movement Correction Signature (FixMovement)
-    //
-    // When the cheat silently changes viewangles, it calls SDK::FixMovement
-    // to recompute forwardmove/sidemove so the player doesn't walk in the
-    // wrong direction. This produces a mathematically precise relationship
-    // between the angle delta and the movement vector rotation.
-    //
-    // For a human, the relationship between view angle changes and movement
-    // inputs is noisy and imprecise. The cheat's correction is exact.
-    // ------------------------------------------------------------------
-
-    if (!anglesModifiedByPlugin && angleDelta > 5.0 && (isAttacking || wasAttacking))
-    {
-        CheckMovementCorrection(client, angles, vel);
-    }
-
-    // ------------------------------------------------------------------
-    // DETECTION 4: Frozen Angles (Bot-like Stillness)
-    //
-    // Between airblasts, the cheat may not produce any mouse input at all
-    // if the user relies entirely on automation. A human playing dodgeball
-    // constantly adjusts their view to track rockets.
-    // ------------------------------------------------------------------
-
-    if (!anglesModifiedByPlugin)
-    {
-        if (FloatAbs(angleDelta) < 0.01)
-        {
-            FrozenTicks[client]++;
-        }
-        else
-        {
-            if (FrozenTicks[client] > RoundToCeil(FROZEN_TIME / GetTickInterval()))
-            {
-                // Only flag if they then instantly snapped to airblast
-                // (frozen -> snap -> attack is a strong automation signal)
-                if (isAttacking && !wasAttacking)
-                {
-                    FrozenAngleDetections[client]++;
-                    LogDetection(client, "FrozenSnap",
-                        "FrozenTicks=%d thenAttacked=1",
-                        FrozenTicks[client]);
-                }
-            }
-            FrozenTicks[client] = 0;
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // DETECTION 5: Airblast Timing Analysis
-    //
-    // The cheat airblasts on the exact tick the rocket enters the deflection
-    // sphere. It predicts rocket position using projectile velocity and
-    // latency compensation, then fires IN_ATTACK2 with frame-perfect timing.
-    //
-    // We track the timing of airblasts relative to nearby rocket proximity.
-    // Consistently hitting sub-2-tick windows is inhuman.
+    // Track airblast timing (used by TFDB_OnRocketDeflect for
+    // ConsistentTiming and PerfectStreak analysis)
     // ------------------------------------------------------------------
 
     if (isAttacking && !wasAttacking)
     {
-        // Timing analysis is done in TFDB_OnRocketDeflect where we have
-        // actual rocket distance/speed data. Here we just track the airblast.
         LastAirblastTime[client] = GetGameTime();
         LastAirblastTick[client] = currentTick;
         JustAirblasted[client] = true;
-
-        // Start tracking for post-airblast snapback
-        PreAttackAngles[client][0] = PrevAngles[client][0];
-        PreAttackAngles[client][1] = PrevAngles[client][1];
-        PreAttackAngles[client][2] = PrevAngles[client][2];
-        TrackingSnapback[client] = true;
-        SnapbackStartTick[client] = currentTick;
     }
-
-    // Check if angles returned to pre-attack position (snapback detection)
-    //
-    // The cheat snaps viewangles for exactly 1 tick then returns.
-    // A human flick takes 2-3 ticks to reach the target direction and
-    // they DON'T return to their exact pre-flick angle afterward — they
-    // continue tracking in the new direction or drift by 2-5+ degrees.
-    //
-    // Detection requires ALL of:
-    //   - Return to within 1.0° of pre-attack angle (cheat precision)
-    //   - Within 2 ticks of attack release (cheat speed)
-    //   - Departure > 15° (meaningful snap, not micro-adjustment)
-    //   - Departure happened in 1 tick (inhuman speed)
-    //
-    // The old threshold of returnDelta < 3.0° over 4 ticks was too loose —
-    // fast human flick-reflects could match it. The new 1.0° / 2-tick
-    // window is physically impossible for a human to hit consistently.
-    if (TrackingSnapback[client] && !isAttacking && !anglesModifiedByPlugin)
-    {
-        int elapsed = currentTick - SnapbackStartTick[client];
-
-        // Tighter window: 2 ticks (≈30ms at 66tick). The cheat returns
-        // in 1 tick; 2 gives margin for network jitter. Humans take 3+.
-        if (elapsed > 0 && elapsed <= 2)
-        {
-            float returnDelta = AngleDelta(
-                PreAttackAngles[client][0], PreAttackAngles[client][1],
-                angles[0], angles[1]
-            );
-
-            // Measure peak departure: max delta between pre-attack angle
-            // and any angle during the attack window
-            float departDelta = 0.0;
-            int departTicks = 0;
-            for (int i = 1; i <= elapsed + 1 && i < AngleSamples[client]; i++)
-            {
-                int histIdx = (AngleIndex[client] - i + ANGLE_HISTORY) % ANGLE_HISTORY;
-                float d = AngleDelta(
-                    PreAttackAngles[client][0], PreAttackAngles[client][1],
-                    AngleHistory[client][histIdx].pitch,
-                    AngleHistory[client][histIdx].yaw
-                );
-                if (d > departDelta)
-                {
-                    departDelta = d;
-                    departTicks = i;
-                }
-            }
-
-            // Snapback: large departure in 1 tick + near-perfect return
-            // returnDelta < 1.0° is the key — humans have 2-5° of drift
-            if (departDelta > 15.0 && returnDelta < 1.0 && departTicks <= 1)
-            {
-                AngleSnapbackDetections[client]++;
-                LogDetection(client, "Snapback",
-                    "depart=%.1f return=%.1f elapsed=%d departTicks=%d",
-                    departDelta, returnDelta, elapsed, departTicks);
-            }
-        }
-
-        // Expire tracking after 3 ticks (was 4 — tighter)
-        if (elapsed > 3)
-        {
-            TrackingSnapback[client] = false;
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // DETECTION 6: Tick Count Manipulation
-    //
-    // The cheat's Backtrack system modifies pCmd->tick_count to exploit
-    // lag compensation. The FakeLag system chokes packets to create
-    // artificial desync. We detect abnormal tickcount patterns.
-    // ------------------------------------------------------------------
-
-    if (LastTickCount[client] > 0)
-    {
-        int tickDiff = tickcount - LastTickCount[client];
-
-        // Tickcount should increment by 1 per command, or skip forward
-        // if commands were choked. Going backwards or jumping by huge
-        // amounts indicates manipulation.
-        if (tickDiff < 0 || tickDiff > RoundToCeil(0.36 / GetTickInterval()))
-        {
-            TickCountAnomalies[client]++;
-            LogDetection(client, "TickManip",
-                "prev=%d curr=%d diff=%d",
-                LastTickCount[client], tickcount, tickDiff);
-        }
-    }
-    LastTickCount[client] = tickcount;
-
-    // ------------------------------------------------------------------
-    // DETECTION 7: Movement Consistency / Inhale-Exhale Pattern
-    //
-    // The cheat's auto-airblast produces a distinctive "breathe" pattern:
-    // - Inhale: normal movement with human-like noise
-    // - Exhale: movement suddenly becomes mathematically corrected
-    //           (via FixMovement) during the airblast frame
-    // - Inhale: immediately returns to noisy human movement
-    //
-    // We measure the noise floor of movement inputs and flag sudden
-    // drops to near-zero noise on attack frames.
-    // ------------------------------------------------------------------
-
-    int mIdx = MoveIndex[client] % MOVE_HISTORY;
-    MoveHistory[client][mIdx].forwardmove = vel[0];
-    MoveHistory[client][mIdx].sidemove    = vel[1];
-    MoveHistory[client][mIdx].pitch       = angles[0];
-    MoveHistory[client][mIdx].yaw         = angles[1];
-    MoveHistory[client][mIdx].prevPitch   = PrevAngles[client][0];
-    MoveHistory[client][mIdx].prevYaw     = PrevAngles[client][1];
-    MoveHistory[client][mIdx].buttons     = buttons;
-    MoveIndex[client]++;
-    if (MoveSamples[client] < MOVE_HISTORY) MoveSamples[client]++;
 
     // Store for next tick comparison
     PrevAngles[client][0] = angles[0];
     PrevAngles[client][1] = angles[1];
     PrevAngles[client][2] = angles[2];
-    PrevMove[client][0]   = vel[0];
-    PrevMove[client][1]   = vel[1];
     PrevButtons[client]   = buttons;
 
     // Periodically evaluate accumulated evidence
@@ -1279,152 +1025,6 @@ public void OnPreThink(int client)
  * 0.1° of the pre-attack angle (REAL_EPSILON). Humans never return to
  * exactly where they were — there's always 2-5° of drift.
  */
-void CheckSilentAim(int client, bool attacking)
-{
-    if (AngleSamples[client] < 8) return;
-
-    // Phase 1: detect lerp-smoothed snap DURING attack.
-    // Look at the arc from t-5 to t (6 frames). If we see IN_ATTACK2
-    // anywhere in that window, measure arc vs net displacement.
-    if (attacking)
-    {
-        int windowSize = 6;
-        if (AngleSamples[client] < windowSize + 1) return;
-
-        // Find the anchor (oldest frame in window)
-        int anchorIdx = (AngleIndex[client] - windowSize + ANGLE_HISTORY) % ANGLE_HISTORY;
-        int currIdx = (AngleIndex[client] - 1 + ANGLE_HISTORY) % ANGLE_HISTORY;
-
-        // Sum per-frame deltas = total arc length
-        float arcLength = 0.0;
-        bool hadAttack = false;
-        for (int i = 0; i < windowSize - 1; i++)
-        {
-            int a = (anchorIdx + i) % ANGLE_HISTORY;
-            int b = (anchorIdx + i + 1) % ANGLE_HISTORY;
-            arcLength += AngleDelta(
-                AngleHistory[client][a].pitch, AngleHistory[client][a].yaw,
-                AngleHistory[client][b].pitch, AngleHistory[client][b].yaw
-            );
-            if (AngleHistory[client][b].attacking) hadAttack = true;
-        }
-
-        // Net displacement = straight line anchor to current
-        float netDisplacement = AngleDelta(
-            AngleHistory[client][anchorIdx].pitch, AngleHistory[client][anchorIdx].yaw,
-            AngleHistory[client][currIdx].pitch, AngleHistory[client][currIdx].yaw
-        );
-
-        // The cheat creates a there-and-back pattern: arc >> net.
-        // A human flick is mostly one-directional: arc ≈ net.
-        // Threshold: arc > 15° (meaningful movement happened) and ratio > 3.0
-        // (the view traveled 3x further than it ended up — strong return signal)
-        if (hadAttack && arcLength > 15.0 && netDisplacement > 0.01)
-        {
-            float ratio = arcLength / netDisplacement;
-            if (ratio > 3.0)
-            {
-                LerpSmoothDetections[client]++;
-                LogDetection(client, "LerpSmooth",
-                    "arc=%.1f net=%.1f ratio=%.2f window=%d",
-                    arcLength, netDisplacement, ratio, windowSize);
-            }
-        }
-
-        // Edge case: cheat is SO precise that net ≈ 0 (returned exactly)
-        // This alone is suspicious if arc was large
-        if (hadAttack && arcLength > 20.0 && netDisplacement < 0.5)
-        {
-            LerpSmoothDetections[client]++;
-            LogDetection(client, "LerpSmooth",
-                "arc=%.1f net=%.1f (near-perfect return) window=%d",
-                arcLength, netDisplacement, windowSize);
-        }
-    }
-
-    // Phase 2: classic instant snapback (no lerp, or lerp disabled).
-    // The cheat without AntiCheatCompatibility still does a raw 1-frame snap.
-    // Keep the original check but with a lower threshold since Phase 1
-    // now handles the smoothed case.
-    int curr = (AngleIndex[client] - 1 + ANGLE_HISTORY) % ANGLE_HISTORY;
-    int prev1 = (AngleIndex[client] - 2 + ANGLE_HISTORY) % ANGLE_HISTORY;
-    int prev2 = (AngleIndex[client] - 3 + ANGLE_HISTORY) % ANGLE_HISTORY;
-
-    float delta1 = AngleDelta(
-        AngleHistory[client][prev2].pitch, AngleHistory[client][prev2].yaw,
-        AngleHistory[client][prev1].pitch, AngleHistory[client][prev1].yaw
-    );
-
-    float delta2 = AngleDelta(
-        AngleHistory[client][prev1].pitch, AngleHistory[client][prev1].yaw,
-        AngleHistory[client][curr].pitch, AngleHistory[client][curr].yaw
-    );
-
-    if (delta1 < 3.0 && delta2 > 15.0 && attacking)
-    {
-        SilentAimDetections[client]++;
-        LogDetection(client, "SilentAim",
-            "calmDelta=%.1f snapDelta=%.1f attacking=%d",
-            delta1, delta2, attacking);
-    }
-}
-
-/**
- * Check for the FixMovement signature.
- *
- * When the cheat silently rotates viewangles by theta degrees, it calls:
- *   SDK::FixMovement(pCmd, oldAngles)
- * which rotates the movement vector by exactly -theta to compensate.
- *
- * This means: rotation(movementVector, angleDelta) ≈ previousMovementVector
- *
- * For a human, changing view angle and movement are independent actions
- * processed by different muscles with different latencies. The correlation
- * between angle delta and movement rotation is weak and noisy.
- */
-void CheckMovementCorrection(int client, float angles[3], float vel[3])
-{
-    // Compute the yaw delta
-    float yawDelta = NormalizeAngle(angles[1] - PrevAngles[client][1]);
-
-    if (FloatAbs(yawDelta) < 3.0) return;  // Too small to measure reliably
-
-    // Current movement direction in world space
-    float moveAngle = ArcTangent2(vel[1], vel[0]);
-    float prevMoveAngle = ArcTangent2(PrevMove[client][1], PrevMove[client][0]);
-
-    float moveRotation = NormalizeAngle(
-        RadToDeg(moveAngle) - RadToDeg(prevMoveAngle)
-    );
-
-    // For FixMovement: moveRotation should be ≈ -yawDelta
-    float expected = -yawDelta;
-    float error = FloatAbs(NormalizeAngle(moveRotation - expected));
-
-    // Also check that the movement magnitude is preserved (FixMovement
-    // preserves the length of the movement vector)
-    float currMoveLen = SquareRoot(vel[0] * vel[0] + vel[1] * vel[1]);
-    float prevMoveLen = SquareRoot(PrevMove[client][0] * PrevMove[client][0] +
-                                   PrevMove[client][1] * PrevMove[client][1]);
-
-    bool magnitudePreserved = false;
-    if (prevMoveLen > 10.0)
-    {
-        float lenRatio = currMoveLen / prevMoveLen;
-        magnitudePreserved = (lenRatio > 0.95 && lenRatio < 1.05);
-    }
-
-    // The cheat's FixMovement is mathematically exact.
-    // If error < 1 degree AND magnitude is preserved AND the angle snap is large,
-    // this is extremely unlikely from human input.
-    if (error < 1.5 && magnitudePreserved && FloatAbs(yawDelta) > 10.0)
-    {
-        MoveFixDetections[client]++;
-        LogDetection(client, "MoveFix",
-            "yawDelta=%.1f moveRot=%.1f error=%.2f magPreserved=%d",
-            yawDelta, moveRotation, error, magnitudePreserved);
-    }
-}
 
 /**
  * Analyze airblast timing patterns.
@@ -1578,32 +1178,25 @@ int CalculateScore(int client)
 {
     int score = 0;
 
-    // HIGH confidence: PSilent detection via facing check
+    // CRITICAL: AntiAim — m_angEyeAngles pitch outside [-89, 89]
+    // Zero false positive rate. Does not decay.
+    score += AntiAimDetections[client] / MaxInt(1, ACSilentHitsPerPoint) * 5;
+
+    // HIGH: PSilent detection via facing check
     score += AirblastFacingDetections[client] / MaxInt(1, ACSilentHitsPerPoint) * 4;
 
-    // HIGH confidence: angle-based (work when cheat doesn't choke, or lerp is visible)
-    score += LerpSmoothDetections[client]   / MaxInt(1, ACSilentHitsPerPoint) * 4;
-    score += SilentAimDetections[client]    / MaxInt(1, ACSilentHitsPerPoint) * 4;
-    score += AngleSnapbackDetections[client]/ MaxInt(1, ACSilentHitsPerPoint) * 4;
+    // HIGH: 3-angle drag snapback (return-to-origin after drag pause)
     score += DragSnapbackDetections[client] / MaxInt(1, ACSilentHitsPerPoint) * 4;
-    score += MoveFixDetections[client]      / MaxInt(1, ACMoveFixHitsPerPoint) * 3;
 
-    // MEDIUM-HIGH: timing (primary detector for no-redirect auto-airblast)
-    // Each ConsistentTiming detection = 3 points. With flag+accumulate pattern,
-    // a persistent cheater gets ~1 per 10 deflects = 30 points per 100 deflects.
+    // MEDIUM-HIGH: timing (primary detector for auto-airblast)
     score += InhaleExhaleDetections[client] * 3;
 
     // MEDIUM-HIGH: streak milestones (each milestone = 4 points)
-    // Streak 6→4pts, 12→8pts, 20→12pts, 30→16pts, 45→20pts
     score += PerfectStreakScore[client] * 4;
 
-    // MEDIUM: individual timing flags (low per-hit weight, needs volume)
-    score += SnapAimDetections[client]      / MaxInt(1, ACSnapHitsPerPoint) * 2;
-    score += PerfectTimingDetections[client]/ MaxInt(1, ACTimingHitsPerPoint) * 2;
+    // MEDIUM: individual timing flags
+    score += PerfectTimingDetections[client] / MaxInt(1, ACTimingHitsPerPoint) * 2;
 
-    // LOW: behavioral
-    score += FrozenAngleDetections[client]  / 10 * 1;
-    score += TickCountAnomalies[client]     / 15 * 1;
     return score;
 }
 
@@ -1634,21 +1227,15 @@ void TakeAction(int client, int score)
         "logs/tfdb_ac/tfdb_ac_%s.log", dateStr);
 
     LogToFile(logPath,
-        "[ACTION] %s (%s) Score:%d | AF:%d LS:%d Sil:%d SB:%d Sn:%d MF:%d PT:%d CT:%d FS:%d DS:%d Str:%d(%d) TK:%d | action:%d",
+        "[ACTION] %s (%s) Score:%d | AA:%d AF:%d DS:%d PT:%d CT:%d Str:%d(%d) | action:%d",
         name, steamId, score,
+        AntiAimDetections[client],
         AirblastFacingDetections[client],
-        LerpSmoothDetections[client],
-        SilentAimDetections[client],
-        AngleSnapbackDetections[client],
-        SnapAimDetections[client],
-        MoveFixDetections[client],
+        DragSnapbackDetections[client],
         PerfectTimingDetections[client],
         InhaleExhaleDetections[client],
-        FrozenAngleDetections[client],
-        DragSnapbackDetections[client],
         CurrentStreak[client],
         PerfectStreakScore[client],
-        TickCountAnomalies[client],
         ACActionMode);
 
     switch (ACActionMode)
@@ -1690,26 +1277,17 @@ public Action Timer_DecayScores(Handle timer)
         if (!IsValidClient(client))
             continue;
 
-        // AirblastFacing decays normally — could have brief false positives
-        // from network jitter causing GetClientEyeAngles desync.
-        AirblastFacingDetections[client] = MaxInt(0, AirblastFacingDetections[client] - decay);
-        LerpSmoothDetections[client]    = MaxInt(0, LerpSmoothDetections[client] - decay);
-        DragSnapbackDetections[client]  = MaxInt(0, DragSnapbackDetections[client] - decay);
-        SilentAimDetections[client]     = MaxInt(0, SilentAimDetections[client] - decay);
-        SnapAimDetections[client]       = MaxInt(0, SnapAimDetections[client] - decay);
-        PerfectTimingDetections[client] = MaxInt(0, PerfectTimingDetections[client] - decay);
-        MoveFixDetections[client]       = MaxInt(0, MoveFixDetections[client] - decay);
-        FrozenAngleDetections[client]   = MaxInt(0, FrozenAngleDetections[client] - decay);
-        AngleSnapbackDetections[client] = MaxInt(0, AngleSnapbackDetections[client] - decay);
-        TickCountAnomalies[client]      = MaxInt(0, TickCountAnomalies[client] - decay);
+        // AntiAim does NOT decay — zero false positive rate, permanent evidence.
 
-        // Don't decay timing counters while the cheat is actively running.
-        // Score must not DROP during blatant cheating — that's a design flaw.
-        // Only decay these when the pattern has broken.
+        AirblastFacingDetections[client] = MaxInt(0, AirblastFacingDetections[client] - decay);
+        DragSnapbackDetections[client]   = MaxInt(0, DragSnapbackDetections[client] - decay);
+        PerfectTimingDetections[client]  = MaxInt(0, PerfectTimingDetections[client] - decay);
+
+        // Don't decay timing counters while cheat is actively running.
         if (!TimingFlagged[client])
-            InhaleExhaleDetections[client]  = MaxInt(0, InhaleExhaleDetections[client] - decay);
+            InhaleExhaleDetections[client] = MaxInt(0, InhaleExhaleDetections[client] - decay);
         if (CurrentStreak[client] < 6)
-            PerfectStreakScore[client]       = MaxInt(0, PerfectStreakScore[client] - decay);
+            PerfectStreakScore[client] = MaxInt(0, PerfectStreakScore[client] - decay);
     }
 
     return Plugin_Continue;
@@ -1749,20 +1327,13 @@ public Action Timer_AdminHud(Handle timer)
         GetClientName(i, name, sizeof(name));
 
         // Compact format: Name Score [active detectors]
-        // Only list detector types that have non-zero counts
         char detectors[128];
         int dLen = 0;
 
+        if (AntiAimDetections[i] > 0)
+            dLen += FormatEx(detectors[dLen], sizeof(detectors) - dLen, " AA:%d", AntiAimDetections[i]);
         if (AirblastFacingDetections[i] > 0)
             dLen += FormatEx(detectors[dLen], sizeof(detectors) - dLen, " AF:%d", AirblastFacingDetections[i]);
-        if (LerpSmoothDetections[i] > 0)
-            dLen += FormatEx(detectors[dLen], sizeof(detectors) - dLen, " LS:%d", LerpSmoothDetections[i]);
-        if (SilentAimDetections[i] > 0)
-            dLen += FormatEx(detectors[dLen], sizeof(detectors) - dLen, " SA:%d", SilentAimDetections[i]);
-        if (AngleSnapbackDetections[i] > 0)
-            dLen += FormatEx(detectors[dLen], sizeof(detectors) - dLen, " SB:%d", AngleSnapbackDetections[i]);
-        if (MoveFixDetections[i] > 0)
-            dLen += FormatEx(detectors[dLen], sizeof(detectors) - dLen, " MF:%d", MoveFixDetections[i]);
         if (DragSnapbackDetections[i] > 0)
             dLen += FormatEx(detectors[dLen], sizeof(detectors) - dLen, " DS:%d", DragSnapbackDetections[i]);
         if (PerfectTimingDetections[i] > 0)
@@ -1836,17 +1407,13 @@ public Action Command_Status(int client, int args)
             }
             CReplyToCommand(client, "%t", "AC_Status_Player",
                 i, score,
+                AntiAimDetections[i],
                 AirblastFacingDetections[i],
-                LerpSmoothDetections[i],
-                SilentAimDetections[i],
-                AngleSnapbackDetections[i],
-                SnapAimDetections[i],
-                MoveFixDetections[i],
+                DragSnapbackDetections[i],
                 PerfectTimingDetections[i],
                 InhaleExhaleDetections[i],
-                FrozenAngleDetections[i],
-                DragSnapbackDetections[i],
-                TickCountAnomalies[i]);
+                CurrentStreak[i],
+                PerfectStreakScore[i]);
         }
     }
     if (!foundAny)
@@ -1879,48 +1446,91 @@ public Action Command_DebugPlayer(int client, int args)
 {
     if (args < 1)
     {
-        if (DebugTarget > 0 && IsValidClient(DebugTarget))
+        // No args: show currently active debug targets
+        bool foundAny = false;
+        for (int i = 1; i <= MaxClients; i++)
         {
-            char name[MAX_NAME_LENGTH];
-            GetClientName(DebugTarget, name, sizeof(name));
-            CReplyToCommand(client, "[AC] Debug active on %s. Use 'sm_ac_debug_player off' to stop.", name);
+            if (PlayerDebug[i].active && IsValidClient(i))
+            {
+                char name[MAX_NAME_LENGTH];
+                GetClientName(i, name, sizeof(name));
+                CReplyToCommand(client, "[{olive}AC{default}] Debugging: {darkorange}%s{default} → %s", name, PlayerDebug[i].steamId);
+                foundAny = true;
+            }
         }
-        else
+        if (!foundAny)
         {
-            CReplyToCommand(client, "[AC] Usage: sm_ac_debug_player <target|off>");
+            CReplyToCommand(client, "[{olive}AC{default}] No active debug targets.");
         }
+        CReplyToCommand(client, "[{olive}AC{default}] Usage: {community}sm_ac_debug_player <target|off>");
         return Plugin_Handled;
     }
 
     char arg[64];
     GetCmdArg(1, arg, sizeof(arg));
 
-    if (StrEqual(arg, "off", false) || StrEqual(arg, "none", false) || StrEqual(arg, "0"))
+    // "off" disables ALL debug targets
+    if (StrEqual(arg, "off", false) || StrEqual(arg, "none", false))
     {
-        DebugTarget = -1;
-        CReplyToCommand(client, "[AC] Debug logging disabled.");
+        int count = 0;
+        for (int i = 1; i <= MaxClients; i++)
+        {
+            if (PlayerDebug[i].active)
+            {
+                PlayerDebug[i].active = false;
+                count++;
+            }
+        }
+        CReplyToCommand(client, "[{olive}AC{default}] Debug logging {red}DISABLED{default} for %d player(s).", count);
         return Plugin_Handled;
     }
 
     int target = FindTarget(client, arg, true);
     if (target == -1) return Plugin_Handled;
 
-    DebugTarget = target;
+    // Toggle: if already debugging this player, disable
+    if (PlayerDebug[target].active)
+    {
+        PlayerDebug[target].active = false;
+        char name[MAX_NAME_LENGTH];
+        GetClientName(target, name, sizeof(name));
+        CReplyToCommand(client, "[{olive}AC{default}] Debug {red}DISABLED{default} for {darkorange}%s{default}.", name);
+        return Plugin_Handled;
+    }
 
-    // Write header to debug log
-    char logPath[PLATFORM_MAX_PATH];
+    // Enable debug on this player — build their unique log file path
+    char steamId[32];
+    if (!GetClientAuthId(target, AuthId_Steam2, steamId, sizeof(steamId)))
+        FormatEx(steamId, sizeof(steamId), "unknown_%d", GetClientUserId(target));
+
+    // Sanitize SteamID for filename: STEAM_0:0:1789052 → STEAM_0_0_1789052
+    char safeSteamId[32];
+    strcopy(safeSteamId, sizeof(safeSteamId), steamId);
+    ReplaceString(safeSteamId, sizeof(safeSteamId), ":", "_");
+
+    // Build path: logs/tfdb_ac/debug_STEAM_0_0_1789052_03_25_2026.log
     char dateStr[32];
     FormatTime(dateStr, sizeof(dateStr), "%m_%d_%Y");
-    BuildPath(Path_SM, logPath, sizeof(logPath),
-        "logs/tfdb_ac/debug_%s.log", dateStr);
 
+    char logPath[PLATFORM_MAX_PATH];
+    BuildPath(Path_SM, logPath, sizeof(logPath),
+        "logs/tfdb_ac/debug_%s_%s.log", safeSteamId, dateStr);
+
+    // Store in the enum struct
+    PlayerDebug[target].active = true;
+    strcopy(PlayerDebug[target].logPath, sizeof(PlayerDebug[].logPath), logPath);
+    strcopy(PlayerDebug[target].steamId, sizeof(PlayerDebug[].steamId), steamId);
+
+    // Write header
     char name[MAX_NAME_LENGTH];
     GetClientName(target, name, sizeof(name));
 
-    LogToFile(logPath, "=== Debug started for %s ===", name);
+    LogToFile(logPath, "=== Debug started for %s (%s) ===", name, steamId);
     LogToFile(logPath, "Format: cmd=CMDNUM p=PITCH y=YAW atk=ATK1+ATK2 btn=BUTTONS tick=TICKCOUNT");
 
-    CReplyToCommand(client, "[AC] Debug logging enabled for %s. File: logs/tfdb_ac/debug_%s.log", name, dateStr);
+    CReplyToCommand(client,
+        "[{olive}AC{default}] Debug {community}ENABLED{default} for {darkorange}%s{default}. File: debug_%s_%s.log",
+        name, safeSteamId, dateStr);
     return Plugin_Handled;
 }
 
@@ -1989,14 +1599,16 @@ void LogDetection(int client, const char[] type, const char[] format, any ...)
 
     // Determine confidence tag for this detection type
     char confidence[12];
-    if (StrEqual(type, "AirblastFacing") || StrEqual(type, "SilentAim") ||
-        StrEqual(type, "Snapback") || StrEqual(type, "DragSnapback") ||
-        StrEqual(type, "MoveFix") || StrEqual(type, "LerpSmooth"))
+    if (StrEqual(type, "AntiAim"))
+    {
+        FormatEx(confidence, sizeof(confidence), "CRITICAL");
+    }
+    else if (StrEqual(type, "AirblastFacing") || StrEqual(type, "DragSnapback"))
     {
         FormatEx(confidence, sizeof(confidence), "HIGH");
     }
-    else if (StrEqual(type, "SnapAim") || StrEqual(type, "PerfectTiming") ||
-             StrEqual(type, "ConsistentTiming") || StrEqual(type, "PerfectStreak"))
+    else if (StrEqual(type, "PerfectTiming") || StrEqual(type, "ConsistentTiming") ||
+             StrEqual(type, "PerfectStreak"))
     {
         FormatEx(confidence, sizeof(confidence), "MEDIUM");
     }
@@ -2041,8 +1653,7 @@ void LogSessionSummary(int client)
 
     // Don't log clean players — keep logs focused
     if (score == 0 &&
-        SilentAimDetections[client] == 0 &&
-        SnapAimDetections[client] == 0 &&
+        AntiAimDetections[client] == 0 &&
         PerfectTimingDetections[client] == 0)
     {
         return;
@@ -2062,21 +1673,15 @@ void LogSessionSummary(int client)
         "logs/tfdb_ac/tfdb_ac_%s.log", dateStr);
 
     LogToFile(logPath,
-        "[SESSION] %s (%s) | Score:%d | AF:%d LS:%d Sil:%d SB:%d Sn:%d MF:%d PT:%d CT:%d FS:%d DS:%d Str:%d(%d) TK:%d",
+        "[SESSION] %s (%s) | Score:%d | AA:%d AF:%d DS:%d PT:%d CT:%d Str:%d(%d)",
         name, steamId, score,
+        AntiAimDetections[client],
         AirblastFacingDetections[client],
-        LerpSmoothDetections[client],
-        SilentAimDetections[client],
-        AngleSnapbackDetections[client],
-        SnapAimDetections[client],
-        MoveFixDetections[client],
+        DragSnapbackDetections[client],
         PerfectTimingDetections[client],
         InhaleExhaleDetections[client],
-        FrozenAngleDetections[client],
-        DragSnapbackDetections[client],
         CurrentStreak[client],
-        PerfectStreakScore[client],
-        TickCountAnomalies[client]);
+        PerfectStreakScore[client]);
 }
 
 void PrintToAdmins(const char[] format, any ...)
