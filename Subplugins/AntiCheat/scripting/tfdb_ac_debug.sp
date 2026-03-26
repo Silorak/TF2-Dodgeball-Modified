@@ -1,22 +1,3 @@
-// ============================================================================
-//  TFDB Anti-Cheat Debug Simulator
-//  Simulates Amalgam's dodgeball cheat behaviors for testing the anti-cheat.
-//
-//  Single command: sm_ac <player> [mode]
-//    sm_ac @me        → toggle all modes on/off
-//    sm_ac @me 1      → toggle mode 1 (autoairblast) on/off
-//    sm_ac @me 2      → toggle mode 2 (silentaim) on/off
-//    sm_ac @me 4      → toggle mode 4 (fixmovement) on/off
-//    sm_ac @me 8      → toggle mode 8 (fakelag) on/off
-//    sm_ac @me 3      → toggle modes 1+2 combined on/off
-//
-//  Modes are a bitfield — combine them by adding: 1+2=3, 1+4=5, etc.
-//  Running the same command again disables the simulation.
-//
-//  ADMIN ONLY — requires root flag.
-//  Designed for SourceMod 1.12+, compatible with TF2 Dodgeball 2.2.0.
-// ============================================================================
-
 #pragma semicolon 1
 #pragma newdecls required
 
@@ -31,7 +12,7 @@
 #define REQUIRE_PLUGIN
 
 #define PLUGIN_NAME    "TFDB AC Debug Simulator"
-#define PLUGIN_VERSION "1.1.0"
+#define PLUGIN_VERSION "2.2.0"
 
 // Simulation mode bitfield
 enum
@@ -55,10 +36,10 @@ int   FakeLagCounter[MAXPLAYERS + 1];
 public Plugin myinfo =
 {
     name        = PLUGIN_NAME,
-    author      = "Anti-Cheat Research",
-    description = "Debug tool: simulates dodgeball cheat behaviors for AC testing",
+    author      = "Silorak",
+    description = "Debug tool: simulates dodgeball cheats",
     version     = PLUGIN_VERSION,
-    url         = "https://github.com/tfdb-anticheat"
+    url         = "https://github.com/Silorak/TF2-Dodgeball"
 };
 
 public void OnPluginStart()

@@ -1,16 +1,3 @@
-// ============================================================================
-//  TFDB Anti-Cheat
-//  A server-side anti-cheat for TF2 Dodgeball built from reverse-engineering
-//  the Amalgam cheat's auto-airblast, projectile simulation, silent aim,
-//  fake lag, backtrack, and network manipulation systems.
-//
-//  Designed for SourceMod 1.12+, compatible with TF2 Dodgeball 2.2.0.
-//  Integrates with the TFDB forward/native ecosystem when available.
-//
-//  Author: Anti-Cheat Research
-//  License: GPLv3
-// ============================================================================
-
 #pragma semicolon 1
 #pragma newdecls required
 
@@ -55,24 +42,10 @@ char   ACImmunityFlag[4];
 // Ring buffer depth for airblast timing samples.
 #define TIMING_HISTORY  64
 
-// Ring buffer for movement consistency samples.
-
-// How many ticks of silence (no angle change at all) we tolerate before
-// flagging a frozen-angle pattern (common with cheat GUIs eating input).
-// Expressed as time, converted to ticks at runtime.
-
-// Maximum reasonable angular snap in a single tick (degrees).
-// A 180-degree flick in one tick is beyond human limits at any tickrate.
-// The cheat's silent aim regularly produces snaps > 30 degrees.
-
 // Perfect airblast timing window. The cheat fires IN_ATTACK2 on the exact
 // tick the rocket enters the deflection sphere (128 hu radius * multiplier).
 // Expressed as time, converted to ticks at runtime.
 #define PERFECT_TIMING_TIME 0.03 // ~2 ticks at 66, ~4 at 128
-
-// Movement correction signature: the cheat calls SDK::FixMovement which
-// recomputes forwardmove/sidemove to compensate for silent angle changes.
-// This produces a very specific ratio between movement and view angle.
 
 // ============================================================================
 // Per-client data structures
@@ -170,10 +143,10 @@ Handle HudSync = INVALID_HANDLE;
 
 public Plugin myinfo = {
     name        = PLUGIN_NAME,
-    author      = "Anti-Cheat Research",
-    description = "Dodgeball-specific anti-cheat built from Amalgam cheat analysis",
+    author      = "Silorak",
+    description = "Dodgeball anti-cheat",
     version     = PLUGIN_VERSION,
-    url         = "https://github.com/tfdb-anticheat"
+    url         = "https://github.com/Silorak/TF2-Dodgeball"
 };
 
 // ============================================================================
