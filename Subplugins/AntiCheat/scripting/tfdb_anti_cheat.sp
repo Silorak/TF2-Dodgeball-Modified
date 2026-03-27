@@ -146,7 +146,7 @@ public Plugin myinfo = {
     author      = "Silorak",
     description = "Dodgeball Anti Cheat",
     version     = PLUGIN_VERSION,
-    url         = "https://github.com/tfdb-anticheat"
+    url         = "https://github.com/Silorak/TF2-Dodgeball"
 };
 
 // ============================================================================
