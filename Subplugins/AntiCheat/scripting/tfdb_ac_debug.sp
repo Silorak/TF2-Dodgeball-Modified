@@ -11,7 +11,7 @@
 #tryinclude <tfdb>
 #define REQUIRE_PLUGIN
 
-#define PLUGIN_NAME    "TFDB AC Debug Simulator"
+#define PLUGIN_NAME    "TFDB Cheat Debugger"
 #define PLUGIN_VERSION "2.2.0"
 
 // Simulation mode bitfield
@@ -37,7 +37,7 @@ public Plugin myinfo =
 {
     name        = PLUGIN_NAME,
     author      = "Silorak",
-    description = "Debug tool: simulates dodgeball cheats",
+    description = "Debug that simulates dodgeball cheat behaviors",
     version     = PLUGIN_VERSION,
     url         = "https://github.com/Silorak/TF2-Dodgeball"
 };

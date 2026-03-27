@@ -743,23 +743,43 @@ void UpdateRocketSkin(int entity, int team, bool neutral)
 /** Gets a random rocket class based on spawner spawn chances. */
 int GetRandomRocketClass(int spawnerClass)
 {
-	int random = GetURandomIntRange(1, 100);
 	ArrayList table = SpawnersChancesTable[spawnerClass];
 	int tableSize = table.Length;
-	int chancesLower = 0;
-	int chancesUpper = 0;
 
+	if (tableSize == 0) return 0;
+
+	// Sum actual weights — don't assume they total 100.
+	// This lets configs use any relative weights: "common%" "9", "nuke%" "1"
+	// works the same as "common%" "90", "nuke%" "10".
+	int totalWeight = 0;
 	for (int entry = 0; entry < tableSize; entry++)
 	{
-		chancesLower = chancesUpper;
-		chancesUpper  = chancesLower + table.Get(entry);
+		totalWeight += table.Get(entry);
+	}
 
-		if ((random >= chancesLower) && (random <= chancesUpper))
+	if (totalWeight <= 0) return 0;
+
+	// Pick a random value in [0, totalWeight - 1].
+	// Using GetRandomInt — SM's built-in that handles range correctly
+	// without the modulo bias of GetURandomInt() % N.
+	int random = GetRandomInt(0, totalWeight - 1);
+
+	// Walk the cumulative weight ranges. Each class owns an exclusive
+	// slice: [cumulative, cumulative + weight). The strict < on the
+	// upper bound means no boundary overlap between adjacent classes.
+	int cumulative = 0;
+	for (int entry = 0; entry < tableSize; entry++)
+	{
+		cumulative += table.Get(entry);
+		if (random < cumulative)
 		{
 			return entry;
 		}
 	}
-	return 0;
+
+	// Should never reach here if weights are valid, but guard against
+	// floating point or config edge cases — return last valid class.
+	return tableSize - 1;
 }
 
 /**

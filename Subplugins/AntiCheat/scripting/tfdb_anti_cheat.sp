@@ -144,9 +144,9 @@ Handle HudSync = INVALID_HANDLE;
 public Plugin myinfo = {
     name        = PLUGIN_NAME,
     author      = "Silorak",
-    description = "Dodgeball anti-cheat",
+    description = "Dodgeball Anti Cheat",
     version     = PLUGIN_VERSION,
-    url         = "https://github.com/Silorak/TF2-Dodgeball"
+    url         = "https://github.com/tfdb-anticheat"
 };
 
 // ============================================================================
