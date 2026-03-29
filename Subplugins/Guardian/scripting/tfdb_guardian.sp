@@ -25,8 +25,12 @@
 #define SOUND_READY     "buttons/button17.wav"
 #define SOUND_ACTIVATE  "misc/halloween/spell_overheal.wav"
 
-#define GUARDIAN_LOG    "logs/guardian_debug.log"
-#define GUARDIAN_SEL    "logs/guardian_select.log"
+#define GUARDIAN_LOG_FILE    "logs/guardian_debug.log"
+#define GUARDIAN_SEL_FILE    "logs/guardian_select.log"
+
+// Resolved at plugin start via BuildPath — writes to addons/sourcemod/logs/
+char GUARDIAN_LOG[PLATFORM_MAX_PATH];
+char GUARDIAN_SEL[PLATFORM_MAX_PATH];
 
 // ============================================================================
 //  Data Structures
@@ -159,8 +163,41 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 	return APLRes_Success;
 }
 
+/**
+ * Logs to the guardian selection log only when debugMode is active.
+ * Prevents "Could not open file" errors when debug is off and the
+ * log file doesn't exist yet. LogToFileEx creates the file on first
+ * write, so the file only appears when debugging is actually enabled.
+ */
+void GuardianLog(const char[] format, any ...)
+{
+	if (!debugMode) return;
+
+	char buffer[512];
+	VFormat(buffer, sizeof(buffer), format, 2);
+	GuardianLog("%s", buffer);
+}
+
+/**
+ * Logs to the guardian debug log only when debugMode is active.
+ */
+void GuardianDebugLog(const char[] format, any ...)
+{
+	if (!debugMode) return;
+
+	char buffer[512];
+	VFormat(buffer, sizeof(buffer), format, 2);
+	GuardianDebugLog("%s", buffer);
+}
+
 public void OnPluginStart()
 {
+	// Resolve log paths to addons/sourcemod/logs/ via BuildPath.
+	// LogToFileEx takes raw paths — without BuildPath it resolves
+	// relative to the game directory (tf/) which may not have a logs/ folder.
+	BuildPath(Path_SM, GUARDIAN_LOG, sizeof(GUARDIAN_LOG), GUARDIAN_LOG_FILE);
+	BuildPath(Path_SM, GUARDIAN_SEL, sizeof(GUARDIAN_SEL), GUARDIAN_SEL_FILE);
+
 	LoadTranslations("tfdb.phrases");
 	debugBossState = -1;
 
@@ -177,7 +214,7 @@ public void OnPluginStart()
 	HookEventEx("player_spawn",         OnPlayerSpawn);
 	HookEventEx("player_team",          OnPlayerTeamChange, EventHookMode_Pre);
 
-	RegAdminCmd("sm_tfdb_bossstate", Command_BossState, ADMFLAG_); // Hidden debug
+	RegAdminCmd("sm_tfdb_bossstate", Command_BossState, ADMFLAG_ROOT); // Hidden debug
 	RegAdminCmd("sm_dguardian", Command_DebugGuardian, ADMFLAG_ROOT, "Toggle guardian debug output.");
 	RegConsoleCmd("sm_guardian",  Command_GuardianOptOut, "Toggle opt-out from being selected as Guardian.");
 	
@@ -207,7 +244,7 @@ public Action Listener_BlockGuardianCommands(int client, const char[] command, i
 		return Plugin_Continue;
 	}
 
-	LogToFileEx(GUARDIAN_SEL, "[CMD] " ... "BlockGuardianCommands - BLOCKED '%s' from guardian %N (client=%d team=%d alive=%d)", command, client, client, GetClientTeam(client), IsPlayerAlive(client));
+	GuardianLog("[CMD] " ... "BlockGuardianCommands - BLOCKED '%s' from guardian %N (client=%d team=%d alive=%d)", command, client, client, GetClientTeam(client), IsPlayerAlive(client));
 	CPrintToChat(client, "{red}[TFDB] You cannot use '%s' while you are the Guardian!", command);
 	return Plugin_Handled;
 }
@@ -225,7 +262,7 @@ public Action Listener_BlockBLUJoin(int client, const char[] command, int argc)
 	// Guardian cannot use jointeam or autoteam at all
 	if (client == guardianClient && IsPlayerAlive(client))
 	{
-		LogToFileEx(GUARDIAN_SEL, "[CMD] " ... "BlockBLUJoin - BLOCKED '%s' from guardian %N (client=%d) - guardian is alive on BLU", command, client, client);
+		GuardianLog("[CMD] " ... "BlockBLUJoin - BLOCKED '%s' from guardian %N (client=%d) - guardian is alive on BLU", command, client, client);
 		CPrintToChat(client, "{red}[TFDB] You cannot use '%s' while you are the Guardian!", command);
 		return Plugin_Handled;
 	}
@@ -233,7 +270,7 @@ public Action Listener_BlockBLUJoin(int client, const char[] command, int argc)
 	// Non-guardian: block attempts to join BLU, redirect to RED
 	if (strcmp(command, "autoteam", false) == 0)
 	{
-		LogToFileEx(GUARDIAN_SEL, "[CMD] " ... "BlockBLUJoin - autoteam from %N (client=%d team=%d) - redirecting to RED", client, client, GetClientTeam(client));
+		GuardianLog("[CMD] " ... "BlockBLUJoin - autoteam from %N (client=%d team=%d) - redirecting to RED", client, client, GetClientTeam(client));
 		CPrintToChat(client, "{olive}[TFDB]{default} Guardian round active. Moving you to {red}RED{default}.");
 		FakeClientCommand(client, "jointeam red");
 		return Plugin_Handled;
@@ -246,14 +283,14 @@ public Action Listener_BlockBLUJoin(int client, const char[] command, int argc)
 
 		if (strcmp(arg, "blue", false) == 0 || strcmp(arg, "3", false) == 0 || strcmp(arg, "auto", false) == 0)
 		{
-			LogToFileEx(GUARDIAN_SEL, "[CMD] " ... "BlockBLUJoin - jointeam %s from %N (client=%d team=%d) - redirecting to RED", arg, client, client, GetClientTeam(client));
+			GuardianLog("[CMD] " ... "BlockBLUJoin - jointeam %s from %N (client=%d team=%d) - redirecting to RED", arg, client, client, GetClientTeam(client));
 			CPrintToChat(client, "{olive}[TFDB]{default} Guardian round active. Moving you to {red}RED{default}.");
 			FakeClientCommand(client, "jointeam red");
 			return Plugin_Handled;
 		}
 	}
 
-	LogToFileEx(GUARDIAN_SEL, "[CMD] " ... "BlockBLUJoin - '%s %s' from %N (client=%d team=%d) - passed through", command, (argc >= 1) ? "..." : "", client, client, GetClientTeam(client));
+	GuardianLog("[CMD] " ... "BlockBLUJoin - '%s %s' from %N (client=%d team=%d) - passed through", command, (argc >= 1) ? "..." : "", client, client, GetClientTeam(client));
 	return Plugin_Continue;
 }
 
@@ -363,7 +400,7 @@ public void OnClientPostAdminCheck(int client)
 		// Move the bot to spectator so it doesn't block future guardian reselection.
 		// HasActiveBots() checks for bots on teams > 1, so leaving the bot on RED/BLU
 		// would permanently block CanActivateGuardian() every round.
-		LogToFileEx(GUARDIAN_SEL, "OnClientPostAdminCheck - bot %d joined mid-guardian, moving to spectator", client);
+		GuardianLog("OnClientPostAdminCheck - bot %d joined mid-guardian, moving to spectator", client);
 		ChangeClientTeam(client, view_as<int>(TFTeam_Spectator));
 	}
 }
@@ -520,19 +557,19 @@ bool CanActivateGuardian()
 {
 	if (!enabled || guardianClassCount == 0)
 	{
-		LogToFileEx(GUARDIAN_SEL, "CanActivateGuardian - false: enabled=%d classCount=%d", enabled, guardianClassCount);
+		GuardianLog("CanActivateGuardian - false: enabled=%d classCount=%d", enabled, guardianClassCount);
 		return false;
 	}
 
 	if (!TFDB_IsDodgeballEnabled())
 	{
-		LogToFileEx(GUARDIAN_SEL, "CanActivateGuardian - false: dodgeball not enabled");
+		GuardianLog("CanActivateGuardian - false: dodgeball not enabled");
 		return false;
 	}
 
 	if (HasActiveBots() && !debugMode)
 	{
-		LogToFileEx(GUARDIAN_SEL, "CanActivateGuardian - false: active bots on server");
+		GuardianLog("CanActivateGuardian - false: active bots on server");
 		if (!botMessageShown)
 		{
 			CPrintToChatAll("%t", "Guardian_BlockedBot");
@@ -546,7 +583,7 @@ bool CanActivateGuardian()
 
 	if (IsFFAActive())
 	{
-		LogToFileEx(GUARDIAN_SEL, "CanActivateGuardian - false: FFA active");
+		GuardianLog("CanActivateGuardian - false: FFA active");
 		CPrintToChatAll("%t", "Guardian_BlockedFFA");
 		return false;
 	}
@@ -561,7 +598,7 @@ bool CanActivateGuardian()
 	}
 	if (eligible < 2)
 	{
-		LogToFileEx(GUARDIAN_SEL, "CanActivateGuardian - false: not enough players (%d eligible, need 2)", eligible);
+		GuardianLog("CanActivateGuardian - false: not enough players (%d eligible, need 2)", eligible);
 		return false;
 	}
 
@@ -719,9 +756,9 @@ public void OnRoundWin(Event event, const char[] name, bool dontBroadcast)
 	if (debugMode)
 	{
 		PrintToChatAll("[GUARDIAN DBG] " ... "OnRoundWin - guardianActive=%d nextRoundIsGuardian=%d", guardianActive, nextRoundIsGuardian);
-		LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "OnRoundWin - guardianActive=%d nextRoundIsGuardian=%d", guardianActive, nextRoundIsGuardian);
+		GuardianDebugLog("[GUARDIAN DBG] " ... "OnRoundWin - guardianActive=%d nextRoundIsGuardian=%d", guardianActive, nextRoundIsGuardian);
 	}
-	LogToFileEx(GUARDIAN_SEL, "=== OnRoundWin - guardianActive=%d ===", guardianActive);
+	GuardianLog("=== OnRoundWin - guardianActive=%d ===", guardianActive);
 
 	// Clean up the guardian IMMEDIATELY on round end.
 	// This moves them back to RED, removes glow/hooks/health bar,
@@ -736,7 +773,7 @@ public void OnRoundWin(Event event, const char[] name, bool dontBroadcast)
 
 	if (!CanActivateGuardian())
 	{
-		LogToFileEx(GUARDIAN_SEL, "OnRoundWin - CanActivateGuardian()=false, nextRoundIsGuardian reset to false");
+		GuardianLog("OnRoundWin - CanActivateGuardian()=false, nextRoundIsGuardian reset to false");
 		nextRoundIsGuardian = false;
 		return;
 	}
@@ -744,18 +781,18 @@ public void OnRoundWin(Event event, const char[] name, bool dontBroadcast)
 	// Determine activation for NEXT round
 	if (forcedClient != -1 || forcedClass != -1)
 	{
-		LogToFileEx(GUARDIAN_SEL, "OnRoundWin - forced next round (forcedClient=%d forcedClass=%d)", forcedClient, forcedClass);
+		GuardianLog("OnRoundWin - forced next round (forcedClient=%d forcedClass=%d)", forcedClient, forcedClass);
 		nextRoundIsGuardian = true;
 	}
 	else if (GetRandomInt(1, 100) <= selectionChance)
 	{
-		LogToFileEx(GUARDIAN_SEL, "OnRoundWin - dice roll HIT (chance=%d%%) - nextRoundIsGuardian=true", selectionChance);
+		GuardianLog("OnRoundWin - dice roll HIT (chance=%d%%) - nextRoundIsGuardian=true", selectionChance);
 		nextRoundIsGuardian = true;
 		CPrintToChatAll("%t", "Guardian_NextRoundWarning");
 	}
 	else
 	{
-		LogToFileEx(GUARDIAN_SEL, "OnRoundWin - dice roll MISS (chance=%d%%) - nextRoundIsGuardian=false", selectionChance);
+		GuardianLog("OnRoundWin - dice roll MISS (chance=%d%%) - nextRoundIsGuardian=false", selectionChance);
 		nextRoundIsGuardian = false;
 	}
 }
@@ -769,11 +806,11 @@ public void OnRoundWin(Event event, const char[] name, bool dontBroadcast)
  */
 public void OnArenaRoundStart(Event event, const char[] name, bool dontBroadcast)
 {
-	LogToFileEx(GUARDIAN_SEL, "=== arena_round_start - TFDB now sets RoundStarted=true, guardian abilities unlock === guardianActive=%d", guardianActive);
+	GuardianLog("=== arena_round_start - TFDB now sets RoundStarted=true, guardian abilities unlock === guardianActive=%d", guardianActive);
 	if (debugMode)
 	{
 		PrintToChatAll("[GUARDIAN DBG] " ... "OnArenaRoundStart - guardianActive=%d TFDB_GetRoundStarted()=%d", guardianActive, TFDB_GetRoundStarted());
-		LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "OnArenaRoundStart - guardianActive=%d TFDB_GetRoundStarted()=%d", guardianActive, TFDB_GetRoundStarted());
+		GuardianDebugLog("[GUARDIAN DBG] " ... "OnArenaRoundStart - guardianActive=%d TFDB_GetRoundStarted()=%d", guardianActive, TFDB_GetRoundStarted());
 	}
 }
 
@@ -782,9 +819,9 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 	if (debugMode)
 	{
 		PrintToChatAll("[GUARDIAN DBG] " ... "OnRoundStart - nextRoundIsGuardian=%d forcedClient=%d forcedClass=%d", nextRoundIsGuardian, forcedClient, forcedClass);
-		LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "OnRoundStart - nextRoundIsGuardian=%d forcedClient=%d forcedClass=%d", nextRoundIsGuardian, forcedClient, forcedClass);
+		GuardianDebugLog("[GUARDIAN DBG] " ... "OnRoundStart - nextRoundIsGuardian=%d forcedClient=%d forcedClass=%d", nextRoundIsGuardian, forcedClient, forcedClass);
 	}
-	LogToFileEx(GUARDIAN_SEL, "=== OnRoundStart - nextRoundIsGuardian=%d forcedClient=%d forcedClass=%d ===",
+	GuardianLog("=== OnRoundStart - nextRoundIsGuardian=%d forcedClient=%d forcedClass=%d ===",
 		nextRoundIsGuardian, forcedClient, forcedClass);
 
 	// Aggressive hard reset every round start
@@ -792,7 +829,7 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 
 	if (!CanActivateGuardian())
 	{
-		LogToFileEx(GUARDIAN_SEL, "OnRoundStart - CanActivateGuardian()=false, aborting");
+		GuardianLog("OnRoundStart - CanActivateGuardian()=false, aborting");
 		nextRoundIsGuardian = false;
 		return;
 	}
@@ -810,13 +847,13 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 	{
 		if (IsClientInGame(forcedClient) && !IsFakeClient(forcedClient))
 		{
-			LogToFileEx(GUARDIAN_SEL, "OnRoundStart - using forcedClient=%d", forcedClient);
+			GuardianLog("OnRoundStart - using forcedClient=%d", forcedClient);
 			target   = forcedClient;
 			activate = true;
 		}
 		else
 		{
-			LogToFileEx(GUARDIAN_SEL, "OnRoundStart - forcedClient=%d no longer valid, ignoring", forcedClient);
+			GuardianLog("OnRoundStart - forcedClient=%d no longer valid, ignoring", forcedClient);
 		}
 
 		forcedClient = -1;
@@ -824,7 +861,7 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 
 	if (!activate)
 	{
-		LogToFileEx(GUARDIAN_SEL, "OnRoundStart - activate=false, no guardian this round");
+		GuardianLog("OnRoundStart - activate=false, no guardian this round");
 		return;
 	}
 
@@ -833,17 +870,17 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 	{
 		classIndex  = forcedClass;
 		forcedClass = -1;
-		LogToFileEx(GUARDIAN_SEL, "OnRoundStart - using forcedClass=%d", classIndex);
+		GuardianLog("OnRoundStart - using forcedClass=%d", classIndex);
 	}
 	else
 	{
 		classIndex = SelectWeightedClass();
-		LogToFileEx(GUARDIAN_SEL, "OnRoundStart - SelectWeightedClass()=%d", classIndex);
+		GuardianLog("OnRoundStart - SelectWeightedClass()=%d", classIndex);
 	}
 
 	if (classIndex == -1)
 	{
-		LogToFileEx(GUARDIAN_SEL, "OnRoundStart - classIndex=-1, aborting (no classes configured?)");
+		GuardianLog("OnRoundStart - classIndex=-1, aborting (no classes configured?)");
 		return;
 	}
 
@@ -851,16 +888,16 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 	if (target == -1)
 	{
 		target = SelectRandomPlayer();
-		LogToFileEx(GUARDIAN_SEL, "OnRoundStart - SelectRandomPlayer()=%d", target);
+		GuardianLog("OnRoundStart - SelectRandomPlayer()=%d", target);
 	}
 
 	if (target == -1)
 	{
-		LogToFileEx(GUARDIAN_SEL, "OnRoundStart - target=-1, aborting (no eligible players?)");
+		GuardianLog("OnRoundStart - target=-1, aborting (no eligible players?)");
 		return;
 	}
 
-	LogToFileEx(GUARDIAN_SEL, "OnRoundStart - activating guardian: client=%d class=%d", target, classIndex);
+	GuardianLog("OnRoundStart - activating guardian: client=%d class=%d", target, classIndex);
 
 	// Surgical Arena Limits: Disable during Guardian round
 	if (cvUnbalanceLimit != null) cvUnbalanceLimit.SetInt(0);
@@ -882,7 +919,7 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast)
 		if (debugMode)
 		{
 			PrintToChatAll("[GUARDIAN DBG] " ... "OnPlayerDeath - guardian %N died, calling CleanupGuardian(false)", client);
-			LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "OnPlayerDeath - guardian %N died, calling CleanupGuardian(false)", client);
+			GuardianDebugLog("[GUARDIAN DBG] " ... "OnPlayerDeath - guardian %N died, calling CleanupGuardian(false)", client);
 		}
 		CPrintToChatAll("%t", "Guardian_Died", client);
 		CleanupGuardian(false);
@@ -901,7 +938,7 @@ public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
 		if (debugMode)
 		{
 			PrintToChatAll("[GUARDIAN DBG] " ... "OnPlayerSpawn - guardian %N spawned, scheduling Frame_ApplyGuardianHealth", client);
-			LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "OnPlayerSpawn - guardian %N spawned, scheduling Frame_ApplyGuardianHealth", client);
+			GuardianDebugLog("[GUARDIAN DBG] " ... "OnPlayerSpawn - guardian %N spawned, scheduling Frame_ApplyGuardianHealth", client);
 		}
 		// Defer health application one frame. TF2 resets the player's health to class
 		// default as part of spawn processing. Applying our custom health inside the
@@ -921,7 +958,7 @@ public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
 				// Bot spawned on BLU during a guardian round.
 				// Bots can't receive the chat message and TF2_RespawnPlayer on a bot
 				// can be unreliable - just move it to spectator to keep it out of the way.
-				LogToFileEx(GUARDIAN_SEL, "OnPlayerSpawn - bot %d spawned on BLU during guardian round, moving to spectator", client);
+				GuardianLog("OnPlayerSpawn - bot %d spawned on BLU during guardian round, moving to spectator", client);
 				ChangeClientTeam(client, view_as<int>(TFTeam_Spectator));
 			}
 			else
@@ -929,7 +966,7 @@ public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
 				if (debugMode)
 				{
 					PrintToChatAll("[GUARDIAN DBG] " ... "OnPlayerSpawn - non-guardian %N on BLU, forcing to RED", client);
-					LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "OnPlayerSpawn - non-guardian %N on BLU, forcing to RED", client);
+					GuardianDebugLog("[GUARDIAN DBG] " ... "OnPlayerSpawn - non-guardian %N on BLU, forcing to RED", client);
 				}
 				// Refined team switch to avoid "Skull" HUD glitch
 				ChangeClientTeam(client, view_as<int>(TFTeam_Red));
@@ -952,7 +989,7 @@ void Frame_ApplyGuardianHealth(int userId)
 	if (debugMode)
 	{
 		PrintToChatAll("[GUARDIAN DBG] " ... "Frame_ApplyGuardianHealth - BEFORE apply: engineHP=%d engineMax=%d", engineHP, engineMax);
-		LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "Frame_ApplyGuardianHealth - BEFORE apply: engineHP=%d engineMax=%d", engineHP, engineMax);
+		GuardianDebugLog("[GUARDIAN DBG] " ... "Frame_ApplyGuardianHealth - BEFORE apply: engineHP=%d engineMax=%d", engineHP, engineMax);
 	}
 
 	ApplyGuardianHealth();
@@ -968,19 +1005,19 @@ public Action OnPlayerTeamChange(Event event, const char[] name, bool dontBroadc
 	int newTeam = event.GetInt("team");
 	int oldTeam = event.GetInt("oldteam");
 
-	LogToFileEx(GUARDIAN_SEL, "OnPlayerTeamChange - %N (client=%d) oldTeam=%d newTeam=%d guardianClient=%d",
+	GuardianLog("OnPlayerTeamChange - %N (client=%d) oldTeam=%d newTeam=%d guardianClient=%d",
 		client, client, oldTeam, newTeam, guardianClient);
 
 	if (client != guardianClient && newTeam == view_as<int>(TFTeam_Blue))
 	{
-		LogToFileEx(GUARDIAN_SEL, "OnPlayerTeamChange - non-guardian joined BLU, scheduling Timer_ForceRed");
+		GuardianLog("OnPlayerTeamChange - non-guardian joined BLU, scheduling Timer_ForceRed");
 		CreateTimer(0.1, Timer_ForceRed, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
 	}
 
 	// Guardian moved to spectator mid-round - clean up immediately
 	if (client == guardianClient && newTeam <= view_as<int>(TFTeam_Spectator))
 	{
-		LogToFileEx(GUARDIAN_SEL, "OnPlayerTeamChange - guardian %N moved to spectator, triggering cleanup", client);
+		GuardianLog("OnPlayerTeamChange - guardian %N moved to spectator, triggering cleanup", client);
 		CleanupGuardian(false);
 	}
 
@@ -991,7 +1028,7 @@ public Action Timer_ForceRed(Handle timer, any userId)
 {
 	if (!guardianActive)
 	{
-		LogToFileEx(GUARDIAN_SEL, "Timer_ForceRed - guardianActive=false, skipping");
+		GuardianLog("Timer_ForceRed - guardianActive=false, skipping");
 		return Plugin_Stop;
 	}
 
@@ -1002,19 +1039,19 @@ public Action Timer_ForceRed(Handle timer, any userId)
 		int team = GetClientTeam(client);
 		if (team == view_as<int>(TFTeam_Blue))
 		{
-			LogToFileEx(GUARDIAN_SEL, "Timer_ForceRed - forcing %N (client=%d) from BLU to RED", client, client);
+			GuardianLog("Timer_ForceRed - forcing %N (client=%d) from BLU to RED", client, client);
 			ChangeClientTeam(client, view_as<int>(TFTeam_Red));
 			TF2_RespawnPlayer(client);
 			CPrintToChat(client, "%t", "Guardian_TeamBlocked");
 		}
 		else
 		{
-			LogToFileEx(GUARDIAN_SEL, "Timer_ForceRed - %N (client=%d) already on team=%d, no action needed", client, client, team);
+			GuardianLog("Timer_ForceRed - %N (client=%d) already on team=%d, no action needed", client, client, team);
 		}
 	}
 	else
 	{
-		LogToFileEx(GUARDIAN_SEL, "Timer_ForceRed - client from userId no longer valid or is guardian, skipping");
+		GuardianLog("Timer_ForceRed - client from userId no longer valid or is guardian, skipping");
 	}
 
 	return Plugin_Stop;
@@ -1036,7 +1073,7 @@ void ActivateGuardian(int client, int classIndex)
 	if (debugMode)
 	{
 		PrintToChatAll("[GUARDIAN DBG] " ... "ActivateGuardian - client=%d class=%s maxHP=%d", client, guardianClasses[classIndex].DisplayName, guardianMaxHP);
-		LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "ActivateGuardian - client=%d class=%s maxHP=%d", client, guardianClasses[classIndex].DisplayName, guardianMaxHP);
+		GuardianDebugLog("[GUARDIAN DBG] " ... "ActivateGuardian - client=%d class=%s maxHP=%d", client, guardianClasses[classIndex].DisplayName, guardianMaxHP);
 	}
 
 	// Reset abilities
@@ -1057,7 +1094,7 @@ void ActivateGuardian(int client, int classIndex)
 	if (debugMode)
 	{
 		PrintToChatAll("[GUARDIAN DBG] " ... "ActivateGuardian - SDKHook_GetMaxHealth registered for client=%d", client);
-		LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "ActivateGuardian - SDKHook_GetMaxHealth registered for client=%d", client);
+		GuardianDebugLog("[GUARDIAN DBG] " ... "ActivateGuardian - SDKHook_GetMaxHealth registered for client=%d", client);
 	}
 
 	// Set flag before any team/respawn operations so player_death fired by the
@@ -1068,23 +1105,23 @@ void ActivateGuardian(int client, int classIndex)
 	// Frame_ApplyGuardianHealth applies the custom health cleanly.
 	if (GetClientTeam(client) != view_as<int>(TFTeam_Blue))
 	{
-		LogToFileEx(GUARDIAN_SEL, "ActivateGuardian - moving guardian %N (client=%d) from team=%d to BLU",
+		GuardianLog("ActivateGuardian - moving guardian %N (client=%d) from team=%d to BLU",
 			client, client, GetClientTeam(client));
 		if (debugMode)
 		{
 			PrintToChatAll("[GUARDIAN DBG] " ... "ActivateGuardian - changing team to BLU for client=%d", client);
-			LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "ActivateGuardian - changing team to BLU for client=%d", client);
+			GuardianDebugLog("[GUARDIAN DBG] " ... "ActivateGuardian - changing team to BLU for client=%d", client);
 		}
 		ChangeClientTeam(client, view_as<int>(TFTeam_Blue));
 	}
 	else
 	{
-		LogToFileEx(GUARDIAN_SEL, "ActivateGuardian - guardian %N (client=%d) already on BLU", client, client);
+		GuardianLog("ActivateGuardian - guardian %N (client=%d) already on BLU", client, client);
 	}
 	if (debugMode)
 	{
 		PrintToChatAll("[GUARDIAN DBG] " ... "ActivateGuardian - calling TF2_RespawnPlayer for client=%d", client);
-		LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "ActivateGuardian - calling TF2_RespawnPlayer for client=%d", client);
+		GuardianDebugLog("[GUARDIAN DBG] " ... "ActivateGuardian - calling TF2_RespawnPlayer for client=%d", client);
 	}
 	TF2_RespawnPlayer(client);
 	guardianActivating = false;
@@ -1109,7 +1146,7 @@ void ActivateGuardian(int client, int classIndex)
 
 		if (GetClientTeam(i) == view_as<int>(TFTeam_Blue))
 		{
-			LogToFileEx(GUARDIAN_SEL, "ActivateGuardian - moving non-guardian %N (client=%d) from BLU to RED", i, i);
+			GuardianLog("ActivateGuardian - moving non-guardian %N (client=%d) from BLU to RED", i, i);
 			ChangeClientTeam(i, view_as<int>(TFTeam_Red));
 			TF2_RespawnPlayer(i);
 		}
@@ -1134,7 +1171,7 @@ void CleanupGuardian(bool respawn)
 	if (debugMode)
 	{
 		PrintToChatAll("[GUARDIAN DBG] " ... "CleanupGuardian - client=%d respawn=%d liveHP=%d", client, respawn, (IsClientInGame(client) ? GetClientHealth(client) : -1));
-		LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "CleanupGuardian - client=%d respawn=%d liveHP=%d", client, respawn, (IsClientInGame(client) ? GetClientHealth(client) : -1));
+		GuardianDebugLog("[GUARDIAN DBG] " ... "CleanupGuardian - client=%d respawn=%d liveHP=%d", client, respawn, (IsClientInGame(client) ? GetClientHealth(client) : -1));
 	}
 
 	DeactivatePrimary();
@@ -1165,7 +1202,7 @@ void CleanupGuardian(bool respawn)
 		if (debugMode)
 		{
 			PrintToChatAll("[GUARDIAN DBG] " ... "CleanupGuardian - unhooked GetMaxHealth + removed attribute for client=%d", client);
-			LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "CleanupGuardian - unhooked GetMaxHealth + removed attribute for client=%d", client);
+			GuardianDebugLog("[GUARDIAN DBG] " ... "CleanupGuardian - unhooked GetMaxHealth + removed attribute for client=%d", client);
 		}
 
 		if (respawn)
@@ -1173,12 +1210,12 @@ void CleanupGuardian(bool respawn)
 			// Round end path (OnRoundWin): guardian stays on BLU for the win screen.
 			// ResetAllState in the next OnRoundStart moves them to RED cleanly before
 			// the next guardian is picked. No forced suicide or team change needed here.
-			LogToFileEx(GUARDIAN_SEL, "CleanupGuardian - round-end: %N (client=%d) stays on BLU for win screen",
+			GuardianLog("CleanupGuardian - round-end: %N (client=%d) stays on BLU for win screen",
 				client, client);
 			if (debugMode)
 			{
 				PrintToChatAll("[GUARDIAN DBG] " ... "CleanupGuardian - round-end: staying on BLU until next OnRoundStart");
-				LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "CleanupGuardian - round-end: staying on BLU until next OnRoundStart");
+				GuardianDebugLog("[GUARDIAN DBG] " ... "CleanupGuardian - round-end: staying on BLU until next OnRoundStart");
 			}
 		}
 		else
@@ -1187,12 +1224,12 @@ void CleanupGuardian(bool respawn)
 			// ChangeClientTeam inside player_death - it can re-trigger the
 			// engine's team-wipe check or fire another death event. Defer the
 			// team change to the next frame so the death event resolves first.
-			LogToFileEx(GUARDIAN_SEL, "CleanupGuardian - death path: deferring team move for %N (client=%d) via RequestFrame",
+			GuardianLog("CleanupGuardian - death path: deferring team move for %N (client=%d) via RequestFrame",
 				client, client);
 			if (debugMode)
 			{
 				PrintToChatAll("[GUARDIAN DBG] " ... "CleanupGuardian - death path: deferring ChangeTeam RED via RequestFrame");
-				LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "CleanupGuardian - death path: deferring ChangeTeam RED via RequestFrame");
+				GuardianDebugLog("[GUARDIAN DBG] " ... "CleanupGuardian - death path: deferring ChangeTeam RED via RequestFrame");
 			}
 			RequestFrame(Frame_MoveToRed, GetClientUserId(client));
 		}
@@ -1211,12 +1248,12 @@ void Frame_MoveToRed(int userId)
 	int client = GetClientOfUserId(userId);
 	if (client > 0 && IsClientInGame(client))
 	{
-		LogToFileEx(GUARDIAN_SEL, "Frame_MoveToRed - moving %N (client=%d) from team=%d to RED", client, client, GetClientTeam(client));
+		GuardianLog("Frame_MoveToRed - moving %N (client=%d) from team=%d to RED", client, client, GetClientTeam(client));
 		ChangeClientTeam(client, view_as<int>(TFTeam_Red));
 	}
 	else
 	{
-		LogToFileEx(GUARDIAN_SEL, "Frame_MoveToRed - client from userId no longer valid");
+		GuardianLog("Frame_MoveToRed - client from userId no longer valid");
 	}
 }
 
@@ -1281,19 +1318,19 @@ public Action Command_DebugGuardian(int client, int args)
 		ServerCommand("tf_bot_add 1 red");
 		ServerCommand("tf_bot_add 1 red");
 
-		LogToFileEx(GUARDIAN_LOG, "");
-		LogToFileEx(GUARDIAN_LOG, "======================================================");
-		LogToFileEx(GUARDIAN_LOG, "  Guardian debug ON  (toggled by %s)", who);
-		LogToFileEx(GUARDIAN_LOG, "======================================================");
-		LogToFileEx(GUARDIAN_SEL, "debugMode=true (toggled by %s)", who);
-		LogToFileEx(GUARDIAN_LOG, "guardianActive=%d  client=%d  maxHP=%d  currentHP=%d  nextRound=%d",
+		GuardianDebugLog("");
+		GuardianDebugLog("======================================================");
+		GuardianDebugLog("  Guardian debug ON  (toggled by %s)", who);
+		GuardianDebugLog("======================================================");
+		GuardianLog("debugMode=true (toggled by %s)", who);
+		GuardianDebugLog("guardianActive=%d  client=%d  maxHP=%d  currentHP=%d  nextRound=%d",
 			guardianActive, guardianClient, guardianMaxHP, guardianCurrentHP, nextRoundIsGuardian);
 
 		if (guardianActive && IsClientInGame(guardianClient))
 		{
 			int liveHP  = GetClientHealth(guardianClient);
 			int liveMax = GetEntProp(guardianClient, Prop_Data, "m_iMaxHealth");
-			LogToFileEx(GUARDIAN_LOG, "Live HP=%d  m_iMaxHealth=%d  guardianMaxHP=%d",
+			GuardianDebugLog("Live HP=%d  m_iMaxHealth=%d  guardianMaxHP=%d",
 				liveHP, liveMax, guardianMaxHP);
 
 			PrintToChatAll("[GUARDIAN DBG] Live HP=%d  m_iMaxHealth=%d  guardianMaxHP=%d",
@@ -1307,12 +1344,12 @@ public Action Command_DebugGuardian(int client, int args)
 		// Only write to debug log if it already exists (avoids creating the file just to say "OFF")
 		if (FileExists(GUARDIAN_LOG))
 		{
-			LogToFileEx(GUARDIAN_LOG, "------------------------------------------------------");
-			LogToFileEx(GUARDIAN_LOG, "  Guardian debug OFF  (toggled by %s)", who);
-			LogToFileEx(GUARDIAN_LOG, "------------------------------------------------------");
-			LogToFileEx(GUARDIAN_LOG, "");
+			GuardianDebugLog("------------------------------------------------------");
+			GuardianDebugLog("  Guardian debug OFF  (toggled by %s)", who);
+			GuardianDebugLog("------------------------------------------------------");
+			GuardianDebugLog("");
 		}
-		LogToFileEx(GUARDIAN_SEL, "debugMode=false (toggled by %s)", who);
+		GuardianLog("debugMode=false (toggled by %s)", who);
 	}
 
 	return Plugin_Handled;
@@ -1332,7 +1369,7 @@ void ApplyGuardianHealth()
 	if (debugMode)
 	{
 		PrintToChatAll("[GUARDIAN DBG] " ... "ApplyGuardianHealth - client=%d maxHP=%d currentHP=%d", client, baseHP, guardianCurrentHP);
-		LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "ApplyGuardianHealth - client=%d maxHP=%d currentHP=%d", client, baseHP, guardianCurrentHP);
+		GuardianDebugLog("[GUARDIAN DBG] " ... "ApplyGuardianHealth - client=%d maxHP=%d currentHP=%d", client, baseHP, guardianCurrentHP);
 	}
 
 	// TF2 recomputes max health from class base + attributes every frame.
@@ -1350,7 +1387,7 @@ void ApplyGuardianHealth()
 	if (debugMode)
 	{
 		PrintToChatAll("[GUARDIAN DBG] " ... "ApplyGuardianHealth - attribute bonus set to %d (base 175 + %d = %d)", bonus, bonus, 175 + bonus);
-		LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "ApplyGuardianHealth - attribute bonus set to %d (base 175 + %d = %d)", bonus, bonus, 175 + bonus);
+		GuardianDebugLog("[GUARDIAN DBG] " ... "ApplyGuardianHealth - attribute bonus set to %d (base 175 + %d = %d)", bonus, bonus, 175 + bonus);
 	}
 
 	SetEntityHealth(client, guardianCurrentHP);
@@ -1361,7 +1398,7 @@ void ApplyGuardianHealth()
 	if (debugMode)
 	{
 		PrintToChatAll("[GUARDIAN DBG] " ... "ApplyGuardianHealth - POST: liveHP=%d liveMax(DataProp)=%d wanted=%d", liveHP, liveMax, guardianCurrentHP);
-		LogToFileEx(GUARDIAN_LOG, "[GUARDIAN DBG] " ... "ApplyGuardianHealth - POST: liveHP=%d liveMax(DataProp)=%d wanted=%d", liveHP, liveMax, guardianCurrentHP);
+		GuardianDebugLog("[GUARDIAN DBG] " ... "ApplyGuardianHealth - POST: liveHP=%d liveMax(DataProp)=%d wanted=%d", liveHP, liveMax, guardianCurrentHP);
 	}
 }
 
@@ -1731,7 +1768,7 @@ public Action Timer_Update(Handle timer)
 	// Bot join check - disable Guardian if a bot appeared mid-round (skip in debugMode)
 	if (HasActiveBots() && !debugMode)
 	{
-		LogToFileEx(GUARDIAN_SEL, "Timer_Update - bot detected mid-round, cleaning up guardian and moving bots to spectator");
+		GuardianLog("Timer_Update - bot detected mid-round, cleaning up guardian and moving bots to spectator");
 		CPrintToChatAll("%t", "Guardian_BotJoined");
 		CleanupGuardian(true);
 		// Move all active-team bots to spectator so they don't block future rounds
@@ -1739,7 +1776,7 @@ public Action Timer_Update(Handle timer)
 		{
 			if (IsClientInGame(i) && IsFakeClient(i) && GetClientTeam(i) > view_as<int>(TFTeam_Spectator))
 			{
-				LogToFileEx(GUARDIAN_SEL, "Timer_Update - moving bot %d from team=%d to spectator", i, GetClientTeam(i));
+				GuardianLog("Timer_Update - moving bot %d from team=%d to spectator", i, GetClientTeam(i));
 				ChangeClientTeam(i, view_as<int>(TFTeam_Spectator));
 			}
 		}

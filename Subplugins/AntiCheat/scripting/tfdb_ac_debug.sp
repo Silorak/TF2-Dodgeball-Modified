@@ -157,18 +157,31 @@ public Action Command_AC(int client, int args)
 
 void FormatModeFlags(int mode, char[] buffer, int maxlen)
 {
-    int len = 0;
+    buffer[0] = '\0';
+    char tmp[32];
 
     if (mode & SIM_AUTOAIRBLAST)
-        len += FormatEx(buffer[len], maxlen - len, "AutoAirblast ");
+    {
+        FormatEx(tmp, sizeof(tmp), "AutoAirblast ");
+        StrCat(buffer, maxlen, tmp);
+    }
     if (mode & SIM_SILENTAIM)
-        len += FormatEx(buffer[len], maxlen - len, "SilentAim ");
+    {
+        FormatEx(tmp, sizeof(tmp), "SilentAim ");
+        StrCat(buffer, maxlen, tmp);
+    }
     if (mode & SIM_FIXMOVEMENT)
-        len += FormatEx(buffer[len], maxlen - len, "FixMovement ");
+    {
+        FormatEx(tmp, sizeof(tmp), "FixMovement ");
+        StrCat(buffer, maxlen, tmp);
+    }
     if (mode & SIM_FAKELAG)
-        len += FormatEx(buffer[len], maxlen - len, "FakeLag ");
+    {
+        FormatEx(tmp, sizeof(tmp), "FakeLag ");
+        StrCat(buffer, maxlen, tmp);
+    }
 
-    if (len == 0)
+    if (buffer[0] == '\0')
         FormatEx(buffer, maxlen, "None");
 }
 

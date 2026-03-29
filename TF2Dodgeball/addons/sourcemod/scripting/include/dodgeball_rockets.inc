@@ -45,7 +45,13 @@ void CreateRocket(int spawnerEntity, int spawnerClass, int team, int rocketClass
 	GetEntPropVector(spawnerEntity, Prop_Send, "m_angRotation", angles);
 	GetAngleVectors(angles, direction, NULL_VECTOR, NULL_VECTOR);
 
-	SetEntProp(entity,    Prop_Send, "m_bCritical",    (GetURandomFloatRange(0.0, 100.0) <= RocketClassCritChance[rocketClass]) ? 1 : 0, 1);
+	// Determine crit status. m_bCritical is NEVER set to 1 (not even server-only)
+	// because Source Engine's edict-level dirty tracking can leak it to clients,
+	// triggering CreateTrails() and spawning client-side crit particles that the
+	// server cannot remove. Instead, crit damage (3x) is applied directly to the
+	// damage value via CalculateRocketDamage.
+	bool isCrit = (GetURandomFloatRange(0.0, 100.0) <= RocketClassCritChance[rocketClass]);
+	SetEntProp(entity,    Prop_Send, "m_bCritical",    0, 1);
 	SetEntProp(entity,    Prop_Send, "m_iTeamNum",     (TestFlags(flags, RocketFlag_IsNeutral)) ? 1 : team, 1);
 	SetEntProp(entity,    Prop_Send, "m_iDeflected",   0);
 	TeleportEntity(entity, position, angles, view_as<float>({0.0, 0.0, 0.0}));
@@ -71,6 +77,9 @@ void CreateRocket(int spawnerEntity, int spawnerClass, int team, int rocketClass
 	RocketHomingPaused[index]       = false;
 	RocketIsDragPause[index]        = false;
 	RocketDragPauseEndTick[index]   = 0;
+	RocketCritGlow[index]           = INVALID_ENT_REFERENCE;
+	RocketCritGlowTeam[index]       = 0;
+	RocketIsCritical[index]         = isCrit;
 	RocketLastDeflectionTime[index] = GetGameTime();
 	RocketLastBeepTime[index]       = GetGameTime();
 	RocketSpeed[index]              = CalculateRocketSpeed(rocketClass, modifier);
@@ -78,7 +87,8 @@ void CreateRocket(int spawnerEntity, int spawnerClass, int team, int rocketClass
 	Internal_SetRocketState(index, RocketState_None);
 
 	CopyVectors(direction, RocketDirection[index]);
-	SetEntDataFloat(entity, DamageOffset, CalculateRocketDamage(rocketClass, modifier), true);
+	float baseDamage = CalculateRocketDamage(rocketClass, modifier);
+	SetEntDataFloat(entity, DamageOffset, isCrit ? baseDamage * 3.0 : baseDamage, true);
 	DispatchSpawn(entity);
 
 	if (TestFlags(flags, RocketFlag_CustomModel))
@@ -102,17 +112,12 @@ void CreateRocket(int spawnerEntity, int spawnerClass, int team, int rocketClass
 
 	SDKHook(entity, SDKHook_StartTouch, OnStartTouch);
 
-	// Kill the engine's default trail and attach a server-controlled replacement.
-	// Must happen after DispatchSpawn (which creates the engine trail) and before
-	// the forward (so subplugins see a clean state).
-	InitRocketTrail(entity);
-
-	// Safety: the engine may write m_hEffectEntity a frame after DispatchSpawn.
-	// Schedule a follow-up kill to catch any late engine trail.
-	DataPack spawnPack = new DataPack();
-	spawnPack.WriteCell(index);
-	spawnPack.WriteCell(EntIndexToEntRef(entity));
-	RequestFrame(Frame_PostSpawnTrailFix, spawnPack);
+	// Create the initial crit glow particle only if the rocket rolled crit.
+	// Non-crit rockets look like normal TF2 rockets (smoke trail only, no glow).
+	if (isCrit)
+	{
+		UpdateCritGlow(index, entity, team);
+	}
 
 	Forward_OnRocketCreated(index, entity);
 }
@@ -125,6 +130,18 @@ void CreateRocket(int spawnerEntity, int spawnerClass, int team, int rocketClass
 void DestroyRocket(int index)
 {
 	if (!IsValidRocket(index)) return;
+
+	// Clean up server-managed crit glow particle
+	if (RocketCritGlow[index] != INVALID_ENT_REFERENCE)
+	{
+		int glow = EntRefToEntIndex(RocketCritGlow[index]);
+		if (glow != -1 && IsValidEntity(glow))
+		{
+			RemoveEntity(glow);
+		}
+		RocketCritGlow[index] = INVALID_ENT_REFERENCE;
+		RocketCritGlowTeam[index] = 0;
+	}
 
 	int entity = EntRefToEntIndex(RocketEntity[index]);
 	if (entity != INVALID_ENT_REFERENCE && IsValidEntity(entity))
@@ -147,91 +164,98 @@ void DestroyRockets()
 	RocketCount = 0;
 }
 
-// ============================================================================
-// Engine Trail Cleanup
-//
-// TF2's engine creates a new trail particle (info_particle_system) every time
-// a rocket is deflected, storing it in m_hEffectEntity. The previous trail is
-// orphaned — still rendering, still consuming resources. After 100+ deflects
-// this causes FPS drops and client crashes.
-//
-// We kill these engine-created trails on spawn and after each deflect.
-// The client renders its own trail from rockettrail.pcf automatically —
-// that's the intended visual. For custom trails, use the tfdb_trails subplugin.
-// ============================================================================
-
 /**
- * Kills the engine's trail particle attached to a rocket via m_hEffectEntity.
- * This is the particle the engine creates on spawn and re-creates on every deflect.
+ * Creates or replaces the server-managed crit glow particle on a rocket.
+ * Since m_iDeflected is frozen (preventing CreateTrails from re-firing),
+ * the client no longer swaps the crit glow on deflection. We handle it
+ * server-side by creating an info_particle_system with the correct team color.
  *
- * @param entity    The rocket entity index.
+ * Optimizations over naive destroy-then-create:
+ * - Same-team skip: if the glow is already the correct team color, do nothing.
+ *   This avoids needless particle churn on same-team re-deflects and bounces.
+ * - Staggered timing: create the NEW glow BEFORE destroying the old one, then
+ *   defer the old glow's removal by one frame. This eliminates the 1-3 frame
+ *   visual gap where neither glow exists (the "trail vanish" on deflect/drag).
+ *
+ * @param index    The rocket's internal index.
+ * @param entity   The rocket entity index.
+ * @param team     The team number for the glow color.
  */
-void KillEngineTrail(int entity)
+void UpdateCritGlow(int index, int entity, int team)
 {
-	if (!IsValidEntity(entity)) return;
+	// Same-team skip: if the current glow is already the correct color,
+	// don't destroy and recreate it. This prevents unnecessary particle
+	// gaps during same-team bounces, re-deflects, and wall bounces.
+	if (RocketCritGlow[index] != INVALID_ENT_REFERENCE && RocketCritGlowTeam[index] == team)
+	{
+		int existingGlow = EntRefToEntIndex(RocketCritGlow[index]);
+		if (existingGlow != -1 && IsValidEntity(existingGlow))
+		{
+			return; // Glow is already correct team color, nothing to do
+		}
+		// Glow entity died somehow — fall through to create a new one
+	}
 
-	int effect = GetEntPropEnt(entity, Prop_Send, "m_hEffectEntity");
-	if (effect == -1 || !IsValidEntity(effect)) return;
+	// Always create team-colored glow for visibility (not gated on m_bCritical).
+	// Since m_bCritical is suppressed for the first snapshot to prevent client glow,
+	// this server-side particle is the only source of the crit aura.
 
-	AcceptEntityInput(effect, "ClearParent");
-	AcceptEntityInput(effect, "Stop");
-	RemoveEntity(effect);
-	SetEntPropEnt(entity, Prop_Send, "m_hEffectEntity", -1);
+	char particleName[32];
+	if (team == view_as<int>(TFTeam_Blue))
+		particleName = "critical_rocket_blue";
+	else if (team == view_as<int>(TFTeam_Red))
+		particleName = "critical_rocket_red";
+	else
+		particleName = "eyeboss_projectile";
+
+	int newGlow = CreateEntityByName("info_particle_system");
+	if (newGlow == -1) return;
+
+	float pos[3];
+	GetEntPropVector(entity, Prop_Send, "m_vecOrigin", pos);
+	TeleportEntity(newGlow, pos, NULL_VECTOR, NULL_VECTOR);
+	DispatchKeyValue(newGlow, "effect_name", particleName);
+	ActivateEntity(newGlow);
+	AcceptEntityInput(newGlow, "Start");
+
+	// Do NOT parent to rocket — parenting causes velocity clamping spam at
+	// high speeds. Position is synced manually in OnGameFrame instead.
+
+	// Staggered kill: defer old glow removal to NEXT FRAME so the new glow
+	// has one frame to become visible before the old one disappears.
+	// This eliminates the 1-3 frame gap that caused "trail vanish" on deflect.
+	if (RocketCritGlow[index] != INVALID_ENT_REFERENCE)
+	{
+		int oldGlowRef = RocketCritGlow[index];
+		int oldGlow = EntRefToEntIndex(oldGlowRef);
+		if (oldGlow != -1 && IsValidEntity(oldGlow))
+		{
+			RequestFrame(Frame_KillOldCritGlow, oldGlowRef);
+		}
+	}
+
+	RocketCritGlow[index] = EntIndexToEntRef(newGlow);
+	RocketCritGlowTeam[index] = team;
 }
 
 /**
- * Kills the engine's default trail on a newly created rocket.
+ * RequestFrame callback — kills the previous crit glow one frame after
+ * the replacement was created. This staggered timing ensures there is
+ * never a frame where no glow exists on the rocket.
  *
- * @param index     The rocket's internal index.
- * @param entity    The rocket entity index.
+ * @param glowRef    Entity reference of the old glow to destroy.
  */
-void InitRocketTrail(int entity)
+void Frame_KillOldCritGlow(int glowRef)
 {
-	KillEngineTrail(entity);
+	int glow = EntRefToEntIndex(glowRef);
+	if (glow != -1 && IsValidEntity(glow))
+	{
+		AcceptEntityInput(glow, "Stop");
+		RemoveEntity(glow);
+	}
 }
 
-/**
- * RequestFrame callback — kills the engine's newly stacked trail after deflect.
- * The engine writes m_hEffectEntity during Deflected(), which hasn't finished
- * when the object_deflected event fires.
- *
- * @param pack    DataPack containing rocket index and entity ref.
- */
-void Frame_PostDeflectTrailFix(DataPack pack)
-{
-	pack.Reset();
-	int index     = pack.ReadCell();
-	int entityRef = pack.ReadCell();
-	delete pack;
 
-	int entity = EntRefToEntIndex(entityRef);
-	if (entity == -1 || !IsValidEntity(entity)) return;
-	if (!IsValidRocket(index)) return;
-	if (RocketEntity[index] != entityRef) return;
-
-	KillEngineTrail(entity);
-}
-
-/**
- * RequestFrame callback — kills any engine trail created after DispatchSpawn.
- * The engine may write m_hEffectEntity a frame after spawn.
- *
- * @param pack    DataPack containing rocket index and entity ref.
- */
-void Frame_PostSpawnTrailFix(DataPack pack)
-{
-	pack.Reset();
-	int index     = pack.ReadCell();
-	int entityRef = pack.ReadCell();
-	delete pack;
-
-	int entity = EntRefToEntIndex(entityRef);
-	if (entity == -1 || !IsValidEntity(entity)) return;
-	if (!IsValidRocket(index)) return;
-	if (RocketEntity[index] != entityRef) return;
-
-	KillEngineTrail(entity);
-}
 
 /**
  * Checks if a rocket index is valid and the rocket exists.
@@ -244,6 +268,21 @@ bool IsValidRocket(int index)
 	if (!((index >= 0) && RocketIsValid[index])) return false;
 	
 	if (EntRefToEntIndex(RocketEntity[index]) != -1) return true;
+
+	// Rocket entity was destroyed by the engine (shot down, exploded, etc.)
+	// without going through DestroyRocket. Clean up the server-managed crit
+	// glow particle so it doesn't linger at the rocket's last position.
+	if (RocketCritGlow[index] != INVALID_ENT_REFERENCE)
+	{
+		int glow = EntRefToEntIndex(RocketCritGlow[index]);
+		if (glow != -1 && IsValidEntity(glow))
+		{
+			AcceptEntityInput(glow, "Stop");
+			RemoveEntity(glow);
+		}
+		RocketCritGlow[index] = INVALID_ENT_REFERENCE;
+		RocketCritGlowTeam[index] = 0;
+	}
 
 	RocketIsValid[index] = false;
 	RocketCount--;
@@ -368,7 +407,8 @@ bool ProcessDeflection(int index, int entity, int rocketClass, RocketFlags flags
 	RocketDeflections[index]        = deflectionCount;
 	RocketLastDeflectionTime[index] = GetGameTime();
 	RocketSpeed[index]              = CalculateRocketSpeed(rocketClass, modifier);
-	SetEntDataFloat(entity, DamageOffset, CalculateRocketDamage(rocketClass, modifier), true);
+	float baseDamage = CalculateRocketDamage(rocketClass, modifier);
+	SetEntDataFloat(entity, DamageOffset, RocketIsCritical[index] ? baseDamage * 3.0 : baseDamage, true);
 
 	if (TestFlags(flags, RocketFlag_ElevateOnDeflect)) RocketInstanceFlags[index] |= RocketFlag_Elevating;
 

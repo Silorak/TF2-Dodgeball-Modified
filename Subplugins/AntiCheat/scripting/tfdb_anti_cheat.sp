@@ -146,7 +146,7 @@ public Plugin myinfo = {
     author      = "Silorak",
     description = "Dodgeball Anti Cheat",
     version     = PLUGIN_VERSION,
-    url         = "https://github.com/Silorak/TF2-Dodgeball"
+    url         = "https://github.com/tfdb-anticheat"
 };
 
 // ============================================================================
@@ -190,20 +190,10 @@ public void OnPluginStart()
         _, true, 1.0, true, 20.0
     );
 
-        "tfdb_ac_snap_hits", "4",
-        "Angle snap raw detections needed per score point.",
-        _, true, 1.0, true, 20.0
-    );
-
     CvarTimingThreshold = CreateConVar(
         "tfdb_ac_timing_hits", "8",
         "Perfect timing raw detections needed per score point.",
         _, true, 1.0, true, 30.0
-    );
-
-        "tfdb_ac_movefix_hits", "6",
-        "Movement correction raw detections needed per score point.",
-        _, true, 1.0, true, 20.0
     );
 
     // Score decay: keeps the system from accumulating stale evidence
@@ -1284,7 +1274,7 @@ public Action Timer_AdminHud(Handle timer)
 
     // Build the HUD text once, then send to all admins
     char hudText[512];
-    int hudLen = 0;
+    hudText[0] = '\0';
     int flaggedCount = 0;
 
     for (int i = 1; i <= MaxClients; i++)
@@ -1301,26 +1291,45 @@ public Action Timer_AdminHud(Handle timer)
 
         // Compact format: Name Score [active detectors]
         char detectors[128];
-        int dLen = 0;
+        detectors[0] = '\0';
+        char tmp[32];
 
         if (AntiAimDetections[i] > 0)
-            dLen += FormatEx(detectors[dLen], sizeof(detectors) - dLen, " AA:%d", AntiAimDetections[i]);
+        {
+            FormatEx(tmp, sizeof(tmp), " AA:%d", AntiAimDetections[i]);
+            StrCat(detectors, sizeof(detectors), tmp);
+        }
         if (AirblastFacingDetections[i] > 0)
-            dLen += FormatEx(detectors[dLen], sizeof(detectors) - dLen, " AF:%d", AirblastFacingDetections[i]);
+        {
+            FormatEx(tmp, sizeof(tmp), " AF:%d", AirblastFacingDetections[i]);
+            StrCat(detectors, sizeof(detectors), tmp);
+        }
         if (DragSnapbackDetections[i] > 0)
-            dLen += FormatEx(detectors[dLen], sizeof(detectors) - dLen, " DS:%d", DragSnapbackDetections[i]);
+        {
+            FormatEx(tmp, sizeof(tmp), " DS:%d", DragSnapbackDetections[i]);
+            StrCat(detectors, sizeof(detectors), tmp);
+        }
         if (PerfectTimingDetections[i] > 0)
-            dLen += FormatEx(detectors[dLen], sizeof(detectors) - dLen, " PT:%d", PerfectTimingDetections[i]);
+        {
+            FormatEx(tmp, sizeof(tmp), " PT:%d", PerfectTimingDetections[i]);
+            StrCat(detectors, sizeof(detectors), tmp);
+        }
         if (InhaleExhaleDetections[i] > 0)
-            dLen += FormatEx(detectors[dLen], sizeof(detectors) - dLen, " CT:%d", InhaleExhaleDetections[i]);
+        {
+            FormatEx(tmp, sizeof(tmp), " CT:%d", InhaleExhaleDetections[i]);
+            StrCat(detectors, sizeof(detectors), tmp);
+        }
         if (PerfectStreakScore[i] > 0 || CurrentStreak[i] >= 6)
-            dLen += FormatEx(detectors[dLen], sizeof(detectors) - dLen, " Str:%d(%d)", CurrentStreak[i], PerfectStreakScore[i]);
+        {
+            FormatEx(tmp, sizeof(tmp), " Str:%d(%d)", CurrentStreak[i], PerfectStreakScore[i]);
+            StrCat(detectors, sizeof(detectors), tmp);
+        }
 
         // Color-code the score in the HUD by threshold proximity
         // Score text goes from white → yellow → red as it approaches action threshold
-        hudLen += FormatEx(hudText[hudLen], sizeof(hudText) - hudLen,
-            "%s [%d]%s\n",
-            name, score, detectors);
+        char hudEntry[128];
+        FormatEx(hudEntry, sizeof(hudEntry), "%s [%d]%s\n", name, score, detectors);
+        StrCat(hudText, sizeof(hudText), hudEntry);
 
         if (flaggedCount >= 5) break; // Max 5 players shown to keep HUD compact
     }

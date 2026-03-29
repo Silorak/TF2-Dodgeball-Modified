@@ -36,8 +36,6 @@ bool ClientShouldSee  [MAXPLAYERS + 1];
 bool Loaded;
 
 int RocketFakeEntity       [MAX_ROCKETS] = {-1, ...};
-int RocketRedCriticalEntity[MAX_ROCKETS] = {-1, ...};
-int RocketBluCriticalEntity[MAX_ROCKETS] = {-1, ...};
 
 char       RocketClassTrail         [MAX_ROCKET_CLASSES][PLATFORM_MAX_PATH];
 char       RocketClassSprite        [MAX_ROCKET_CLASSES][PLATFORM_MAX_PATH];
@@ -182,28 +180,11 @@ public void OnObjectDeflected(Event event, char[] eventName, bool dontBroadcast)
 	
 	if (!(RocketClassTrailFlags[classIndex] & TrailFlag_ReplaceParticles)) return;
 	
-	bool critical = !!GetEntProp(entity, Prop_Send, "m_bCritical");
 	int team = GetEntProp(entity, Prop_Send, "m_iTeamNum", 1);
 	
-	if (critical)
-	{
-		int redCritEntity = EntRefToEntIndex(RocketRedCriticalEntity[index]);
-		int bluCritEntity = EntRefToEntIndex(RocketBluCriticalEntity[index]);
-		
-		if (redCritEntity != -1 && bluCritEntity != -1)
-		{
-			if (team == view_as<int>(TFTeam_Red))
-			{
-				AcceptEntityInput(bluCritEntity, "Stop");
-				AcceptEntityInput(redCritEntity, "Start");
-			}
-			else if (team == view_as<int>(TFTeam_Blue))
-			{
-				AcceptEntityInput(bluCritEntity, "Start");
-				AcceptEntityInput(redCritEntity, "Stop");
-			}
-		}
-	}
+	// Crit glow swapping is handled by the core plugin's UpdateCritGlow.
+	// m_bCritical is always 0 on the network, so the trails subplugin's
+	// RocketRedCriticalEntity/RocketBluCriticalEntity system never activates.
 	
 	int fakeEntity = EntRefToEntIndex(RocketFakeEntity[index]);
 	
@@ -287,52 +268,9 @@ public void TFDB_OnRocketCreated(int index, int entity)
 				CreateTempParticle(ROCKET_TRAIL_FIRE, position, _, _, fakeEntity, PATTACH_POINT_FOLLOW, 1);
 				TE_SendToAll();
 				
-				bool critical = !!GetEntProp(entity, Prop_Send, "m_bCritical");
-				
-				if (critical)
-				{
-					int redCritEntity = CreateEntityByName("info_particle_system");
-					int bluCritEntity = CreateEntityByName("info_particle_system");
-					
-					if ((redCritEntity != -1) && (bluCritEntity != -1))
-					{
-						TeleportEntity(redCritEntity, position, angles, view_as<float>({0.0, 0.0, 0.0}));
-						TeleportEntity(bluCritEntity, position, angles, view_as<float>({0.0, 0.0, 0.0}));
-						
-						DispatchKeyValue(redCritEntity, "effect_name", ROCKET_CRIT_RED);
-						DispatchKeyValue(bluCritEntity, "effect_name", ROCKET_CRIT_BLU);
-						
-						RocketRedCriticalEntity[index] = EntIndexToEntRef(redCritEntity);
-						RocketBluCriticalEntity[index] = EntIndexToEntRef(bluCritEntity);
-						
-						DispatchSpawn(redCritEntity);
-						DispatchSpawn(bluCritEntity);
-						
-						ActivateEntity(redCritEntity);
-						ActivateEntity(bluCritEntity);
-						
-						SetVariantString("!activator");
-						AcceptEntityInput(redCritEntity, "SetParent", fakeEntity, redCritEntity);
-						
-						SetVariantString("!activator");
-						AcceptEntityInput(bluCritEntity, "SetParent", fakeEntity, bluCritEntity);
-						
-						SetVariantString("trail");
-						AcceptEntityInput(redCritEntity, "SetParentAttachment", fakeEntity, redCritEntity);
-						
-						SetVariantString("trail");
-						AcceptEntityInput(bluCritEntity, "SetParentAttachment", fakeEntity, bluCritEntity);
-						
-						if (team == view_as<int>(TFTeam_Red))
-						{
-							AcceptEntityInput(redCritEntity, "Start");
-						}
-						else if (team == view_as<int>(TFTeam_Blue))
-						{
-							AcceptEntityInput(bluCritEntity, "Start");
-						}
-					}
-				}
+				// Crit glow particles are managed by the core plugin's UpdateCritGlow.
+				// m_bCritical is always 0 on the network, so the trails subplugin
+				// does not create its own crit glow entities.
 			}
 		}
 	}

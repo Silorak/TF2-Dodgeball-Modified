@@ -117,6 +117,9 @@ int         RocketBounces[MAX_ROCKETS];
 bool        RocketHomingPaused[MAX_ROCKETS];
 bool        RocketIsDragPause[MAX_ROCKETS];     // true = drag pause (per-frame unpause), false = bounce pause (timer unpause)
 int         RocketDragPauseEndTick[MAX_ROCKETS]; // GetGameTickCount() when drag pause should end
+int         RocketCritGlow[MAX_ROCKETS];         // Entity ref for server-managed crit glow particle
+int         RocketCritGlowTeam[MAX_ROCKETS];     // Team the current crit glow was created for (avoids same-team recreate)
+bool        RocketIsCritical[MAX_ROCKETS];       // Whether this rocket rolled crit (damage x3, no m_bCritical networking)
 int         RocketCount;
 
 // Classes

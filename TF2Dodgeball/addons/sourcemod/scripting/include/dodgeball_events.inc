@@ -248,17 +248,27 @@ public void OnObjectDeflected(Event event, char[] eventName, bool dontBroadcast)
 		SetEntProp(entity, Prop_Send, "m_iTeamNum", 1, 1);
 	}
 
-	// Engine trail cleanup: TF2 creates a new m_hEffectEntity trail on every
-	// deflect, stacking them. Kill it to prevent FPS drops at 100+ deflects.
-	// The client renders its own rockettrail.pcf trail automatically.
-	KillEngineTrail(entity);
+	// Freeze m_iDeflected at 0: the client's C_TFBaseRocket::OnDataChanged()
+	// compares m_iCachedDeflect against GetDeflected(). If the networked value
+	// never changes from 0, CreateTrails() never re-fires after spawn.
+	// This is the primary mechanism that prevents particle stacking.
+	// (Verified from Valve's SDK 2013 source: tf_weaponbase_rocket.cpp)
+	SetEntProp(entity, Prop_Send, "m_iDeflected", 0);
 
-	// The engine writes m_hEffectEntity during Deflected(), which hasn't
-	// finished when this event fires. Schedule cleanup for next frame.
-	DataPack pack = new DataPack();
-	pack.WriteCell(index);
-	pack.WriteCell(EntIndexToEntRef(entity));
-	RequestFrame(Frame_PostDeflectTrailFix, pack);
+	// m_bCritical stays 0 at all times (never set server-only either).
+	// Crit damage is handled by multiplying the damage value directly.
+	// The engine's Deflected() may call SetCritical(true) if the deflector
+	// has crit boost — re-zero it unconditionally.
+	SetEntProp(entity, Prop_Send, "m_bCritical", 0, 1);
+
+	// Since CreateTrails no longer re-fires, the client won't swap the crit glow.
+	// Swap it server-side using the rocket's new team (already set by Deflected()).
+	// Only for crit rockets — non-crit rockets have no glow to swap.
+	if (RocketIsCritical[index])
+	{
+		int newTeam = GetEntProp(entity, Prop_Send, "m_iTeamNum");
+		UpdateCritGlow(index, entity, newTeam);
+	}
 }
 
 /**
@@ -276,6 +286,19 @@ public void OnGameFrame()
 		if (RocketClassBehaviour[RocketClass[index]] == Behaviour_Homing)
 		{
 			HomingRocketThink(index);
+		}
+
+		// Sync crit glow position to rocket (not parented to avoid velocity clamp spam)
+		if (RocketCritGlow[index] != INVALID_ENT_REFERENCE)
+		{
+			int glow = EntRefToEntIndex(RocketCritGlow[index]);
+			int entity = EntRefToEntIndex(RocketEntity[index]);
+			if (glow != -1 && entity != -1 && IsValidEntity(glow) && IsValidEntity(entity))
+			{
+				float pos[3];
+				GetEntPropVector(entity, Prop_Send, "m_vecOrigin", pos);
+				TeleportEntity(glow, pos, NULL_VECTOR, NULL_VECTOR);
+			}
 		}
 	}
 }
