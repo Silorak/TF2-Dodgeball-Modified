@@ -10,7 +10,7 @@
 #define PLUGIN_AUTHOR      "x07x08, Silorak"
 #define PLUGIN_DESCRIPTION "Various rocket votes."
 #define PLUGIN_VERSION     "2.2.0"
-#define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball-Modified"
+#define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball"
 
 int g_iSpawnersCount;
 

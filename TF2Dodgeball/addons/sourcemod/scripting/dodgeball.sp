@@ -20,7 +20,7 @@
 #define PLUGIN_NAME             "[TF2] Dodgeball"
 #define PLUGIN_AUTHOR           "Damizean, x07x08 continued by Silorak"
 #define PLUGIN_VERSION          "2.2.0"
-#define PLUGIN_CONTACT          "https://github.com/Silorak/TF2-Dodgeball-Modified"
+#define PLUGIN_CONTACT          "https://github.com/Silorak/TF2-Dodgeball"
 
 enum Musics
 {

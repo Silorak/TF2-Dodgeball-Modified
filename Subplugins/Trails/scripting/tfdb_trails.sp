@@ -14,7 +14,7 @@
 #define PLUGIN_AUTHOR      "x07x08, Silorak"
 #define PLUGIN_DESCRIPTION "Customizable rocket trails"
 #define PLUGIN_VERSION     "2.2.0"
-#define PLUGIN_URL         "https://github.com/x07x08/TF2-Dodgeball-Modified"
+#define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball"
 
 enum ParticleAttachmentType
 {

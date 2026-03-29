@@ -135,7 +135,7 @@ ConVar CvarImmunityFlag;
 ConVar CvarAdminHud;
 
 // Admin HUD synchronizer — persistent overlay for admins showing live scores
-Handle HudSync = INVALID_HANDLE;
+Handle HudSync = null;
 
 // ============================================================================
 // Plugin Info
@@ -146,7 +146,7 @@ public Plugin myinfo = {
     author      = "Silorak",
     description = "Dodgeball Anti Cheat",
     version     = PLUGIN_VERSION,
-    url         = "https://github.com/tfdb-anticheat"
+    url         = "https://github.com/Silorak/TF2-Dodgeball"
 };
 
 // ============================================================================
@@ -263,12 +263,23 @@ public void OnPluginStart()
         }
     }
 
-    CreateTimer(CvarDecayInterval.FloatValue, Timer_DecayScores, _, TIMER_REPEAT);
-    CreateTimer(1.0, Timer_AdminHud, _, TIMER_REPEAT);
+    CreateTimer(CvarDecayInterval.FloatValue, Timer_DecayScores, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+    CreateTimer(1.0, Timer_AdminHud, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 
     RegAdminCmd("sm_ac_status", Command_Status, ADMFLAG_BAN, "Show anti-cheat status for all players.");
     RegAdminCmd("sm_ac_reset", Command_Reset, ADMFLAG_ROOT, "Reset detection counters for a player.");
     RegAdminCmd("sm_ac_debug_player", Command_DebugPlayer, ADMFLAG_ROOT, "Toggle per-tick CSV debug logging for a player.");
+}
+
+// ============================================================================
+// Map Lifecycle
+// ============================================================================
+
+public void OnMapStart()
+{
+    // Recreate repeating timers — TIMER_FLAG_NO_MAPCHANGE kills them on map end.
+    CreateTimer(CvarDecayInterval.FloatValue, Timer_DecayScores, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+    CreateTimer(1.0, Timer_AdminHud, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
 // ============================================================================
@@ -1269,7 +1280,7 @@ public Action Timer_DecayScores(Handle timer)
 public Action Timer_AdminHud(Handle timer)
 {
     if (!ACEnabled) return Plugin_Continue;
-    if (HudSync == INVALID_HANDLE) return Plugin_Continue;
+    if (HudSync == null) return Plugin_Continue;
     if (!CvarAdminHud.BoolValue) return Plugin_Continue;
 
     // Build the HUD text once, then send to all admins

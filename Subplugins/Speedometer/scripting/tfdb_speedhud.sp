@@ -16,7 +16,7 @@ public Plugin myinfo =
 	author = "Silorak",
 	description = "Displays the speed of active rockets to all players.",
 	version = PLUGIN_VERSION,
-	url = "https://github.com/Silorak/TF2-Dodgeball-Modified"
+	url = "https://github.com/Silorak/TF2-Dodgeball"
 };
 
 // ====================================================================================================

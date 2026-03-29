@@ -16,7 +16,7 @@
 #define PLUGIN_AUTHOR      "Silorak"
 #define PLUGIN_DESCRIPTION "Guardian mode for dodgeball - one powered player vs all"
 #define PLUGIN_VERSION     "2.2.0"
-#define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball-Modified"
+#define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball"
 
 #define MAX_GUARDIAN_CLASSES   16
 #define HUD_UPDATE_INTERVAL    0.1

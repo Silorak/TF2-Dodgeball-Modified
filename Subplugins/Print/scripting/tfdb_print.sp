@@ -8,7 +8,7 @@
 #define PLUGIN_AUTHOR      "x07x08 & Silorak"
 #define PLUGIN_DESCRIPTION "Does what it says"
 #define PLUGIN_VERSION     "2.2.0"
-#define PLUGIN_URL         "https://github.com/x07x08/TF2-Dodgeball-Modified"
+#define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball"
 
 char CmdBuffer[255];
 char ExplodeBuffer[32][255];
