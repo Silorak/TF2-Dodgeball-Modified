@@ -287,19 +287,6 @@ public void OnGameFrame()
 		{
 			HomingRocketThink(index);
 		}
-
-		// Sync crit glow position to rocket (not parented to avoid velocity clamp spam)
-		if (RocketCritGlow[index] != INVALID_ENT_REFERENCE)
-		{
-			int glow = EntRefToEntIndex(RocketCritGlow[index]);
-			int entity = EntRefToEntIndex(RocketEntity[index]);
-			if (glow != -1 && entity != -1 && IsValidEntity(glow) && IsValidEntity(entity))
-			{
-				float pos[3];
-				GetEntPropVector(entity, Prop_Send, "m_vecOrigin", pos);
-				TeleportEntity(glow, pos, NULL_VECTOR, NULL_VECTOR);
-			}
-		}
 	}
 }
 

@@ -111,6 +111,7 @@ void CreateRocket(int spawnerEntity, int spawnerClass, int team, int rocketClass
 	NextSpawnTime = GetGameTime() + SpawnersInterval[spawnerClass];
 
 	SDKHook(entity, SDKHook_StartTouch, OnStartTouch);
+	SDKHook(entity, SDKHook_OnTakeDamage, OnRocketTakeDamage);
 
 	// Create the initial crit glow particle only if the rocket rolled crit.
 	// Non-crit rockets look like normal TF2 rockets (smoke trail only, no glow).
@@ -166,16 +167,7 @@ void DestroyRockets()
 
 /**
  * Creates or replaces the server-managed crit glow particle on a rocket.
- * Since m_iDeflected is frozen (preventing CreateTrails from re-firing),
- * the client no longer swaps the crit glow on deflection. We handle it
- * server-side by creating an info_particle_system with the correct team color.
- *
- * Optimizations over naive destroy-then-create:
- * - Same-team skip: if the glow is already the correct team color, do nothing.
- *   This avoids needless particle churn on same-team re-deflects and bounces.
- * - Staggered timing: create the NEW glow BEFORE destroying the old one, then
- *   defer the old glow's removal by one frame. This eliminates the 1-3 frame
- *   visual gap where neither glow exists (the "trail vanish" on deflect/drag).
+ * Uses proper SetParent attachment for smooth following without position sync.
  *
  * @param index    The rocket's internal index.
  * @param entity   The rocket entity index.
@@ -183,22 +175,16 @@ void DestroyRockets()
  */
 void UpdateCritGlow(int index, int entity, int team)
 {
-	// Same-team skip: if the current glow is already the correct color,
-	// don't destroy and recreate it. This prevents unnecessary particle
-	// gaps during same-team bounces, re-deflects, and wall bounces.
+	// Same-team skip: if the current glow is already the correct team color,
+	// don't destroy and recreate it.
 	if (RocketCritGlow[index] != INVALID_ENT_REFERENCE && RocketCritGlowTeam[index] == team)
 	{
 		int existingGlow = EntRefToEntIndex(RocketCritGlow[index]);
 		if (existingGlow != -1 && IsValidEntity(existingGlow))
 		{
-			return; // Glow is already correct team color, nothing to do
+			return;
 		}
-		// Glow entity died somehow — fall through to create a new one
 	}
-
-	// Always create team-colored glow for visibility (not gated on m_bCritical).
-	// Since m_bCritical is suppressed for the first snapshot to prevent client glow,
-	// this server-side particle is the only source of the crit aura.
 
 	char particleName[32];
 	if (team == view_as<int>(TFTeam_Blue))
@@ -214,29 +200,35 @@ void UpdateCritGlow(int index, int entity, int team)
 	float pos[3];
 	GetEntPropVector(entity, Prop_Send, "m_vecOrigin", pos);
 	TeleportEntity(newGlow, pos, NULL_VECTOR, NULL_VECTOR);
+
 	DispatchKeyValue(newGlow, "effect_name", particleName);
+	DispatchSpawn(newGlow);
 	ActivateEntity(newGlow);
-	AcceptEntityInput(newGlow, "Start");
 
-	// Do NOT parent to rocket — parenting causes velocity clamping spam at
-	// high speeds. Position is synced manually in OnGameFrame instead.
+	// Parent to rocket - match TF2's native attachment method
+	SetVariantString("!activator");
+	AcceptEntityInput(newGlow, "SetParent", entity, newGlow);
+	SetVariantString("trail");
+	AcceptEntityInput(newGlow, "SetParentAttachment", entity, newGlow);
 
-	// Staggered kill: defer old glow removal to NEXT FRAME so the new glow
-	// has one frame to become visible before the old one disappears.
-	// This eliminates the 1-3 frame gap that caused "trail vanish" on deflect.
+	// Clean up old glow if exists
 	if (RocketCritGlow[index] != INVALID_ENT_REFERENCE)
 	{
 		int oldGlowRef = RocketCritGlow[index];
 		int oldGlow = EntRefToEntIndex(oldGlowRef);
 		if (oldGlow != -1 && IsValidEntity(oldGlow))
 		{
-			RequestFrame(Frame_KillOldCritGlow, oldGlowRef);
+			AcceptEntityInput(oldGlow, "Stop");
+			RemoveEntity(oldGlow);
 		}
 	}
+
+	AcceptEntityInput(newGlow, "Start");
 
 	RocketCritGlow[index] = EntIndexToEntRef(newGlow);
 	RocketCritGlowTeam[index] = team;
 }
+
 
 /**
  * RequestFrame callback — kills the previous crit glow one frame after
@@ -934,4 +926,19 @@ void CheckRoundDelays(int index)
 	{
 		RocketSpeed[index] += CvarDelayPreventionSpeedup.FloatValue;
 	}
+}
+
+public Action OnRocketTakeDamage(int victim, int &attacker, int &inflictor, 
+                                  float &damage, int &damagetype, int &weapon, 
+                                  float damageForce[3], float damagePosition[3])
+{
+	int index = FindRocketByEntity(inflictor);
+	if (index == -1) return Plugin_Continue;
+
+	if (RocketIsCritical[index])
+	{
+		damagetype |= DMG_CRIT;
+	}
+
+	return Plugin_Continue;
 }
