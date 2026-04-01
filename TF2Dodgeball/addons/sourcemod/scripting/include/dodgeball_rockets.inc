@@ -208,8 +208,12 @@ void UpdateCritGlow(int index, int entity, int team)
 	// Parent to rocket - match TF2's native attachment method
 	SetVariantString("!activator");
 	AcceptEntityInput(newGlow, "SetParent", entity, newGlow);
-	SetVariantString("trail");
-	AcceptEntityInput(newGlow, "SetParentAttachment", entity, newGlow);
+
+	if (LookupEntityAttachment(entity, "trail") > 0)
+	{
+		SetVariantString("trail");
+		AcceptEntityInput(newGlow, "SetParentAttachment", entity, newGlow);
+	}
 
 	// Clean up old glow if exists
 	if (RocketCritGlow[index] != INVALID_ENT_REFERENCE)
@@ -227,24 +231,6 @@ void UpdateCritGlow(int index, int entity, int team)
 
 	RocketCritGlow[index] = EntIndexToEntRef(newGlow);
 	RocketCritGlowTeam[index] = team;
-}
-
-
-/**
- * RequestFrame callback — kills the previous crit glow one frame after
- * the replacement was created. This staggered timing ensures there is
- * never a frame where no glow exists on the rocket.
- *
- * @param glowRef    Entity reference of the old glow to destroy.
- */
-void Frame_KillOldCritGlow(int glowRef)
-{
-	int glow = EntRefToEntIndex(glowRef);
-	if (glow != -1 && IsValidEntity(glow))
-	{
-		AcceptEntityInput(glow, "Stop");
-		RemoveEntity(glow);
-	}
 }
 
 
@@ -364,6 +350,11 @@ bool ProcessDeflection(int index, int entity, int rocketClass, RocketFlags flags
 		GetAngleVectors(viewAngles, direction, NULL_VECTOR, NULL_VECTOR);
 		CopyVectors(direction, RocketDirection[index]);
 		UpdateRocketSkin(entity, team, TestFlags(flags, RocketFlag_IsNeutral));
+		
+		if (RocketIsCritical[index])
+		{
+			UpdateCritGlow(index, entity, team);
+		}
 
 		if (!(flags & RocketFlag_CanBeStolen))
 		{

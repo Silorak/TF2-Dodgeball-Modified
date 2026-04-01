@@ -277,6 +277,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 	CreateNative("TFDB_SetRocketFlags", Native_SetRocketFlags);
 	CreateNative("TFDB_GetRocketTarget", Native_GetRocketTarget);
 	CreateNative("TFDB_SetRocketTarget", Native_SetRocketTarget);
+	CreateNative("TFDB_GetRocketOwner", Native_GetRocketOwner);
 	CreateNative("TFDB_GetRocketEventDeflections", Native_GetRocketEventDeflections);
 	CreateNative("TFDB_SetRocketEventDeflections", Native_SetRocketEventDeflections);
 	CreateNative("TFDB_GetRocketDeflections", Native_GetRocketDeflections);

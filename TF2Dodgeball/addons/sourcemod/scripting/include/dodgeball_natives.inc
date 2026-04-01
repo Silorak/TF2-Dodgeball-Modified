@@ -55,6 +55,16 @@ public any Native_SetRocketTarget(Handle plugin, int numParams) {
 	return 0;
 }
 
+public any Native_GetRocketOwner(Handle plugin, int numParams) {
+	int index = GetNativeCell(1);
+	if (!RocketIsValid[index]) return -1;
+	
+	int entity = EntRefToEntIndex(RocketEntity[index]);
+	if (entity == -1) return -1;
+	
+	return GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
+}
+
 public any Native_GetRocketEventDeflections(Handle plugin, int numParams) {
 	return RocketEventDeflections[GetNativeCell(1)];
 }

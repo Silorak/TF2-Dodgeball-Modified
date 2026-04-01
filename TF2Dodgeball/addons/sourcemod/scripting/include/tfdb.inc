@@ -299,6 +299,14 @@ native void TFDB_SetRocketFlags(int iIndex, RocketFlags iFlags);
 native int TFDB_GetRocketTarget(int iIndex);
 
 /**
+ * Gets the owner of a rocket (who deflected it last).
+ *
+ * @param iIndex    The rocket's internal index.
+ * @return          The owner client index, or -1 if no owner.
+ */
+native int TFDB_GetRocketOwner(int iIndex);
+
+/**
  * Sets the target of a rocket.
  *
  * @param iIndex    The rocket's internal index.
@@ -890,6 +898,7 @@ public void __pl_TFDB_SetNTVOptional()
 	MarkNativeAsOptional("TFDB_SetRocketFlags");
 	MarkNativeAsOptional("TFDB_GetRocketTarget");
 	MarkNativeAsOptional("TFDB_SetRocketTarget");
+	MarkNativeAsOptional("TFDB_GetRocketOwner");
 	MarkNativeAsOptional("TFDB_GetRocketEventDeflections");
 	MarkNativeAsOptional("TFDB_SetRocketEventDeflections");
 	MarkNativeAsOptional("TFDB_GetRocketDeflections");
