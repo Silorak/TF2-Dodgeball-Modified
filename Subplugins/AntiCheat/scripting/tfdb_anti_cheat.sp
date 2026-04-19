@@ -23,8 +23,8 @@ int    ACLogLevel;
 int    ACActionThreshold;
 int    ACActionMode;
 int    ACSilentHitsPerPoint;
-int    ACTimingHitsPerPoint;
 int    ACDecayAmount;
+int    ACBanDuration;   // Minutes (0 = perma)
 char   ACImmunityFlag[4];
 
 // ============================================================================
@@ -35,8 +35,8 @@ char   ACImmunityFlag[4];
 #define PLUGIN_VERSION "2.2.0"
 
 // Ring buffer depth for angle history.
-// The cheat's AntiCheatCompatibility keeps 5 frames of history to mask snaps,
-// so we keep more to see through the smoothing.
+// Some cheats smooth their angle snaps over multiple frames to defeat
+// short-window detectors. A 32-frame window sees through that smoothing.
 #define ANGLE_HISTORY   32
 
 // Ring buffer depth for airblast timing samples.
@@ -46,6 +46,13 @@ char   ACImmunityFlag[4];
 // tick the rocket enters the deflection sphere (128 hu radius * multiplier).
 // Expressed as time, converted to ticks at runtime.
 #define PERFECT_TIMING_TIME 0.03 // ~2 ticks at 66, ~4 at 128
+
+// Reaction-time floor for ReactTimeFloor detection.
+// Per psychophysics literature: hard physiological floor ~100ms;
+// practical visual simple-RT floor ~150ms; typical ~180-250ms.
+// 0.120s is a defensible "below this is physically impossible without anticipation,
+// and TFDB's random target assignment prevents anticipation of specific rockets."
+#define REACT_FLOOR_SECS 0.120
 
 // ============================================================================
 // Per-client data structures
@@ -79,9 +86,21 @@ int          TimingSamples[MAXPLAYERS + 1];
 // Detection counters - accumulated evidence, not instant bans.
 int   PerfectTimingDetections[MAXPLAYERS + 1];
 int   InhaleExhaleDetections[MAXPLAYERS + 1];  // ConsistentTiming counter
-int   DragSnapbackDetections[MAXPLAYERS + 1];  // Post-drag-pause 3-angle snapback (TFDB-specific)
+int   DragSnapbackDetections[MAXPLAYERS + 1];  // Post-control-delay 3-angle snapback (TFDB-specific)
 int   AirblastFacingDetections[MAXPLAYERS + 1]; // Airblast succeeded while not facing rocket
+int   AirblastFacingStreak[MAXPLAYERS + 1];     // Consecutive not-facing deflects; scored only at streak >=3
+int   OneTickM2Detections[MAXPLAYERS + 1];      // IN_ATTACK2 pressed for exactly 1 tick (cheat signature)
+int   OneTickM2Streak[MAXPLAYERS + 1];          // Consecutive 1-tick presses; scored at streak >=3
+int   M2PressStartTick[MAXPLAYERS + 1];         // Tick when IN_ATTACK2 began; used to measure hold duration
+
+// Reaction-time floor tracking (physiological floor ~120ms per the
+// psychophysics literature). When a rocket becomes targeted at a client,
+// record the moment. If they deflect within 120ms of that moment, it's
+// below what any human can visually react to.
+float LastRocketIncomingTime[MAXPLAYERS + 1];   // Seconds (GetEngineTime) when any rocket last targeted this client
+int   ReactTimeFloorDetections[MAXPLAYERS + 1]; // Count of sub-floor deflects
 int   AntiAimDetections[MAXPLAYERS + 1];       // m_angEyeAngles pitch outside [-89, 89]
+int   SnapAimDetections[MAXPLAYERS + 1];       // Large angle snap coinciding with airblast
 int   PerfectStreakScore[MAXPLAYERS + 1];       // Scored streak milestones (not raw count)
 float LastDetectionTime[MAXPLAYERS + 1];
 
@@ -97,6 +116,12 @@ int   LastAirblastTick[MAXPLAYERS + 1];
 bool  JustAirblasted[MAXPLAYERS + 1];
 
 // Angle state for snapback detection
+
+// SnapAim tracking — detects large angle jumps around airblast ticks
+float PreSnapAngles[MAXPLAYERS + 1][3];  // Angles before the snap started
+bool  SnapPending[MAXPLAYERS + 1];       // We saw a big snap, waiting for return
+int   SnapStartTick[MAXPLAYERS + 1];     // When the snap happened
+bool  SnapHadAirblast[MAXPLAYERS + 1];   // Was ATK2 pressed during/near the snap
 
 // Previous tick data
 float PrevAngles[MAXPLAYERS + 1][3];
@@ -119,6 +144,10 @@ enum struct DebugState {
 
 DebugState PlayerDebug[MAXPLAYERS + 1];
 
+// Global "collect all" mode — when true, every player who joins gets debug-logged
+// automatically, and logging persists across map changes until disabled with "off".
+bool CollectAll = false;
+
 // ============================================================================
 // ConVars
 // ============================================================================
@@ -128,11 +157,11 @@ ConVar CvarLogLevel;
 ConVar CvarActionThreshold;
 ConVar CvarAction;
 ConVar CvarSilentThreshold;
-ConVar CvarTimingThreshold;
 ConVar CvarDecayInterval;
 ConVar CvarDecayAmount;
 ConVar CvarImmunityFlag;
 ConVar CvarAdminHud;
+ConVar CvarBanDuration;  // Minutes (0 = permanent). Default 1440 = 24h.
 
 // Admin HUD synchronizer — persistent overlay for admins showing live scores
 Handle HudSync = null;
@@ -152,6 +181,17 @@ public Plugin myinfo = {
 // ============================================================================
 // Plugin Lifecycle
 // ============================================================================
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+    MarkNativeAsOptional("TFDB_GetRocketSpeed");
+    MarkNativeAsOptional("TFDB_GetRocketClass");
+    MarkNativeAsOptional("TFDB_GetRocketClassControlDelay");
+    MarkNativeAsOptional("TFDB_FindRocketByEntity");
+    MarkNativeAsOptional("TFDB_GetRocketTarget");
+    MarkNativeAsOptional("TFDB_GetRocketDeflections");
+    return APLRes_Success;
+}
 
 public void OnPluginStart()
 {
@@ -190,12 +230,6 @@ public void OnPluginStart()
         _, true, 1.0, true, 20.0
     );
 
-    CvarTimingThreshold = CreateConVar(
-        "tfdb_ac_timing_hits", "8",
-        "Perfect timing raw detections needed per score point.",
-        _, true, 1.0, true, 30.0
-    );
-
     // Score decay: keeps the system from accumulating stale evidence
     CvarDecayInterval = CreateConVar(
         "tfdb_ac_decay_interval", "60.0",
@@ -223,6 +257,14 @@ public void OnPluginStart()
         _, true, 0.0, true, 1.0
     );
 
+    // Ban duration when action=2. Minutes. 0 = permanent.
+    // Default 1440 (24h) — safer than permanent on automated detection.
+    CvarBanDuration = CreateConVar(
+        "tfdb_ac_ban_duration", "1440",
+        "Ban duration in minutes when action=2 (ban). 0 = permanent.",
+        _, true, 0.0, true, 525600.0  // max 1 year
+    );
+
     AutoExecConfig(true, "tfdb_anticheat");
 
     // Create log directory — LogToFile does NOT create directories automatically.
@@ -244,8 +286,8 @@ public void OnPluginStart()
     CvarActionThreshold.AddChangeHook(OnConVarChanged);
     CvarAction.AddChangeHook(OnConVarChanged);
     CvarSilentThreshold.AddChangeHook(OnConVarChanged);
-    CvarTimingThreshold.AddChangeHook(OnConVarChanged);
     CvarDecayAmount.AddChangeHook(OnConVarChanged);
+    CvarBanDuration.AddChangeHook(OnConVarChanged);
     CvarImmunityFlag.AddChangeHook(OnConVarChanged);
 
     // Initial cache population
@@ -263,12 +305,18 @@ public void OnPluginStart()
         }
     }
 
-    CreateTimer(CvarDecayInterval.FloatValue, Timer_DecayScores, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-    CreateTimer(1.0, Timer_AdminHud, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-
     RegAdminCmd("sm_ac_status", Command_Status, ADMFLAG_BAN, "Show anti-cheat status for all players.");
     RegAdminCmd("sm_ac_reset", Command_Reset, ADMFLAG_ROOT, "Reset detection counters for a player.");
-    RegAdminCmd("sm_ac_debug_player", Command_DebugPlayer, ADMFLAG_ROOT, "Toggle per-tick CSV debug logging for a player.");
+    RegAdminCmd("sm_ac_debug_player", Command_DebugPlayer, ADMFLAG_ROOT, "Toggle debug CSV logging. No args = collect all (toggle). With player = single target.");
+
+    // Late-load: if the plugin is loaded mid-map (sm plugins load), OnMapStart
+    // won't fire until the next map change. Decay + HUD timers would never
+    // fire, leaving scores accumulating forever. Manually invoke OnMapStart
+    // to create the timers right now when we detect we're already in a map.
+    char mapName[64];
+    if (GetCurrentMap(mapName, sizeof(mapName)) && mapName[0] != '\0') {
+        OnMapStart();
+    }
 }
 
 // ============================================================================
@@ -280,6 +328,17 @@ public void OnMapStart()
     // Recreate repeating timers — TIMER_FLAG_NO_MAPCHANGE kills them on map end.
     CreateTimer(CvarDecayInterval.FloatValue, Timer_DecayScores, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
     CreateTimer(1.0, Timer_AdminHud, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public void OnPluginEnd()
+{
+    // Release the HUD synchronizer handle. SM will clean on unload but being
+    // explicit avoids handle-table pressure during dev iteration.
+    if (HudSync != null)
+    {
+        delete HudSync;
+        HudSync = null;
+    }
 }
 
 // ============================================================================
@@ -304,6 +363,30 @@ public void OnAllPluginsLoaded()
 }
 
 #if defined _tfdb_included
+// Record moment each rocket becomes targeted at a client. Epoch for the
+// ReactTimeFloor detection — a legit player needs >120ms from this moment
+// before they can physically react and press airblast.
+public void TFDB_OnRocketCreated(int index, int entity)
+{
+    if (!ACEnabled) return;
+    int target = TFDB_GetRocketTarget(index);
+    if (target > 0 && target <= MaxClients && IsValidClient(target))
+    {
+        LastRocketIncomingTime[target] = GetEngineTime();
+    }
+}
+
+// Runs just BEFORE a deflect completes. The new target is the player the
+// rocket is re-assigned to; they become the reaction-window epoch.
+public Action TFDB_OnRocketDeflectPre(int index, int entity, int owner, int &newTarget)
+{
+    if (ACEnabled && newTarget > 0 && newTarget <= MaxClients && IsValidClient(newTarget))
+    {
+        LastRocketIncomingTime[newTarget] = GetEngineTime();
+    }
+    return Plugin_Continue;
+}
+
 // Hook TFDB deflect forward for precise rocket-player attribution.
 // This is far more accurate than scanning entities in PreThink because
 // TFDB tells us exactly WHO deflected WHICH rocket at WHAT speed.
@@ -311,6 +394,28 @@ public void TFDB_OnRocketDeflect(int index, int entity, int owner)
 {
     if (!ACEnabled || !IsValidClient(owner))
         return;
+
+    // Admin immunity: without this gate, detection counters would accumulate
+    // on immune admins — showing them on the admin HUD and polluting their
+    // decay state. Gate every downstream detection on this single check.
+    if (HasImmunity(owner))
+        return;
+
+    // ReactTimeFloor: compare deflect moment to when rocket last became
+    // incoming to this client. Sub-120ms = below physiological floor.
+    // LastRocketIncomingTime == 0.0 means "never tracked" — skip first
+    // few seconds after plugin load when state hasn't warmed up.
+    if (LastRocketIncomingTime[owner] > 0.0)
+    {
+        float elapsed = GetEngineTime() - LastRocketIncomingTime[owner];
+        if (elapsed < REACT_FLOOR_SECS && elapsed > 0.0)
+        {
+            ReactTimeFloorDetections[owner]++;
+            LogDetection(owner, "ReactTimeFloor",
+                "elapsed=%.3fs (floor=%.3fs) - physiologically impossible",
+                elapsed, REACT_FLOOR_SECS);
+        }
+    }
 
     // Record the exact rocket speed at deflection time.
     float speed = TFDB_GetRocketSpeed(index);
@@ -330,19 +435,16 @@ public void TFDB_OnRocketDeflect(int index, int entity, int owner)
         TimingHistory[owner][tIdx].rocketDistance = GetVectorDistance(clientPos, rocketPos);
     }
 
-    // Estimate ticks margin (how close to the deflection sphere boundary).
+    // Estimate ticks margin (conservative lower bound since rocket curve
+    // makes actual travel longer than straight-line). Kept for downstream
+    // ConsistentTiming analysis — its VARIANCE is meaningful even when the
+    // absolute value is biased low.
     //
-    // NOTE ON ROCKET CURVES: Dodgeball rockets don't fly straight — they
-    // curve toward their target via LerpVectors with a turn rate each frame.
-    // The cheat's PredictOrigin also uses straight-line projection from
-    // instantaneous velocity, so our calculation matches the cheat's model.
-    //
-    // Since the curve makes the actual travel path longer than the straight
-    // line, our margin estimate is a conservative lower bound — we'll
-    // undercount rather than overcount perfect timing hits. That's correct
-    // behavior for anti-cheat (fewer false positives).
-    //
-    // Speed in dodgeball typically caps around 3500 HU/s in practice.
+    // NOTE: do NOT add a "PerfectTiming" per-deflect check based on
+    // `RoundToFloor(dist / (speed * tickInterval)) == 0` — the straight-line
+    // distance makes this return 0 for any close deflect, so it fires on
+    // every legitimate close-range airblast. Streak and ConsistentTiming
+    // detections cover the same pattern more reliably.
     float deflectionRadius = 128.0;
     float distToSphere = TimingHistory[owner][tIdx].rocketDistance - deflectionRadius;
     if (distToSphere < 0.0) distToSphere = 0.0;
@@ -357,14 +459,6 @@ public void TFDB_OnRocketDeflect(int index, int entity, int owner)
     TimingIndex[owner]++;
     if (TimingSamples[owner] < TIMING_HISTORY) TimingSamples[owner]++;
 
-    if (ticksMargin <= RoundToCeil(PERFECT_TIMING_TIME / GetTickInterval()) && TimingHistory[owner][tIdx].rocketDistance < deflectionRadius + 80.0)
-    {
-        PerfectTimingDetections[owner]++;
-        LogDetection(owner, "PerfectTiming",
-            "dist=%.0f speed=%.0f ticksMargin=%d (via TFDB)",
-            TimingHistory[owner][tIdx].rocketDistance, speed, ticksMargin);
-    }
-
     // Analyze timing consistency with enough samples
     if (TimingSamples[owner] >= 8)
     {
@@ -372,9 +466,9 @@ public void TFDB_OnRocketDeflect(int index, int entity, int owner)
     }
 
     // ------------------------------------------------------------------
-    // AIRBLAST-WITHOUT-FACING: Detects PSilent (bSendPacket choking).
+    // AIRBLAST-WITHOUT-FACING: Detects tick-choking silent-aim.
     //
-    // The cheat's PSilent auto-airblast works by:
+    // Tick-choking auto-airblast works by:
     //   1. Choking the tick where viewangles are snapped to the rocket
     //   2. Firing IN_ATTACK2 on the choked tick
     //   3. Restoring viewangles and sending the next tick
@@ -389,8 +483,8 @@ public void TFDB_OnRocketDeflect(int index, int entity, int owner)
     // the player must have used silent aim on a choked tick.
     //
     // False positive risk: a player might legitimately look away in the
-    // same tick the deflection processes. But combined with consistent
-    // timing, this becomes very strong evidence.
+    // same tick the deflection processes. Streak requirement (below) plus
+    // ConsistentTiming correlation make this strong evidence.
     // ------------------------------------------------------------------
     if (IsValidEntity(entity))
     {
@@ -416,10 +510,10 @@ public void TFDB_OnRocketDeflect(int index, int entity, int owner)
             // LEGIT PLAYER: Faces rocket → airblasts → flicks away.
             //   At least 1-2 ticks in the window will show < 50° to rocket.
             //
-            // PSILENT CHEAT: Never faces rocket in SENT ticks. The facing
-            //   angle was on a CHOKED tick, which doesn't appear in our
-            //   history because AntiCheatCompatibility smoothed it.
-            //   All visible ticks show the player's REAL view direction.
+            // TICK-CHOKING CHEAT: Never faces rocket in SENT ticks. The
+            //   facing angle was on a CHOKED tick, which doesn't appear in
+            //   our history because the cheat's anti-detection smoothing
+            //   erased it. All visible ticks show the player's REAL view.
             //
             // Why 50° not 60°: the deflection sphere is generous, but a
             // legit player who was tracking the rocket should have at least
@@ -455,34 +549,52 @@ public void TFDB_OnRocketDeflect(int index, int entity, int owner)
             if (currentDelta < bestDelta)
                 bestDelta = currentDelta;
 
-            // If NO tick in the window faced the rocket, this is PSilent.
-            // The airblast succeeded (TFDB_OnRocketDeflect fired) but the
-            // player's visible angles never pointed at the rocket.
+            // If NO tick in the window faced the rocket, this is
+            // tick-choking silent-aim. The airblast succeeded
+            // (TFDB_OnRocketDeflect fired) but the player's visible angles
+            // never pointed at the rocket.
+            //
+            // Tuning: a single not-facing deflect can happen legit on
+            // glance-deflects, quick camera flicks, or rockets entering
+            // from behind in FOV dead zones. Require a STREAK of 3
+            // consecutive not-facing deflects before counting — this is
+            // how a real tick-choking cheat looks (every deflect is silent),
+            // while a legit player breaks the streak with a normal deflect.
             if (!facedRocket)
             {
-                AirblastFacingDetections[owner]++;
-                LogDetection(owner, "AirblastFacing",
-                    "bestDelta=%.1f eyeAng=(%.1f,%.1f) rocketAng=(%.1f,%.1f) dist=%.0f",
-                    bestDelta, currentAngles[0], currentAngles[1],
-                    angleToRocket[0], angleToRocket[1], dist);
+                AirblastFacingStreak[owner]++;
+                if (AirblastFacingStreak[owner] >= 3)
+                {
+                    AirblastFacingDetections[owner]++;
+                    LogDetection(owner, "AirblastFacing",
+                        "streak=%d bestDelta=%.1f eyeAng=(%.1f,%.1f) rocketAng=(%.1f,%.1f) dist=%.0f",
+                        AirblastFacingStreak[owner],
+                        bestDelta, currentAngles[0], currentAngles[1],
+                        angleToRocket[0], angleToRocket[1], dist);
+                }
+            }
+            else
+            {
+                // Faced rocket this time → streak broken.
+                AirblastFacingStreak[owner] = 0;
             }
         }
     }
 
     // ------------------------------------------------------------------
-    // DRAG-AWARE DETECTION: 3-angle snapback via TFDB drag pause.
+    // CONTROL-DELAY-AWARE DETECTION: 3-angle snapback via TFDB control delay (blind window).
     //
-    // The cheat's auto-airblast with Redirect does this:
+    // Snap-airblast-restore cheats do this:
     //   1. Player's real view = angle A (PreDeflect)
     //   2. Cheat snaps to rocket = angle B (Deflect) + fires IN_ATTACK2
-    //   3. AntiCheatCompatibility lerps back within 1-3 ticks
-    //   4. After drag pause, player's view = angle C (PostDrag) ≈ A
+    //   3. Cheat's anti-detection smoothing lerps back within 1-3 ticks
+    //   4. After control delay expires, player's view = angle C (PostDrag) ≈ A
     //
     // A LEGIT DRAGGER does this:
     //   1. Player faces rocket = angle A ≈ B (already looking at it)
     //   2. Airblasts = angle B (Deflect)
-    //   3. Drags mouse to aim at enemy target during drag pause
-    //   4. After drag pause = angle C ≠ A, ≠ B (new target direction)
+    //   3. Drags mouse to aim at enemy target during control delay (blind window)
+    //   4. After control delay expires = angle C ≠ A, ≠ B (new target direction)
     //
     // OLD (BROKEN) DETECTION: |B - C| > 45°
     //   → Flags legit draggers (who move from B to C)
@@ -490,7 +602,7 @@ public void TFDB_OnRocketDeflect(int index, int entity, int owner)
     //
     // NEW (CORRECT) DETECTION: |C - A| < threshold AND |B - A| > 15°
     //   → The cheat snapped FROM A to B (large departure) then returned
-    //     to A after drag pause (near-perfect return = snapback)
+    //     to A after control delay (near-perfect return = snapback)
     //   → Legit draggers have A ≈ B (no departure) so |B - A| < 15°
     //     and C is somewhere new → never triggers
     //
@@ -498,23 +610,23 @@ public void TFDB_OnRocketDeflect(int index, int entity, int owner)
     // A is pulled from AngleHistory — we look 4 ticks back from the
     // current tick to get the angle BEFORE the cheat started snapping.
     // B is GetClientEyeAngles at the moment of TFDB_OnRocketDeflect.
-    // C is GetClientEyeAngles after the drag pause timer fires.
+    // C is GetClientEyeAngles after the control delay timer fires.
     // ------------------------------------------------------------------
     int rocketClass = TFDB_GetRocketClass(index);
-    float dragDuration = TFDB_GetRocketClassDragPauseDuration(rocketClass);
+    float dragDuration = TFDB_GetRocketClassControlDelay(rocketClass);
 
     if (dragDuration > 0.0)
     {
         // Angle B: where the player is looking RIGHT NOW at deflection time.
-        // If the cheat has Redirect on, this is the snapped angle (toward rocket).
-        // If legit, this is where they were naturally aiming.
+        // If the cheat is snapping on airblast, this is the snapped angle
+        // (toward rocket). If legit, this is where they were naturally aiming.
         float deflectAngles[3];
         GetClientEyeAngles(owner, deflectAngles);
 
         // Angle A: where the player was looking BEFORE the deflection.
         // We go 4 ticks back in AngleHistory to get the pre-snap angle.
         // The cheat snaps on the same tick as the airblast, so t-4 should
-        // be before any AntiCheatCompatibility lerping began.
+        // be before any anti-detection lerp-back began.
         // If we don't have enough history, skip this check.
         float preDeflectPitch = deflectAngles[0];
         float preDeflectYaw = deflectAngles[1];
@@ -542,12 +654,12 @@ public void TFDB_OnRocketDeflect(int index, int entity, int owner)
 }
 
 /**
- * Fires after TFDB's drag pause expires. Implements 3-angle snapback detection.
+ * Fires after TFDB's control delay (blind window) expires. Implements 3-angle snapback detection.
  *
  * Angles:
  *   A = PreDeflect (4 ticks before airblast — before cheat snap)
  *   B = Deflect    (at airblast — potentially cheat-snapped)
- *   C = PostDrag   (now, after drag pause — where player is looking)
+ *   C = PostDrag   (now, after control delay — where player is looking)
  *
  * Cheat signature: |B - A| > 15° (cheat snapped) AND |C - A| < 8° (returned to origin)
  * Legit dragger:   |B - A| < 15° (already facing rocket) → no flag regardless of C
@@ -574,7 +686,7 @@ public Action Timer_CheckDragAngle(Handle timer, DataPack pack)
     if (!hasPreDeflect)
         return Plugin_Stop;
 
-    // Angle C: where the player is looking NOW (after drag pause)
+    // Angle C: where the player is looking NOW (after control delay)
     float currentAngles[3];
     GetClientEyeAngles(client, currentAngles);
 
@@ -594,13 +706,13 @@ public Action Timer_CheckDragAngle(Handle timer, DataPack pack)
     // 1. departure > 15°: the cheat snapped viewangles to a different direction
     //    (toward the rocket) at airblast time. A legit player was already
     //    facing the rocket, so their departure is small.
-    // 2. returnToOrigin < 8°: after drag pause, the cheat has snapped back
+    // 2. returnToOrigin < 8°: after control delay, the cheat has snapped back
     //    to within 8° of where it was before. A legit dragger has moved to
     //    a completely new angle (their drag target), so returnToOrigin is large.
     //
-    // The 8° return threshold is generous — the cheat's AntiCheatCompatibility
-    // returns to within 0.1° (REAL_EPSILON). We use 8° to account for natural
-    // mouse drift during the drag pause period while the cheat is "returned".
+    // The 8° return threshold is generous — cheat angle-smoothing typically
+    // returns to within ~0.1°. We use 8° to account for natural mouse drift
+    // during the control delay period while the cheat is "returned".
     if (departure > 15.0 && returnToOrigin < 8.0)
     {
         DragSnapbackDetections[client]++;
@@ -627,8 +739,8 @@ void CacheAllConVars()
     ACActionThreshold = CvarActionThreshold.IntValue;
     ACActionMode = CvarAction.IntValue;
     ACSilentHitsPerPoint = MaxInt(1, CvarSilentThreshold.IntValue);
-    ACTimingHitsPerPoint = MaxInt(1, CvarTimingThreshold.IntValue);
     ACDecayAmount = CvarDecayAmount.IntValue;
+    ACBanDuration = CvarBanDuration.IntValue;
     CvarImmunityFlag.GetString(ACImmunityFlag, sizeof(ACImmunityFlag));
 }
 
@@ -641,6 +753,13 @@ public void OnClientPutInServer(int client)
 {
     ResetClientState(client);
     SDKHook(client, SDKHook_PreThink, OnPreThink);
+
+    // Auto-enable debug logging if global collect mode is on
+    if (CollectAll && !IsFakeClient(client))
+    {
+        // Delay so SteamID is available (not ready in OnClientPutInServer)
+        CreateTimer(3.0, Timer_AutoDebugPlayer, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+    }
 }
 
 public void OnClientDisconnect(int client)
@@ -671,7 +790,14 @@ void ResetClientState(int client)
     InhaleExhaleDetections[client]   = 0;
     DragSnapbackDetections[client]   = 0;
     AirblastFacingDetections[client] = 0;
+    AirblastFacingStreak[client]     = 0;
     AntiAimDetections[client]        = 0;
+    SnapAimDetections[client]        = 0;
+    OneTickM2Detections[client]      = 0;
+    OneTickM2Streak[client]          = 0;
+    M2PressStartTick[client]         = 0;
+    ReactTimeFloorDetections[client] = 0;
+    LastRocketIncomingTime[client]   = 0.0;
     PerfectStreakScore[client]        = 0;
     LastDetectionTime[client]        = 0.0;
 
@@ -683,6 +809,13 @@ void ResetClientState(int client)
     LastAirblastTime[client]  = 0.0;
     LastAirblastTick[client]  = 0;
     JustAirblasted[client]    = false;
+
+    PreSnapAngles[client][0] = 0.0;
+    PreSnapAngles[client][1] = 0.0;
+    PreSnapAngles[client][2] = 0.0;
+    SnapPending[client]      = false;
+    SnapStartTick[client]    = 0;
+    SnapHadAirblast[client]  = false;
 
     PrevAngles[client][0] = 0.0;
     PrevAngles[client][1] = 0.0;
@@ -765,7 +898,8 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse,
 
     // If another plugin modified the angles between OnPlayerRunCmdPre and
     // OnPlayerRunCmd, the delta we'd see isn't from the client's usercmd.
-    // Skip angle-based detections this tick to avoid false positives.
+    // Skip snap-based detections this tick to avoid false positives.
+    // (E.g. PvB's aim override or Guardian's target-lock rotate angles.)
     bool anglesModifiedByPlugin = false;
     if (RawAnglesValid[client])
     {
@@ -808,13 +942,16 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse,
     // AntiAim. Zero false positive rate.
     // ------------------------------------------------------------------
 
-    float eyePitch = GetEntPropFloat(client, Prop_Send, "m_angEyeAngles", 0);
-    if (eyePitch > 89.1 || eyePitch < -89.1)
+    if (HasEntProp(client, Prop_Send, "m_angEyeAngles"))
     {
-        AntiAimDetections[client]++;
-        LogDetection(client, "AntiAim",
-            "m_angEyeAngles[0]=%.2f (valid range [-89, 89])",
-            eyePitch);
+        float eyePitch = GetEntPropFloat(client, Prop_Send, "m_angEyeAngles", 0);
+        if (eyePitch > 89.1 || eyePitch < -89.1)
+        {
+            AntiAimDetections[client]++;
+            LogDetection(client, "AntiAim",
+                "m_angEyeAngles[0]=%.2f (valid range [-89, 89])",
+                eyePitch);
+        }
     }
 
     // ------------------------------------------------------------------
@@ -827,6 +964,111 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse,
         LastAirblastTime[client] = GetGameTime();
         LastAirblastTick[client] = currentTick;
         JustAirblasted[client] = true;
+        M2PressStartTick[client] = currentTick;
+    }
+
+    // ------------------------------------------------------------------
+    // DETECTION: 1-tick IN_ATTACK2 press
+    //
+    // Common TF2 auto-airblast implementations set IN_ATTACK2 for exactly
+    // one tick per fire; human players physically hold M2 for 6-15 ticks
+    // (~90-220ms) before releasing it. The fingerprint is robust — reviewed
+    // public auto-airblast implementations do not mask it by holding the
+    // button across ticks.
+    //
+    // Requires a streak of 3 consecutive 1-tick presses to fire. A legit
+    // player tap can produce a 1-tick press occasionally (hardware debounce
+    // or very quick release); three-in-a-row is cheat-only behavior.
+    // ------------------------------------------------------------------
+    if (!isAttacking && wasAttacking)
+    {
+        int holdDuration = currentTick - M2PressStartTick[client];
+        if (holdDuration <= 1)
+        {
+            OneTickM2Streak[client]++;
+            if (OneTickM2Streak[client] >= 3)
+            {
+                OneTickM2Detections[client]++;
+                LogDetection(client, "OneTickM2",
+                    "streak=%d (M2 held for %d tick, human floor ~6 ticks)",
+                    OneTickM2Streak[client], holdDuration);
+            }
+        }
+        else
+        {
+            OneTickM2Streak[client] = 0;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // DETECTION: SnapAim — large sudden angle change around airblast
+    //
+    // Silent aim snaps the usercmd angles toward the rocket for the
+    // airblast frame, then returns to the original view direction.
+    // A real cheat modifies angles CLIENT-SIDE so the snap appears in
+    // the raw usercmd (visible in OnPlayerRunCmdPre).
+    //
+    // Signature:
+    //   1. Large angle delta (>25°) in a single tick
+    //   2. ATK2 pressed during or within 3 ticks of the snap
+    //   3. Angles return to within 10° of pre-snap position within 8 ticks
+    // ------------------------------------------------------------------
+
+    float angleDelta = AngleDelta(PrevAngles[client][0], PrevAngles[client][1],
+        angles[0], angles[1]);
+
+    // Check if angles returned to pre-snap position (confirms snapback)
+    if (SnapPending[client])
+    {
+        int ticksSinceSnap = currentTick - SnapStartTick[client];
+
+        // Track if airblast happened near the snap
+        if (isAttacking || wasAttacking)
+            SnapHadAirblast[client] = true;
+
+        float returnDelta = AngleDelta(PreSnapAngles[client][0], PreSnapAngles[client][1],
+            angles[0], angles[1]);
+
+        if (returnDelta < 10.0 && SnapHadAirblast[client] && ticksSinceSnap >= 2)
+        {
+            // Confirmed: large snap → airblast → return to origin
+            SnapAimDetections[client]++;
+            LogDetection(client, "SnapAim",
+                "preSnap=(%.1f,%.1f) current=(%.1f,%.1f) return=%.1f ticks=%d",
+                PreSnapAngles[client][0], PreSnapAngles[client][1],
+                angles[0], angles[1], returnDelta, ticksSinceSnap);
+            SnapPending[client] = false;
+        }
+        else if (ticksSinceSnap > 8)
+        {
+            // Window expired — probably a legit flick, not a snapback
+            SnapPending[client] = false;
+        }
+    }
+
+    // Detect new snap: large angle change in one tick.
+    // Require at least 12 samples so a late-joining client doesn't trigger
+    // on the first real tick vs zero-initialized PrevAngles. The old guard
+    // `PrevAngles != 0.0` was fragile (0.0 is a legit horizontal pitch).
+    //
+    // Threshold raised 25→35°: skilled dodgeball pros routinely flick 40-60°,
+    // and 25° was generating false positives. 35° keeps detection strong
+    // against cheat silent-aim (which snaps ~90° to rocket) while giving
+    // room for legit fast flicks.
+    //
+    // Also gate on anglesModifiedByPlugin — if another subplugin (PvB aim
+    // override, Guardian target-lock) rotated angles this tick, the snap
+    // is not client-side and we must not flag it.
+    if (angleDelta > 35.0 && !SnapPending[client] &&
+        !anglesModifiedByPlugin &&
+        AngleSamples[client] >= 12)
+    {
+        PreSnapAngles[client][0] = PrevAngles[client][0];
+        PreSnapAngles[client][1] = PrevAngles[client][1];
+        PreSnapAngles[client][2] = PrevAngles[client][2];
+        SnapPending[client] = true;
+        SnapStartTick[client] = currentTick;
+        SnapHadAirblast[client] = (isAttacking || wasAttacking);
     }
 
     // Store for next tick comparison
@@ -953,21 +1195,10 @@ public void OnPreThink(int client)
     TimingIndex[client]++;
     if (TimingSamples[client] < TIMING_HISTORY) TimingSamples[client]++;
 
-    // The cheat predicts rocket position using:
-    //   SDK::PredictOrigin(vOrigin, m_vecOrigin(), GetVelocity(), latency)
-    // Then checks CanAirblastEntity using a CEntitySphereQuery.
-    // It fires IN_ATTACK2 on the exact frame the rocket is within range.
-    //
-    // A human needs to visually react to the approaching rocket and time
-    // their airblast with imprecise muscle memory. Consistently airblasting
-    // within 0-2 ticks of the sphere boundary is inhuman.
-    if (ticksBeforeHit <= RoundToCeil(PERFECT_TIMING_TIME / GetTickInterval()) && closestDist < deflectionRadius + 80.0)
-    {
-        PerfectTimingDetections[client]++;
-        LogDetection(client, "PerfectTiming",
-            "dist=%.0f speed=%.0f ticksMargin=%d",
-            closestDist, closestSpeed, ticksBeforeHit);
-    }
+    // PerfectTiming per-airblast check REMOVED — see TFDB_OnRocketDeflect
+    // for rationale. Timing history is still recorded here for the
+    // ConsistentTiming variance analysis, which uses the distribution
+    // shape (not the individual margin=0 flag).
 }
 
 // ============================================================================
@@ -977,9 +1208,9 @@ public void OnPreThink(int client)
 /**
  * Check for the silent aim snapback pattern.
  *
- * The cheat sets PSilentAngles = true, snaps to a rocket, fires IN_ATTACK2,
- * then its AntiCheatCompatibility function lerps the viewangles back over
- * 2-3 frames to avoid per-frame delta thresholds.
+ * The cheat chokes a tick with silent angles, snaps to a rocket, fires
+ * IN_ATTACK2, then lerps the visible viewangles back toward the original
+ * aim over 2-3 frames to avoid per-frame delta thresholds.
  *
  * The old detector checked: calm(t-2→t-1) + big(t-1→t) + attacking.
  * This fails because the cheat's lerp splits the snap into multiple small
@@ -1020,7 +1251,9 @@ void AnalyzeAirblastTiming(int client, int ticksMargin)
                 TimingSamples[client] : TIMING_HISTORY;
 
     // ------- Streak tracking (per-deflect, not historical scan) -------
-    if (ticksMargin <= 2)
+    // Only margin 0-1 counts as "perfect" for streaks. Margin 2 is
+    // achievable by good dodgeball players and inflates streaks.
+    if (ticksMargin <= 1)
     {
         CurrentStreak[client]++;
 
@@ -1156,11 +1389,14 @@ int CalculateScore(int client)
     // Zero false positive rate. Does not decay.
     score += AntiAimDetections[client] / MaxInt(1, ACSilentHitsPerPoint) * 5;
 
-    // HIGH: PSilent detection via facing check
+    // HIGH: Tick-choking silent-aim detection via facing check
     score += AirblastFacingDetections[client] / MaxInt(1, ACSilentHitsPerPoint) * 4;
 
-    // HIGH: 3-angle drag snapback (return-to-origin after drag pause)
+    // HIGH: 3-angle drag snapback (return-to-origin after control delay)
     score += DragSnapbackDetections[client] / MaxInt(1, ACSilentHitsPerPoint) * 4;
+
+    // HIGH: SnapAim — large angle snap + airblast + return to origin
+    score += SnapAimDetections[client] / MaxInt(1, ACSilentHitsPerPoint) * 5;
 
     // MEDIUM-HIGH: timing (primary detector for auto-airblast)
     score += InhaleExhaleDetections[client] * 3;
@@ -1168,8 +1404,15 @@ int CalculateScore(int client)
     // MEDIUM-HIGH: streak milestones (each milestone = 4 points)
     score += PerfectStreakScore[client] * 4;
 
-    // MEDIUM: individual timing flags
-    score += PerfectTimingDetections[client] / MaxInt(1, ACTimingHitsPerPoint) * 2;
+    // HIGH: 1-tick IN_ATTACK2 signature (free-paste cheat fingerprint).
+    // Every detection already requires a 3-deep streak before scoring, so
+    // full weight (6) is safe; false-positive rate is near zero.
+    score += OneTickM2Detections[client] * 6;
+
+    // CRITICAL: ReactTimeFloor — deflect within 120ms of rocket becoming
+    // incoming. Physiologically impossible; weight heavy. Does NOT decay
+    // (like AntiAim) — permanent evidence.
+    score += ReactTimeFloorDetections[client] * 8;
 
     return score;
 }
@@ -1201,11 +1444,12 @@ void TakeAction(int client, int score)
         "logs/tfdb_ac/tfdb_ac_%s.log", dateStr);
 
     LogToFile(logPath,
-        "[ACTION] %s (%s) Score:%d | AA:%d AF:%d DS:%d PT:%d CT:%d Str:%d(%d) | action:%d",
+        "[ACTION] %s (%s) Score:%d | AA:%d AF:%d DS:%d SA:%d PT:%d CT:%d Str:%d(%d) | action:%d",
         name, steamId, score,
         AntiAimDetections[client],
         AirblastFacingDetections[client],
         DragSnapbackDetections[client],
+        SnapAimDetections[client],
         PerfectTimingDetections[client],
         InhaleExhaleDetections[client],
         CurrentStreak[client],
@@ -1229,7 +1473,9 @@ void TakeAction(int client, int score)
         {
             char reason[128];
             Format(reason, sizeof(reason), "%T", "AC_Ban_Reason", LANG_SERVER);
-            BanClient(client, 0, BANFLAG_AUTHID, reason, reason);
+            // Use configured ban duration instead of hardcoded 0 (permanent).
+            // Default cvar value is 1440 (24h) — safer for automated AC.
+            BanClient(client, ACBanDuration, BANFLAG_AUTHID, reason, reason);
             PrintToAdmins("%t", "AC_Admin_Banned", client, score);
         }
     }
@@ -1255,7 +1501,8 @@ public Action Timer_DecayScores(Handle timer)
 
         AirblastFacingDetections[client] = MaxInt(0, AirblastFacingDetections[client] - decay);
         DragSnapbackDetections[client]   = MaxInt(0, DragSnapbackDetections[client] - decay);
-        PerfectTimingDetections[client]  = MaxInt(0, PerfectTimingDetections[client] - decay);
+        SnapAimDetections[client]        = MaxInt(0, SnapAimDetections[client] - decay);
+        OneTickM2Detections[client]      = MaxInt(0, OneTickM2Detections[client] - decay);
 
         // Don't decay timing counters while cheat is actively running.
         if (!TimingFlagged[client])
@@ -1284,7 +1531,7 @@ public Action Timer_AdminHud(Handle timer)
     if (!CvarAdminHud.BoolValue) return Plugin_Continue;
 
     // Build the HUD text once, then send to all admins
-    char hudText[512];
+    char hudText[768];
     hudText[0] = '\0';
     int flaggedCount = 0;
 
@@ -1313,6 +1560,11 @@ public Action Timer_AdminHud(Handle timer)
         if (AirblastFacingDetections[i] > 0)
         {
             FormatEx(tmp, sizeof(tmp), " AF:%d", AirblastFacingDetections[i]);
+            StrCat(detectors, sizeof(detectors), tmp);
+        }
+        if (SnapAimDetections[i] > 0)
+        {
+            FormatEx(tmp, sizeof(tmp), " SA:%d", SnapAimDetections[i]);
             StrCat(detectors, sizeof(detectors), tmp);
         }
         if (DragSnapbackDetections[i] > 0)
@@ -1403,6 +1655,7 @@ public Action Command_Status(int client, int args)
                 AntiAimDetections[i],
                 AirblastFacingDetections[i],
                 DragSnapbackDetections[i],
+                SnapAimDetections[i],
                 PerfectTimingDetections[i],
                 InhaleExhaleDetections[i],
                 CurrentStreak[i],
@@ -1435,73 +1688,20 @@ public Action Command_Reset(int client, int args)
     return Plugin_Handled;
 }
 
-public Action Command_DebugPlayer(int client, int args)
+// Helper: enable debug logging on a single client. Returns true if newly enabled.
+bool EnableDebugOnClient(int target)
 {
-    if (args < 1)
-    {
-        // No args: show currently active debug targets
-        bool foundAny = false;
-        for (int i = 1; i <= MaxClients; i++)
-        {
-            if (PlayerDebug[i].active && IsValidClient(i))
-            {
-                char name[MAX_NAME_LENGTH];
-                GetClientName(i, name, sizeof(name));
-                CReplyToCommand(client, "[{olive}AC{default}] Debugging: {darkorange}%s{default} → %s", name, PlayerDebug[i].steamId);
-                foundAny = true;
-            }
-        }
-        if (!foundAny)
-        {
-            CReplyToCommand(client, "[{olive}AC{default}] No active debug targets.");
-        }
-        CReplyToCommand(client, "[{olive}AC{default}] Usage: {community}sm_ac_debug_player <target|off>");
-        return Plugin_Handled;
-    }
+    if (PlayerDebug[target].active) return false;  // Already active
+    if (IsFakeClient(target)) return false;
 
-    char arg[64];
-    GetCmdArg(1, arg, sizeof(arg));
-
-    // "off" disables ALL debug targets
-    if (StrEqual(arg, "off", false) || StrEqual(arg, "none", false))
-    {
-        int count = 0;
-        for (int i = 1; i <= MaxClients; i++)
-        {
-            if (PlayerDebug[i].active)
-            {
-                PlayerDebug[i].active = false;
-                count++;
-            }
-        }
-        CReplyToCommand(client, "[{olive}AC{default}] Debug logging {red}DISABLED{default} for %d player(s).", count);
-        return Plugin_Handled;
-    }
-
-    int target = FindTarget(client, arg, true);
-    if (target == -1) return Plugin_Handled;
-
-    // Toggle: if already debugging this player, disable
-    if (PlayerDebug[target].active)
-    {
-        PlayerDebug[target].active = false;
-        char name[MAX_NAME_LENGTH];
-        GetClientName(target, name, sizeof(name));
-        CReplyToCommand(client, "[{olive}AC{default}] Debug {red}DISABLED{default} for {darkorange}%s{default}.", name);
-        return Plugin_Handled;
-    }
-
-    // Enable debug on this player — build their unique log file path
     char steamId[32];
     if (!GetClientAuthId(target, AuthId_Steam2, steamId, sizeof(steamId)))
         FormatEx(steamId, sizeof(steamId), "unknown_%d", GetClientUserId(target));
 
-    // Sanitize SteamID for filename: STEAM_0:0:1789052 → STEAM_0_0_1789052
     char safeSteamId[32];
     strcopy(safeSteamId, sizeof(safeSteamId), steamId);
     ReplaceString(safeSteamId, sizeof(safeSteamId), ":", "_");
 
-    // Build path: logs/tfdb_ac/debug_STEAM_0_0_1789052_03_25_2026.log
     char dateStr[32];
     FormatTime(dateStr, sizeof(dateStr), "%m_%d_%Y");
 
@@ -1509,21 +1709,96 @@ public Action Command_DebugPlayer(int client, int args)
     BuildPath(Path_SM, logPath, sizeof(logPath),
         "logs/tfdb_ac/debug_%s_%s.log", safeSteamId, dateStr);
 
-    // Store in the enum struct
     PlayerDebug[target].active = true;
     strcopy(PlayerDebug[target].logPath, sizeof(PlayerDebug[].logPath), logPath);
     strcopy(PlayerDebug[target].steamId, sizeof(PlayerDebug[].steamId), steamId);
 
-    // Write header
     char name[MAX_NAME_LENGTH];
     GetClientName(target, name, sizeof(name));
-
     LogToFile(logPath, "=== Debug started for %s (%s) ===", name, steamId);
     LogToFile(logPath, "Format: cmd=CMDNUM p=PITCH y=YAW atk=ATK1+ATK2 btn=BUTTONS tick=TICKCOUNT");
 
-    CReplyToCommand(client,
-        "[{olive}AC{default}] Debug {community}ENABLED{default} for {darkorange}%s{default}. File: debug_%s_%s.log",
-        name, safeSteamId, dateStr);
+    return true;
+}
+
+// Timer callback for auto-enabling debug on newly joined players (collect-all mode)
+public Action Timer_AutoDebugPlayer(Handle timer, any userid)
+{
+    int client = GetClientOfUserId(userid);
+    if (client == 0 || !IsClientInGame(client) || IsFakeClient(client)) return Plugin_Stop;
+    if (!CollectAll) return Plugin_Stop;  // Collect mode was turned off before timer fired
+
+    if (EnableDebugOnClient(client))
+    {
+        char name[MAX_NAME_LENGTH];
+        GetClientName(client, name, sizeof(name));
+        LogMessage("[AC] Auto-debug enabled for %s (%s) — collect-all mode.", name, PlayerDebug[client].steamId);
+    }
+    return Plugin_Stop;
+}
+
+public Action Command_DebugPlayer(int client, int args)
+{
+    // No args: toggle collect-all mode (on → off, off → on)
+    if (args < 1)
+    {
+        if (CollectAll)
+        {
+            // Second call: disable everything
+            int count = 0;
+            for (int i = 1; i <= MaxClients; i++)
+            {
+                if (PlayerDebug[i].active)
+                {
+                    PlayerDebug[i].active = false;
+                    count++;
+                }
+            }
+            CollectAll = false;
+            CReplyToCommand(client, "[{olive}AC{default}] Collect-all {red}DISABLED{default}. Stopped debug on %d player(s).", count);
+        }
+        else
+        {
+            // First call: enable on all current players + auto-collect new joins
+            CollectAll = true;
+            int count = 0;
+            for (int i = 1; i <= MaxClients; i++)
+            {
+                if (IsClientInGame(i) && !IsFakeClient(i))
+                {
+                    if (EnableDebugOnClient(i))
+                        count++;
+                }
+            }
+            CReplyToCommand(client,
+                "[{olive}AC{default}] Collect-all {community}ENABLED{default}. Debug started on %d player(s). New joins auto-logged. Type again to stop.",
+                count);
+        }
+        return Plugin_Handled;
+    }
+
+    // With args: toggle a single player
+    char arg[64];
+    GetCmdArg(1, arg, sizeof(arg));
+
+    int target = FindTarget(client, arg, true);
+    if (target == -1) return Plugin_Handled;
+
+    if (PlayerDebug[target].active)
+    {
+        PlayerDebug[target].active = false;
+        char name[MAX_NAME_LENGTH];
+        GetClientName(target, name, sizeof(name));
+        CReplyToCommand(client, "[{olive}AC{default}] Debug {red}DISABLED{default} for {darkorange}%s{default}.", name);
+    }
+    else if (EnableDebugOnClient(target))
+    {
+        char name[MAX_NAME_LENGTH];
+        GetClientName(target, name, sizeof(name));
+        CReplyToCommand(client,
+            "[{olive}AC{default}] Debug {community}ENABLED{default} for {darkorange}%s{default}. File: %s",
+            name, PlayerDebug[target].logPath);
+    }
     return Plugin_Handled;
 }
 
@@ -1596,7 +1871,7 @@ void LogDetection(int client, const char[] type, const char[] format, any ...)
     {
         FormatEx(confidence, sizeof(confidence), "CRITICAL");
     }
-    else if (StrEqual(type, "AirblastFacing") || StrEqual(type, "DragSnapback"))
+    else if (StrEqual(type, "AirblastFacing") || StrEqual(type, "DragSnapback") || StrEqual(type, "SnapAim"))
     {
         FormatEx(confidence, sizeof(confidence), "HIGH");
     }
@@ -1666,11 +1941,12 @@ void LogSessionSummary(int client)
         "logs/tfdb_ac/tfdb_ac_%s.log", dateStr);
 
     LogToFile(logPath,
-        "[SESSION] %s (%s) | Score:%d | AA:%d AF:%d DS:%d PT:%d CT:%d Str:%d(%d)",
+        "[SESSION] %s (%s) | Score:%d | AA:%d AF:%d DS:%d SA:%d PT:%d CT:%d Str:%d(%d)",
         name, steamId, score,
         AntiAimDetections[client],
         AirblastFacingDetections[client],
         DragSnapbackDetections[client],
+        SnapAimDetections[client],
         PerfectTimingDetections[client],
         InhaleExhaleDetections[client],
         CurrentStreak[client],

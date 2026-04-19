@@ -317,7 +317,7 @@ void ParseConfigurations(char[] configFile = "general.cfg")
 	if (!FileExists(path, true)) return;
 
 	KeyValues config = new KeyValues("TF2_Dodgeball");
-	if (!config.ImportFromFile(path)) SetFailState("Error while parsing the configuration file.");
+	if (!config.ImportFromFile(path)) SetFailState("[TFDB] Error while parsing configuration file: %s", path);
 
 	config.GotoFirstSubKey();
 	do
@@ -351,6 +351,16 @@ void ParseGeneral(KeyValues config)
 	UseNoBlock              = view_as<bool>(config.GetNum("noblock", 1));
 	UseTargetLock           = view_as<bool>(config.GetNum("target lock", 0));
 	UseTargetLockBotOnly    = view_as<bool>(config.GetNum("target lock bot only", 1));
+
+	// Engine-wide projectile speed cap. Ports the Unified fork's feature.
+	// 0 = leave engine default (3500). Any positive value overrides via sv_maxvelocity.
+	// Without this, per-class "speed limit" values above 3500 are silently clamped by engine.
+	float maxVel = config.GetFloat("max velocity", 0.0);
+	if (maxVel > 0.0)
+	{
+		ConVar maxVelCvar = FindConVar("sv_maxvelocity");
+		if (maxVelCvar != null) maxVelCvar.FloatValue = maxVel;
+	}
 
 	if (!MusicEnabled) return;
 
@@ -468,15 +478,26 @@ void ParseClasses(KeyValues config)
 		// Scaling mode: bounce vertical scale
 		RocketClassBounceVerticalScale[index] = config.GetFloat("bounce vertical ratio", 1.0);
 		RocketClassBounceMaxVerticalSpeed[index] = config.GetFloat("bounce max vertical speed", 0.0);
-		RocketClassDragPauseDuration[index] = config.GetFloat("drag pause duration", 0.1);
-		float tickInterval = GetTickInterval();
-		int dragTicks = 0;
-		if (tickInterval > 0.0 && RocketClassDragPauseDuration[index] > 0.0)
-		{
-			dragTicks = RoundToCeil(RocketClassDragPauseDuration[index] / tickInterval);
-		}
-		RocketClassDragPauseTicks[index] = dragTicks;
-		
+		// Steering control (server ticks): drag window between object_deflected and eye-angle read.
+		// Per-class knob. Higher = more time for the deflector to flick the rocket before the
+		// direction is committed. Default 3 (~45ms @ 66tick, master-like). 0 = tight, 5-8 = loose/heavy.
+		RocketClassSteeringControl[index] = config.GetNum("steering control", 3);
+		if (RocketClassSteeringControl[index] < 0) RocketClassSteeringControl[index] = 0;
+
+		// Bounce control (server ticks): post-bounce blind window before homing resumes.
+		// Per-class. 0 = instant homing resume, 3 = ~45ms (approximates old 10 Hz), 5-8 = heavy.
+		RocketClassBounceControl[index] = config.GetNum("bounce control", 3);
+		if (RocketClassBounceControl[index] < 0) RocketClassBounceControl[index] = 0;
+
+		// Think interval (seconds): how often the homing lerp runs.
+		// 0    = per-tick (default, current smooth behavior)
+		// 0.05 = 20 Hz (authentic YADB/Damizean lerp cadence)
+		// 0.1  = 10 Hz (chunky, matches 2.2.0 legacy timer)
+		// When >0: turn rate applies RAW per fire (no tick-scale compensation) — matches Damizean's
+		// math semantic, which means Damizean-era turn rate values (e.g. 0.233) just work.
+		RocketClassThinkInterval[index] = config.GetFloat("think interval", 0.0);
+		if (RocketClassThinkInterval[index] < 0.0) RocketClassThinkInterval[index] = 0.0;
+
 		DataPack cmds = null;
 		config.GetString("on spawn", buffer, sizeof(buffer));
 		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnSpawnCmd; RocketClassCmdsOnSpawn[index] = cmds; }

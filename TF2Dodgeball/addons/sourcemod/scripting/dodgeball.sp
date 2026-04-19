@@ -114,9 +114,11 @@ float       RocketLastDeflectionTime[MAX_ROCKETS];
 float       RocketLastBeepTime[MAX_ROCKETS];
 float       LastSpawnTime[MAX_ROCKETS];
 int         RocketBounces[MAX_ROCKETS];
-bool        RocketHomingPaused[MAX_ROCKETS];
-bool        RocketIsDragPause[MAX_ROCKETS];     // true = drag pause (per-frame unpause), false = bounce pause (timer unpause)
-int         RocketDragPauseEndTick[MAX_ROCKETS]; // GetGameTickCount() when drag pause should end
+bool        RocketHomingPaused[MAX_ROCKETS];     // true between OnTouch bounce and HomingRocketThink bounce-control unpause
+int         RocketDragEventTick[MAX_ROCKETS];     // GetGameTickCount() when object_deflected fired; read by HomingRocketThink after steering-control ticks
+int         RocketBounceEventTick[MAX_ROCKETS];   // GetGameTickCount() when OnTouch bounce happened; unpause after bounce-control ticks
+float       RocketNextHomingThink[MAX_ROCKETS];   // GetGameTime() when the homing-lerp block is next eligible. Only gated when class sets "think interval" > 0.
+float       RocketLastLogicThink[MAX_ROCKETS];    // GetGameTime() of last shared/legacy-think call (10 Hz gate inside per-tick SDKHook_Think)
 int         RocketCritGlow[MAX_ROCKETS];         // Entity ref for server-managed crit glow particle
 int         RocketCritGlowTeam[MAX_ROCKETS];     // Team the current crit glow was created for (avoids same-team recreate)
 bool        RocketIsCritical[MAX_ROCKETS];       // Whether this rocket rolled crit (damage x3, no m_bCritical networking)
@@ -159,8 +161,9 @@ float          RocketClassMaxSpeed[MAX_ROCKET_CLASSES];
 int            RocketClassMaxDeflections[MAX_ROCKET_CLASSES];
 float          RocketClassBounceVerticalScale[MAX_ROCKET_CLASSES];
 float          RocketClassBounceMaxVerticalSpeed[MAX_ROCKET_CLASSES];
-float          RocketClassDragPauseDuration[MAX_ROCKET_CLASSES];
-int            RocketClassDragPauseTicks[MAX_ROCKET_CLASSES];
+int            RocketClassSteeringControl[MAX_ROCKET_CLASSES]; // ticks between object_deflected and eye-angle read (the drag window)
+int            RocketClassBounceControl[MAX_ROCKET_CLASSES];   // ticks between OnTouch bounce and homing resume (the post-bounce blind window)
+float          RocketClassThinkInterval[MAX_ROCKET_CLASSES];    // seconds between homing-lerp applications. 0 = per-tick (default). 0.05 = 20 Hz (Damizean authentic).
 int            RocketClassCount;
 
 // Spawner classes
@@ -408,8 +411,12 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 	CreateNative("TFDB_SetRocketClassBounceVerticalScale", Native_SetRocketClassBounceVerticalScale);
 	CreateNative("TFDB_GetRocketClassBounceMaxVerticalSpeed", Native_GetRocketClassBounceMaxVerticalSpeed);
 	CreateNative("TFDB_SetRocketClassBounceMaxVerticalSpeed", Native_SetRocketClassBounceMaxVerticalSpeed);
-	CreateNative("TFDB_GetRocketClassDragPauseDuration", Native_GetRocketClassDragPauseDuration);
-	CreateNative("TFDB_SetRocketClassDragPauseDuration", Native_SetRocketClassDragPauseDuration);
+	CreateNative("TFDB_GetRocketClassSteeringControl", Native_GetRocketClassSteeringControl);
+	CreateNative("TFDB_SetRocketClassSteeringControl", Native_SetRocketClassSteeringControl);
+	CreateNative("TFDB_GetRocketClassBounceControl",   Native_GetRocketClassBounceControl);
+	CreateNative("TFDB_SetRocketClassBounceControl",   Native_SetRocketClassBounceControl);
+	CreateNative("TFDB_GetRocketClassThinkInterval",   Native_GetRocketClassThinkInterval);
+	CreateNative("TFDB_SetRocketClassThinkInterval",   Native_SetRocketClassThinkInterval);
 	CreateNative("TFDB_CreateRocket", Native_CreateRocket);
 	CreateNative("TFDB_DestroyRocket", Native_DestroyRocket);
 	CreateNative("TFDB_DestroyRockets", Native_DestroyRockets);

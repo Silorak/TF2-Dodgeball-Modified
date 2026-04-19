@@ -36,6 +36,9 @@ bool ClientShouldSee  [MAXPLAYERS + 1];
 bool Loaded;
 
 int RocketFakeEntity       [MAX_ROCKETS] = {-1, ...};
+// Parallel array of the real rocket entref, used by OnEntityDestroyed to
+// reverse-lookup which fake belongs to a dying rocket.
+int RocketRealEntity       [MAX_ROCKETS] = {-1, ...};
 
 char       RocketClassTrail         [MAX_ROCKET_CLASSES][PLATFORM_MAX_PATH];
 char       RocketClassSprite        [MAX_ROCKET_CLASSES][PLATFORM_MAX_PATH];
@@ -147,19 +150,57 @@ public void TFDB_OnRocketsConfigExecuted(const char[] configFile)
 public void OnMapEnd()
 {
 	if (!Loaded) return;
-	
+
 	Loaded = false;
-	
+
 	// Do NOT UnhookEvent here — SM auto-cleans on plugin unload.
 	// Manual unhooking causes "has no active hook" errors that cascade
 	// into the core dodgeball plugin and permanently break it.
-	
+
 	for (int index = 0; index < RocketClassCount; index++)
 	{
 		delete RocketClassSpriteTrie[index];
 	}
-	
+
+	// Reap any fake entities still parented to dead rockets. Children of a
+	// dead parent are orphaned (not auto-killed) in Source — without this
+	// pass, prop_dynamic / info_particle_system / env_spritetrail entities
+	// leak across map changes.
+	for (int i = 0; i < MAX_ROCKETS; i++)
+	{
+		int fake = EntRefToEntIndex(RocketFakeEntity[i]);
+		if (fake != -1 && IsValidEntity(fake))
+		{
+			AcceptEntityInput(fake, "Kill");
+		}
+		RocketFakeEntity[i] = -1;
+		RocketRealEntity[i] = -1;
+	}
+
 	RocketClassCount = 0;
+}
+
+public void OnEntityDestroyed(int entity)
+{
+	if (entity < 0) return;
+	int entRef = EntIndexToEntRef(entity);
+	if (entRef == INVALID_ENT_REFERENCE) return;
+
+	// If a tracked rocket just died, kill its fake (prop_dynamic) — trail
+	// and sprite entities are parented to the fake and die with it.
+	for (int i = 0; i < MAX_ROCKETS; i++)
+	{
+		if (RocketRealEntity[i] != entRef) continue;
+
+		int fake = EntRefToEntIndex(RocketFakeEntity[i]);
+		if (fake != -1 && IsValidEntity(fake))
+		{
+			AcceptEntityInput(fake, "Kill");
+		}
+		RocketFakeEntity[i] = -1;
+		RocketRealEntity[i] = -1;
+		break;
+	}
 }
 
 public void OnClientDisconnect(int client)
@@ -177,7 +218,8 @@ public void OnObjectDeflected(Event event, char[] eventName, bool dontBroadcast)
 	if (index == -1) return;
 	
 	int classIndex = TFDB_GetRocketClass(index);
-	
+	if (classIndex < 0 || classIndex >= RocketClassCount) return;
+
 	if (!(RocketClassTrailFlags[classIndex] & TrailFlag_ReplaceParticles)) return;
 	
 	int team = GetEntProp(entity, Prop_Send, "m_iTeamNum", 1);
@@ -234,8 +276,15 @@ public void OnPlayerTeam(Event event, char[] eventName, bool dontBroadcast)
 
 public void TFDB_OnRocketCreated(int index, int entity)
 {
+	// Remember the real rocket so OnEntityDestroyed can reap the fake when
+	// the rocket dies — Source does not cascade-delete SetParent children.
+	RocketRealEntity[index] = EntIndexToEntRef(entity);
+
 	int classIndex = TFDB_GetRocketClass(index);
-	int team  = GetAnalogueTeam(GetClientTeam(TFDB_GetRocketTarget(index)));
+	if (classIndex < 0 || classIndex >= RocketClassCount) return;
+	int target = TFDB_GetRocketTarget(index);
+	if (target < 1 || target > MaxClients || !IsClientInGame(target)) return;
+	int team  = GetAnalogueTeam(GetClientTeam(target));
 	TrailFlags flags = RocketClassTrailFlags[classIndex];
 	
 	float position[3], angles[3], fDirection[3];
@@ -482,7 +531,7 @@ void ParseConfigurations(const char[] configFile)
 	
 	KeyValues kvConfig = new KeyValues("TF2_Dodgeball");
 	
-	if (kvConfig.ImportFromFile(path) == false) SetFailState("Error while parsing the configuration file.");
+	if (kvConfig.ImportFromFile(path) == false) SetFailState("[TFDB Trails] Error while parsing configuration file: %s", path);
 	
 	kvConfig.GotoFirstSubKey();
 	
@@ -666,7 +715,11 @@ stock void CreateTempParticle(const char[] particleName,
 	int particleIndex = GetPrecachedParticle(particleName);
 	if (particleIndex == INVALID_STRING_INDEX)
 	{
-		ThrowError("Could not find particle index: %s", particleName);
+		// Previously this was ThrowError, which crashed the Trails subplugin whenever a
+		// trail config referenced a missing particle. Now it logs and skips — missing
+		// particles just mean no trail for that rocket, not a plugin death.
+		LogError("[TFDB Trails] Missing precached particle: \"%s\" — skipping this trail.", particleName);
+		return;
 	}
 	
 	TE_Start("TFParticleEffect");

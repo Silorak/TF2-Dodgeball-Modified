@@ -12,7 +12,7 @@
 #define PLUGIN_VERSION     "2.2.0"
 #define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball"
 
-int g_iSpawnersCount;
+int SpawnersCount;
 
 ConVar CvarVoteBounceDuration;
 ConVar CvarVoteClassDuration;
@@ -106,7 +106,7 @@ public void OnMapEnd()
 	
 	Loaded = false;
 	
-	g_iSpawnersCount = 0;
+	SpawnersCount = 0;
 }
 
 public void TFDB_OnRocketsConfigExecuted(const char[] configFile)
@@ -132,7 +132,7 @@ public void TFDB_OnRocketsConfigExecuted(const char[] configFile)
 	
 	if (strcmp(configFile, "general.cfg") == 0)
 	{
-		g_iSpawnersCount = 0;
+		SpawnersCount = 0;
 	}
 	
 	ParseConfigurations(configFile);
@@ -386,12 +386,14 @@ public void VoteClassResultHandler(Menu menu,
 {
 	int winnerIndex = 0;
 	int iClassCount = TFDB_GetRocketClassCount();
-	
+
 	if (MainRocketClass != -1) iClassCount++;
-	
-	bool isEqual = AreVotesEqual(itemInfo, iClassCount);
-	
-	if (isEqual) winnerIndex = GetRandomInt(0, (iClassCount - 1));
+
+	int iBound = numItems < iClassCount ? numItems : iClassCount;
+
+	bool isEqual = AreVotesEqual(itemInfo, iBound);
+
+	if (isEqual) winnerIndex = GetRandomInt(0, (iBound - 1));
 	
 	char winner[8], strClassLongName[32];
 	
@@ -500,12 +502,14 @@ public void VoteCountResultHandler(Menu menu,
 {
 	int winnerIndex = 0;
 	int iVotesCount = 5;
-	
+
 	if (RocketsCount != -1) iVotesCount++;
-	
-	bool isEqual = AreVotesEqual(itemInfo, iVotesCount);
-	
-	if (isEqual) winnerIndex = GetRandomInt(0, (iVotesCount - 1));
+
+	int iBound = numItems < iVotesCount ? numItems : iVotesCount;
+
+	bool isEqual = AreVotesEqual(itemInfo, iBound);
+
+	if (isEqual) winnerIndex = GetRandomInt(0, (iBound - 1));
 	
 	char winner[8]; menu.GetItem(itemInfo[winnerIndex][VOTEINFO_ITEM_INDEX], winner, sizeof(winner));
 	
@@ -692,7 +696,7 @@ void ParseConfigurations(const char[] configFile)
 	
 	KeyValues kvConfig = new KeyValues("TF2_Dodgeball");
 	
-	if (kvConfig.ImportFromFile(path) == false) SetFailState("Error while parsing the configuration file.");
+	if (kvConfig.ImportFromFile(path) == false) SetFailState("[TFDB Votes] Error while parsing configuration file: %s", path);
 	
 	kvConfig.GotoFirstSubKey();
 	
@@ -713,17 +717,17 @@ void ParseSpawners(KeyValues kvConfig)
 	
 	do
 	{
-		if (g_iSpawnersCount >= MAX_SPAWNER_CLASSES)
+		if (SpawnersCount >= MAX_SPAWNER_CLASSES)
 		{
 			LogError("Reached maximum spawner classes (%d). Remaining spawners will be ignored.", MAX_SPAWNER_CLASSES);
 			break;
 		}
 
-		int index = g_iSpawnersCount;
+		int index = SpawnersCount;
 		
 		SavedMaxRockets[index] = kvConfig.GetNum("max rockets", 1);
 		
-		g_iSpawnersCount++;
+		SpawnersCount++;
 	}
 	while (kvConfig.GotoNextKey());
 	

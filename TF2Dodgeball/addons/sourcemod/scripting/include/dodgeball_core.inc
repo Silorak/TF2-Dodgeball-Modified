@@ -196,21 +196,9 @@ public Action OnDodgeBallGameFrame(Handle timer, any data)
 		}
 	}
 
-	// Rocket Think Logic
-	int index = -1;
-	while ((index = FindNextValidRocket(index)) != -1)
-	{
-		// This timer handles legacy homing rockets and shared logic for all rockets.
-		switch (RocketClassBehaviour[RocketClass[index]])
-		{
-			case Behaviour_LegacyHoming:
-			{
-				RocketLegacyThink(index);
-			}
-		}
-		// Shared logic (sounds, delays) is called for all rockets from here.
-		SharedRocketThink(index);
-	}
+	// Per-rocket think (legacy-behaviour step + shared logic) now runs inside OnRocketThink
+	// via SDKHook_Think per entity, gated internally to 10 Hz. This timer only handles
+	// spawner bookkeeping now — rockets manage their own cadence.
 
 	return Plugin_Continue;
 }

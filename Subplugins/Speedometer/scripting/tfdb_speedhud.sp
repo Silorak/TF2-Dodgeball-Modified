@@ -25,7 +25,7 @@ public Plugin myinfo =
 
 ConVar CvarHudEnabled;
 Handle DisplayTimer;
-Handle CookieHudPref; // Handle for the client's HUD preference cookie.
+Cookie CookieHudPref; // Cookie for the client's HUD preference.
 
 // Tracks if the HUD is currently being displayed for a client.
 bool IsHudVisible[MAXPLAYERS + 1];
@@ -49,7 +49,7 @@ public void OnPluginStart()
 	LoadTranslations("tfdb.phrases.txt");
 
 	// Register the cookie. The second argument is the default value.
-	CookieHudPref = RegClientCookie("tfdb_speedhud_pref", "Toggle for the Dodgeball Speed HUD", CookieAccess_Public);
+	CookieHudPref = new Cookie("tfdb_speedhud_pref", "Toggle for the Dodgeball Speed HUD", CookieAccess_Public);
 
 	// Hook the ConVar change to enable/disable the timer on the fly.
 	CvarHudEnabled.AddChangeHook(OnConVarChanged);
@@ -93,19 +93,18 @@ public void OnMapEnd()
 
 public void OnClientPostAdminCheck(int client)
 {
-	// Load the client's preference when they fully connect.
+	// Default to ON until cookies are loaded.
+	HudEnabledForClient[client] = true;
+}
+
+public void OnClientCookiesCached(int client)
+{
+	// Load the client's preference once cookies are available.
 	char sCookie[8];
 	GetClientCookie(client, CookieHudPref, sCookie, sizeof(sCookie));
 
 	// Default to ON if the cookie is not set or is set to "1".
-	if (sCookie[0] == '0')
-	{
-		HudEnabledForClient[client] = false;
-	}
-	else
-	{
-		HudEnabledForClient[client] = true;
-	}
+	HudEnabledForClient[client] = (sCookie[0] != '0');
 }
 
 // ====================================================================================================
@@ -205,9 +204,22 @@ public Action DisplayHud(Handle timer)
 	// Only run if the main Dodgeball plugin is enabled and the cvar is on.
 	if (!CvarHudEnabled.BoolValue || !TFDB_IsDodgeballEnabled())
 	{
-		// Ensure the HUD is cleared if the plugin is disabled globally.
-		StopDisplayTimer();
-		return Plugin_Continue;
+		// Self-terminate: set handle to null and return Plugin_Stop.
+		// Do NOT call KillTimer/StopDisplayTimer from inside the callback.
+		DisplayTimer = null;
+
+		// Clear the HUD for any player who might still have it open.
+		for (int i = 1; i <= MaxClients; i++)
+		{
+			if (IsClientInGame(i) && IsHudVisible[i])
+			{
+				SetHudTextParams(0.0, 0.0, 0.1, 255, 255, 255, 0, 0, 0.0, 0.0, 0.0);
+				ShowHudText(i, 4, " ");
+				IsHudVisible[i] = false;
+			}
+		}
+
+		return Plugin_Stop;
 	}
 
 	// --- Collect and sort active rockets ---
@@ -316,7 +328,7 @@ public Action DisplayHud(Handle timer)
 			if (i == 0)
 				strcopy(hudMessage, sizeof(hudMessage), line);
 			else
-				Format(hudMessage, sizeof(hudMessage), "%s%s", hudMessage, line);
+				StrCat(hudMessage, sizeof(hudMessage), line);
 		}
 
 		// Display the list on the left side for all players.

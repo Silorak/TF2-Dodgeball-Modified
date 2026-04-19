@@ -228,24 +228,76 @@ stock void ShowHiddenMOTDPanel(int client, char[] title, char[] msg, char[] type
 }
 
 /**
- * Plays a particle system.
+ * Spawn an info_particle_system entity. Unified primitive for all particle spawns.
+ * Handles both the "positioned + auto-destruct" shape (PlayParticle, nuke effects)
+ * and the "parented + persistent" shape (UpdateCritGlow, attached trails).
+ *
+ * @param particleName      Particle effect name. Must be in the ParticleEffectNames
+ *                          string table (precached) or nothing renders.
+ * @param position          World position. Used only when parent = 0.
+ * @param angles            World angles. Used only when parent = 0.
+ * @param parent            Parent entity to attach to via SetParent. 0 = unparented.
+ * @param attachmentName    Attachment point on parent. "" = parent origin only.
+ * @param effectTime        Seconds until "Stop" input fires. 0 = no stop timer (persistent).
+ * @param lifeTime          Seconds until entity is killed. 0 = no kill timer (manual cleanup).
+ * @return                  Entity index on success, -1 on failure.
+ */
+stock int SpawnParticleSystem(const char[] particleName,
+                              const float position[3]  = NULL_VECTOR,
+                              const float angles[3]    = NULL_VECTOR,
+                              int parent               = 0,
+                              const char[] attachmentName = "",
+                              float effectTime         = 0.0,
+                              float lifeTime           = 0.0)
+{
+	int entity = CreateEntityByName("info_particle_system");
+	if (entity == -1)
+	{
+		LogError("SpawnParticleSystem: could not create info_particle_system");
+		return -1;
+	}
+
+	DispatchKeyValue(entity, "effect_name", particleName);
+	DispatchSpawn(entity);
+	ActivateEntity(entity);
+
+	if (parent > 0 && IsValidEntity(parent))
+	{
+		SetVariantString("!activator");
+		AcceptEntityInput(entity, "SetParent", parent, entity);
+
+		if (attachmentName[0] != '\0' && LookupEntityAttachment(parent, attachmentName) > 0)
+		{
+			SetVariantString(attachmentName);
+			AcceptEntityInput(entity, "SetParentAttachment", parent, entity);
+		}
+	}
+	else
+	{
+		TeleportEntity(entity, position, angles, NULL_VECTOR);
+	}
+
+	AcceptEntityInput(entity, "Start");
+
+	if (effectTime > 0.0)
+	{
+		CreateTimer(effectTime, StopParticle, EntIndexToEntRef(entity), TIMER_FLAG_NO_MAPCHANGE);
+	}
+	if (lifeTime > 0.0)
+	{
+		CreateTimer(lifeTime, KillParticle, EntIndexToEntRef(entity), TIMER_FLAG_NO_MAPCHANGE);
+	}
+
+	return entity;
+}
+
+/**
+ * Plays a one-shot positioned particle system with auto-destruction.
+ * Thin wrapper over SpawnParticleSystem.
  */
 stock void PlayParticle(float position[3], float angles[3], char[] particleName, float effectTime = 5.0, float lifeTime = 9.0)
 {
-	int entity = CreateEntityByName("info_particle_system");
-	
-	if (entity == -1)
-	{
-		LogError("PlayParticle: could not create info_particle_system");
-		return;
-	}
-	
-	TeleportEntity(entity, position, angles, NULL_VECTOR);
-	DispatchKeyValue(entity, "effect_name", particleName);
-	ActivateEntity(entity);
-	AcceptEntityInput(entity, "Start");
-	CreateTimer(effectTime, StopParticle, EntIndexToEntRef(entity), TIMER_FLAG_NO_MAPCHANGE);
-	CreateTimer(lifeTime, KillParticle, EntIndexToEntRef(entity), TIMER_FLAG_NO_MAPCHANGE);
+	SpawnParticleSystem(particleName, position, angles, 0, "", effectTime, lifeTime);
 }
 
 /**

@@ -46,8 +46,19 @@ public void OnPluginStart()
 public void OnClientPutInServer(int client)
 {
 	if (!TFDB_IsDodgeballEnabled()) return;
-	
+
 	SDKHook(client, SDKHook_OnTakeDamage, OnPlayerTakeDamage);
+}
+
+public void OnAllPluginsLoaded()
+{
+	// CH_PassFilter is a forward from the CollisionHook extension. If the
+	// extension is missing, the forward never fires and tf_dodgeball_as_collision
+	// is silently a no-op. Log a one-time warning so admins notice.
+	if (CvarHookCollision.BoolValue && GetExtensionFileStatus("collisionhook.ext") < 1)
+	{
+		LogMessage("[AntiSnipe] tf_dodgeball_as_collision=1 but CollisionHook extension is not loaded — collision anti-snipe is inactive.");
+	}
 }
 
 public Action OnPlayerTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damageType)

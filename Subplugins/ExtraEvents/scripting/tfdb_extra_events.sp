@@ -34,8 +34,16 @@ public void OnPluginStart()
 	for (int index = 0; index < MAX_ROCKETS; index++)
 	{
 		if (!TFDB_IsValidRocket(index)) continue;
-		
-		SDKHook(EntRefToEntIndex(TFDB_GetRocketEntity(index)), SDKHook_Touch, OnTouch);
+
+		// TFDB_GetRocketEntity already unwraps the ent ref internally and returns
+		// an entity INDEX. Do NOT wrap it in EntRefToEntIndex again — double-wrapping
+		// a raw index returns INVALID_ENT_REFERENCE (raw indices lack the ent-ref magic
+		// bits), which makes SDKHook(-1, ...) silently fail on plugin late-load.
+		int entity = TFDB_GetRocketEntity(index);
+		if (entity > 0 && IsValidEntity(entity))
+		{
+			SDKHook(entity, SDKHook_Touch, OnTouch);
+		}
 	}
 }
 
@@ -74,7 +82,7 @@ void ParseConfigurations(const char[] configFile)
 	
 	KeyValues kvConfig = new KeyValues("TF2_Dodgeball");
 	
-	if (kvConfig.ImportFromFile(path) == false) SetFailState("Error while parsing the configuration file.");
+	if (kvConfig.ImportFromFile(path) == false) SetFailState("[TFDB ExtraEvents] Error while parsing configuration file: %s", path);
 	
 	kvConfig.GotoFirstSubKey();
 	
@@ -184,7 +192,8 @@ public Action OnTouch(int entity, int other)
 	if (index == -1) return Plugin_Continue;
 	
 	int rocketClass = TFDB_GetRocketClass(index);
-	
+	if (rocketClass < 0 || rocketClass >= RocketClassCount) return Plugin_Continue;
+
 	if (RocketClassCmdsOnDestroyed[rocketClass] == null) return Plugin_Continue;
 	
 	DataPack touchInfo = new DataPack();
@@ -211,6 +220,13 @@ public void TouchRequestFrame(DataPack touchInfo)
 	int rocketClass     = touchInfo.ReadCell();
 	int rocket          = EntRefToEntIndex(touchInfo.ReadCell());
 	int owner           = EntRefToEntIndex(touchInfo.ReadCell());
+	// Re-validate the owner: if the player disconnected between frames,
+	// EntRefToEntIndex returns -1 and `@owner` would expand to "-1" —
+	// clamp to 0 so substituted commands receive a sentinel instead.
+	if (owner < 1 || owner > MaxClients || !IsClientInGame(owner))
+	{
+		owner = 0;
+	}
 	int target          = touchInfo.ReadCell();
 	int lastDead        = touchInfo.ReadCell();
 	float speed         = touchInfo.ReadFloat();
@@ -222,7 +238,9 @@ public void TouchRequestFrame(DataPack touchInfo)
 	delete touchInfo;
 	
 	if (rocket != -1) return;
-	
+	if (rocketClass < 0 || rocketClass >= RocketClassCount) return;
+	if (RocketClassCmdsOnDestroyed[rocketClass] == null) return;
+
 	if (other != -1)
 	{
 		if (((other = GetClientOfUserId(other)) == 0) ||

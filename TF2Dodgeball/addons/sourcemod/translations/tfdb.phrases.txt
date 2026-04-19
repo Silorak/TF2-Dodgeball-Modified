@@ -771,4 +771,308 @@
 	{
 		"en"		"[{olive}TFDB{default}] Usage: sm_ac_reset <target>"
 	}
+
+	// =========================================================================
+	// Player vs Bot (PvB) Subplugin
+	// =========================================================================
+
+	"PvB_Entered"
+	{
+		"en"		"[{olive}TFDB{default}] The Mann Co. Bot has entered the arena."
+	}
+
+	"PvB_Left"
+	{
+		"en"		"[{olive}TFDB{default}] The Mann Co. Bot has left the arena."
+	}
+
+	"PvB_Training_AlreadyActive"
+	{
+		"en"		"[{olive}TFDB{default}] Training mode is already active! Use {darkorange}sm_stoptraining{default} to end."
+	}
+
+	"PvB_Training_Started"
+	{
+		"en"		"[{olive}TFDB{default}] Training mode started! All bot types spawned on both teams."
+	}
+
+	"PvB_Training_Capped"
+	{
+		"#format"	"{1:d},{2:d}"
+		"en"		"[{olive}TFDB{default}] {darkorange}Note:{default} max_training_bots={steelblue}{1}{default} capped training to first {steelblue}{2}{default} classes."
+	}
+
+	"PvB_Training_Spawned"
+	{
+		"#format"	"{1:d},{2:d}"
+		"en"		"[{olive}TFDB{default}] {darkorange}TRAINING MODE:{default} {steelblue}{1}{default} bots spawned ({steelblue}{2}{default} per team). They will learn from each other!"
+	}
+
+	"PvB_Training_HowToStop"
+	{
+		"en"		"[{olive}TFDB{default}] Use {darkorange}sm_stoptraining{default} to end training."
+	}
+
+	"PvB_Training_NotActive"
+	{
+		"en"		"[{olive}TFDB{default}] Training mode is not active."
+	}
+
+	"PvB_Training_Ended_Admin"
+	{
+		"en"		"[{olive}TFDB{default}] Training mode ended. All bots kicked."
+	}
+
+	"PvB_Training_Ended"
+	{
+		"en"		"[{olive}TFDB{default}] Training mode ended."
+	}
+
+	"PvB_ConsoleOnly_Admin"
+	{
+		"en"		"[SM] This command is for in-game admins only."
+	}
+
+	"PvB_ConsoleOnly_Player"
+	{
+		"en"		"[SM] This command is for players only."
+	}
+
+	"PvB_ConsoleOnly_Stats"
+	{
+		"en"		"[SM] Console cannot view stats. Join the server!"
+	}
+
+	"PvB_ConfigReloaded"
+	{
+		"en"		"[{olive}TFDB{default}] Config reloaded!"
+	}
+
+	"PvB_Admin_TypeChanged"
+	{
+		"#format"	"{1:s}"
+		"en"		"[{olive}TFDB{default}] Admin changed bot type to {darkorange}{1}{default}"
+	}
+
+	"PvB_Brain_RequiresRoot"
+	{
+		"en"		"[{olive}TFDB{default}] Brain reset requires ROOT access."
+	}
+
+	"PvB_Brain_ResetAll"
+	{
+		"en"		"[{olive}TFDB{default}] ALL brain data has been reset!"
+	}
+
+	"PvB_Brain_ResetType"
+	{
+		"#format"	"{1:s}"
+		"en"		"[{olive}TFDB{default}] Brain data reset for type: {darkorange}{1}{default}"
+	}
+
+	"PvB_Speech_Toggled"
+	{
+		"#format"	"{1:s}"
+		"en"		"[{olive}TFDB{default}] Speech {darkorange}{1}{default}"
+	}
+
+	"PvB_SetBotType_Usage"
+	{
+		"#format"	"{1:d}"
+		"en"		"[{olive}TFDB{default}] Usage: sm_setbottype <index|name>  (have {steelblue}{1}{default} classes)"
+	}
+
+	"PvB_SetBotType_Unknown"
+	{
+		"#format"	"{1:s},{2:d}"
+		"en"		"[{olive}TFDB{default}] Unknown class '{darkorange}{1}{default}'. Have {steelblue}{2}{default} classes."
+	}
+
+	"PvB_BotType_Set"
+	{
+		"#format"	"{1:s}"
+		"en"		"[{olive}TFDB{default}] Bot type set to {darkorange}{1}{default}"
+	}
+
+	"PvB_Disabled"
+	{
+		"en"		"[{olive}TFDB{default}] Plugin is disabled."
+	}
+
+	"PvB_Bot_NotActive"
+	{
+		"en"		"[{olive}TFDB{default}] Bot is not currently active."
+	}
+
+	"PvB_Bot_NoActive"
+	{
+		"en"		"[{olive}TFDB{default}] No bot active."
+	}
+
+	"PvB_Stats_Header"
+	{
+		"en"		"{olive}========== {darkorange}PvB Bot Stats {olive}=========="
+	}
+
+	"PvB_Stats_Type"
+	{
+		"#format"	"{1:s}"
+		"en"		"{darkorange}Type: {community}{1}"
+	}
+
+	"PvB_Stats_Rounds"
+	{
+		"#format"	"{1:d},{2:d},{3:d}"
+		"en"		"{darkorange}Rounds: {community}{1} {default}(W: {olive}{2} {default}| L: {red}{3}{default})"
+	}
+
+	"PvB_Stats_WinRate"
+	{
+		"#format"	"{1:.1f}"
+		"en"		"{darkorange}Win Rate: {community}{1}%%"
+	}
+
+	"PvB_Stats_Deflects"
+	{
+		"#format"	"{1:d},{2:d}"
+		"en"		"{darkorange}Total Deflects: {community}{1} {default}(This round: {community}{2}{default})"
+	}
+
+	"PvB_Stats_Kills"
+	{
+		"#format"	"{1:d}"
+		"en"		"{darkorange}Total Kills: {community}{1}"
+	}
+
+	"PvB_Stats_Deaths"
+	{
+		"#format"	"{1:d}"
+		"en"		"{darkorange}Total Deaths: {community}{1}"
+	}
+
+	"PvB_Stats_Brain"
+	{
+		"#format"	"{1:d}"
+		"en"		"{darkorange}Brain Entries: {community}{1}"
+	}
+
+	"PvB_Stats_Footer"
+	{
+		"en"		"{olive}========================================="
+	}
+
+	"PvB_Vote_InProgress"
+	{
+		"en"		"[{olive}TFDB{default}] A vote is already in progress!"
+	}
+
+	"PvB_Vote_TrainingBlock"
+	{
+		"en"		"[{olive}TFDB{default}] Cannot vote during training mode. Ask a ROOT admin."
+	}
+
+	"PvB_Vote_TooManyPlayers"
+	{
+		"#format"	"{1:d},{2:d}"
+		"en"		"[{olive}TFDB{default}] Vote blocked! Too many players ({steelblue}{1}{default} > {steelblue}{2}{default})."
+	}
+
+	"PvB_Vote_StartDisable"
+	{
+		"#format"	"{1:N}"
+		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} started a vote to {red}DISABLE{default} the bot!"
+	}
+
+	"PvB_Vote_StartClass"
+	{
+		"#format"	"{1:N}"
+		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} started a bot class vote!"
+	}
+
+	"PvB_Vote_YesDisable"
+	{
+		"#format"	"{1:N},{2:d},{3:d}"
+		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} voted {olive}YES{default} to disable ({steelblue}{2}{default}/{steelblue}{3}{default})"
+	}
+
+	"PvB_Vote_No_KeepBot"
+	{
+		"#format"	"{1:N}"
+		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} voted {red}NO{default} (keep bot)"
+	}
+
+	"PvB_Vote_DisablePassed"
+	{
+		"en"		"[{olive}TFDB{default}] Vote passed! {red}Disabling bot...{default} Normal match resumed."
+	}
+
+	"PvB_Vote_DisableFailed"
+	{
+		"#format"	"{1:d},{2:d}"
+		"en"		"[{olive}TFDB{default}] Vote failed ({steelblue}{1}{default}/{steelblue}{2}{default}). Bot stays active."
+	}
+
+	"PvB_PlayerJoined_BotDisabled"
+	{
+		"en"		"[{olive}TFDB{default}] Another player joined. Bot disabled."
+	}
+
+	"PvB_PlayerJoined_Cancelled"
+	{
+		"en"		"[{olive}TFDB{default}] Another player joined - selection cancelled."
+	}
+
+	"PvB_PvB_Starting"
+	{
+		"#format"	"{1:s}"
+		"en"		"[{olive}TFDB{default}] Starting PvB with {darkorange}{1}{default} bot!"
+	}
+
+	"PvB_ClassVote_Start"
+	{
+		"en"		"[{olive}TFDB{default}] Vote for bot type! You have 20 seconds."
+	}
+
+	"PvB_ClassVote_Voted"
+	{
+		"#format"	"{1:N},{2:s}"
+		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} voted for {community}{2}{default}"
+	}
+
+	"PvB_ClassVote_NoVotes"
+	{
+		"en"		"[{olive}TFDB{default}] No votes cast. Using default bot type."
+	}
+
+	"PvB_ClassVote_Result"
+	{
+		"#format"	"{1:s},{2:d}"
+		"en"		"[{olive}TFDB{default}] Vote result: {darkorange}{1}{default} wins! ({steelblue}{2}{default} votes)"
+	}
+
+	"PvB_Bot_AlreadyActive"
+	{
+		"en"		"[{olive}TFDB{default}] Bot is already active!"
+	}
+
+	"PvB_Bot_AlreadyDisabled"
+	{
+		"en"		"[{olive}TFDB{default}] Bot is already disabled!"
+	}
+
+	"Menu_OrbitTightness"
+	{
+		"en"		"[{olive}TFDB{default}] Type new orbit tightness (seconds-like coefficient)."
+	}
+
+	"Menu_MaxSpeed"
+	{
+		"en"		"[{olive}TFDB{default}] Type new max speed (HU/s)."
+	}
+
+	"Menu_MaxDeflections"
+	{
+		"en"		"[{olive}TFDB{default}] Type new max deflections."
+	}
+
 }

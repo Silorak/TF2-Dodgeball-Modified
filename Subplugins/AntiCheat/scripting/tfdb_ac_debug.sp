@@ -44,6 +44,13 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
+    // Load shared phrase files so any %t formatter in admin messages resolves.
+    // AC_Debug's user-facing text is admin-only English (intentional — debug
+    // output shouldn't be localized), but common phrases (player targeting
+    // errors from FindTarget, etc.) need the common tables.
+    LoadTranslations("common.phrases");
+    LoadTranslations("tfdb.phrases.txt");
+
     RegAdminCmd("sm_ac", Command_AC, ADMFLAG_ROOT,
         "Toggle cheat simulation. Usage: sm_ac <player> [mode]  Modes: 1=autoairblast 2=silentaim 4=fixmovement 8=fakelag");
 }

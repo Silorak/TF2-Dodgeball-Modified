@@ -26,7 +26,7 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-	LoadTranslations("tfdb.phrases.txt");
+	// No translations used by this plugin
 	
 	BracketsPattern = new Regex("(?<=\\[)(.*?)(?=\\])");
 	
@@ -34,6 +34,16 @@ public void OnPluginStart()
 	RegAdminCmd("tf_dodgeball_print_c", CmdPrintMessageClient, ADMFLAG_CHAT, "Prints a message to a client and replaces client indexes inside a pair of '##'");
 	RegAdminCmd("tf_dodgeball_phrase", CmdPrintPhrase, ADMFLAG_CHAT, "Prints a translation phrase to chat");
 	RegAdminCmd("tf_dodgeball_phrase_c", CmdPrintPhraseClient, ADMFLAG_CHAT, "Prints a translation phrase to a client");
+}
+
+public void OnPluginEnd()
+{
+	// Release the compiled Regex handle on unload (created in OnPluginStart).
+	if (BracketsPattern != null)
+	{
+		delete BracketsPattern;
+		BracketsPattern = null;
+	}
 }
 
 public Action CmdPrintMessage(int client, int cmdArgs)
@@ -243,20 +253,25 @@ void PrintPhrase(const char[] phrase, const char args[32][255], const any aArgs[
 // With only 8 calls instead of 29, this fits comfortably in default heap.
 any[] HBC(const char[][] args, const any[] aArgs, int index)
 {
-	static any aResult[256];
-	
+	// Use rotating buffers so multiple HBC calls in a single FormatEx
+	// each return a distinct buffer instead of overwriting each other.
+	static any aResult[8][256];
+	static int iBuf = 0;
+	int cur = iBuf;
+	iBuf = (iBuf + 1) % 8;
+
 	if (!args[index][0])
 	{
-		aResult[0] = aArgs[index];
-		return aResult;
+		aResult[cur][0] = aArgs[index];
+		return aResult[cur];
 	}
-	
+
 	int i;
 	for (i = 0; i < 255 && args[index][i]; i++)
 	{
-		aResult[i] = view_as<any>(args[index][i]);
+		aResult[cur][i] = view_as<any>(args[index][i]);
 	}
-	aResult[i] = 0;
-	return aResult;
+	aResult[cur][i] = 0;
+	return aResult[cur];
 }
 

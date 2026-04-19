@@ -74,9 +74,11 @@ void CreateRocket(int spawnerEntity, int spawnerClass, int team, int rocketClass
 	RocketDeflections[index]        = 0;
 	RocketEventDeflections[index]   = 0;
 	RocketBounces[index]            = 0;
-	RocketHomingPaused[index]       = false;
-	RocketIsDragPause[index]        = false;
-	RocketDragPauseEndTick[index]   = 0;
+	RocketHomingPaused[index]     = false;
+	RocketDragEventTick[index]    = 0;
+	RocketBounceEventTick[index]  = 0;
+	RocketNextHomingThink[index]  = 0.0;
+	RocketLastLogicThink[index]   = 0.0;
 	RocketCritGlow[index]           = INVALID_ENT_REFERENCE;
 	RocketCritGlowTeam[index]       = 0;
 	RocketIsCritical[index]         = isCrit;
@@ -112,6 +114,9 @@ void CreateRocket(int spawnerEntity, int spawnerClass, int team, int rocketClass
 
 	SDKHook(entity, SDKHook_StartTouch, OnStartTouch);
 	SDKHook(entity, SDKHook_OnTakeDamage, OnRocketTakeDamage);
+	// Note: OnRocketThink is driven by OnGameFrame iteration (see events.inc),
+	// NOT by SDKHook_Think. tf_projectile_rocket's engine-side Think schedule is
+	// sparse (~10Hz lifetime checks), so SDKHook_Think cannot drive per-tick homing.
 
 	// Create the initial crit glow particle only if the rocket rolled crit.
 	// Non-crit rockets look like normal TF2 rockets (smoke trail only, no glow).
@@ -194,32 +199,15 @@ void UpdateCritGlow(int index, int entity, int team)
 	else
 		particleName = "eyeboss_projectile";
 
-	int newGlow = CreateEntityByName("info_particle_system");
+	// Spawn parented persistent glow via shared helper. Attaches to "trail" attachment
+	// on the rocket model if one exists, otherwise to parent origin.
+	int newGlow = SpawnParticleSystem(particleName, NULL_VECTOR, NULL_VECTOR, entity, "trail", 0.0, 0.0);
 	if (newGlow == -1) return;
-
-	float pos[3];
-	GetEntPropVector(entity, Prop_Send, "m_vecOrigin", pos);
-	TeleportEntity(newGlow, pos, NULL_VECTOR, NULL_VECTOR);
-
-	DispatchKeyValue(newGlow, "effect_name", particleName);
-	DispatchSpawn(newGlow);
-	ActivateEntity(newGlow);
-
-	// Parent to rocket - match TF2's native attachment method
-	SetVariantString("!activator");
-	AcceptEntityInput(newGlow, "SetParent", entity, newGlow);
-
-	if (LookupEntityAttachment(entity, "trail") > 0)
-	{
-		SetVariantString("trail");
-		AcceptEntityInput(newGlow, "SetParentAttachment", entity, newGlow);
-	}
 
 	// Clean up old glow if exists
 	if (RocketCritGlow[index] != INVALID_ENT_REFERENCE)
 	{
-		int oldGlowRef = RocketCritGlow[index];
-		int oldGlow = EntRefToEntIndex(oldGlowRef);
+		int oldGlow = EntRefToEntIndex(RocketCritGlow[index]);
 		if (oldGlow != -1 && IsValidEntity(oldGlow))
 		{
 			AcceptEntityInput(oldGlow, "Stop");
@@ -227,9 +215,7 @@ void UpdateCritGlow(int index, int entity, int team)
 		}
 	}
 
-	AcceptEntityInput(newGlow, "Start");
-
-	RocketCritGlow[index] = EntIndexToEntRef(newGlow);
+	RocketCritGlow[index]     = EntIndexToEntRef(newGlow);
 	RocketCritGlowTeam[index] = team;
 }
 
@@ -455,39 +441,56 @@ void HomingRocketThink(int index)
 	int deflectionCount  = RocketEventDeflections[index];
 	float modifier       = CalculateModifier(rocketClass, deflectionCount);
 	
-	// --- Deflection detected: pause homing, defer aim reading to per-frame check ---
-	if ((deflectionCount > RocketDeflections[index]) && !(RocketInstanceState[index] & RocketState_Dragging))
+	// --- Bounce unpause: clear the pause after per-class bounce control ticks ---
+	// OnTouch set RocketHomingPaused=true and stamped RocketBounceEventTick. We let the
+	// rocket fly its bounce direction blindly for that many ticks, then resume homing.
+	if (RocketHomingPaused[index])
 	{
-		RocketHomingPaused[index] = true;
-		RocketIsDragPause[index] = true;
-		
-		// Drag window is stored as an absolute game tick for deterministic behavior.
-		int pauseTicks = RocketClassDragPauseTicks[rocketClass];
-		RocketDragPauseEndTick[index] = GetGameTickCount() + pauseTicks;
-		
-		Internal_SetRocketState(index, (RocketInstanceState[index] | (RocketState_CanDrag | RocketState_Dragging)));
+		int bounceReady = RocketBounceEventTick[index] + RocketClassBounceControl[rocketClass];
+		if (GetGameTickCount() >= bounceReady)
+		{
+			ApplyRocketParameters(index);
+			RocketHomingPaused[index] = false;
+		}
+		// If a deflection came in during the bounce pause, the drag block below still
+		// runs on top — eye-angle read wins over the bounce direction. Both systems
+		// cooperate: whichever is "ready" fires; if both ready same tick, drag wins.
 	}
 
-	// --- Drag pause expired: process deflection per-frame (allows sub-100ms drag) ---
-	if (RocketHomingPaused[index] && RocketIsDragPause[index] && GetGameTickCount() >= RocketDragPauseEndTick[index])
+	// --- Emergent drag: deflection processed after per-class steering control ticks ---
+	// The event handler recorded the event tick. We wait the configured window, then do the
+	// one-shot eye-angle read via ProcessDeflection. This delay IS the drag window — mouse
+	// movement during it gets captured when the read finally fires.
+	if (deflectionCount > RocketDeflections[index])
 	{
-		if (deflectionCount > RocketDeflections[index])
+		int delayTicks  = RocketClassSteeringControl[rocketClass];
+		int eventTick   = RocketDragEventTick[index];
+		int readyTick   = eventTick + delayTicks;
+		int currentTick = GetGameTickCount();
+
+		if (currentTick >= readyTick)
 		{
-			if (!ProcessDeflection(index, entity, rocketClass, flags, team, targetTeam, deflectionCount, modifier, true))
+			if (!ProcessDeflection(index, entity, rocketClass, flags, team, targetTeam, deflectionCount, modifier, false))
 			{
-				RocketHomingPaused[index] = false;
-				RocketIsDragPause[index] = false;
 				return;
 			}
+			ApplyRocketParameters(index);
 		}
-
-		// Apply parameters and re-enable smooth homing
-		ApplyRocketParameters(index);
-		RocketHomingPaused[index] = false;
-		RocketIsDragPause[index] = false;
+		else
+		{
+			// Still waiting for the drag window to elapse. Do not run homing yet.
+			return;
+		}
 	}
 
 	// --- Normal homing: lerp toward target (only when not paused) ---
+	// Per-class think interval gate: if "think interval" > 0 (e.g. 0.05 for Damizean 20 Hz),
+	// run the homing lerp only at that cadence AND apply raw turn rate (Damizean semantic).
+	// If "think interval" == 0, run per-tick with tickScale compensation (current 2.2.0 behavior).
+	float thinkInterval = RocketClassThinkInterval[rocketClass];
+	bool gatedThink = (thinkInterval > 0.0);
+	bool homingLerpEligible = !gatedThink || (GetGameTime() >= RocketNextHomingThink[index]);
+
 	if (!RocketHomingPaused[index])
 	{
 		if (!IsValidClient(target, true))
@@ -510,12 +513,12 @@ void HomingRocketThink(int index)
 			}
 			Forward_OnRocketNoTarget(index, target, owner);
 		}
-		else
+		else if (homingLerpEligible)
 		{
 			if ((GetGameTime() - RocketLastDeflectionTime[index]) >= RocketClassControlDelay[rocketClass])
 			{
-				// Scale turn rate from "per TICK_BASE_INTERVAL" to "per frame" using GetTickInterval().
-				float tickScale = GetTickInterval() / TICK_BASE_INTERVAL;
+				// tickScale: 1.0 for gated think (Damizean raw-lerp), else GetTickInterval()/TICK_BASE_INTERVAL.
+				float tickScale = gatedThink ? 1.0 : (GetTickInterval() / TICK_BASE_INTERVAL);
 				float turnRate = CalculateRocketTurnRate(rocketClass, modifier) * tickScale;
 				float directionToTarget[3]; CalculateDirectionToClient(entity, target, directionToTarget);
 
@@ -529,6 +532,11 @@ void HomingRocketThink(int index)
 					turnRate = RocketClassTurnRateLimit[rocketClass] * tickScale;
 				}
 				LerpVectors(RocketDirection[index], directionToTarget, RocketDirection[index], turnRate);
+
+				if (gatedThink)
+				{
+					RocketNextHomingThink[index] = GetGameTime() + thinkInterval;
+				}
 			}
 		}
 
@@ -568,29 +576,11 @@ void SharedRocketThink(int index)
 	int rocketClass      = RocketClass[index];
 	RocketFlags flags    = RocketInstanceFlags[index];
 	int target           = EntRefToEntIndex(RocketTarget[index]);
-	int team             = GetEntProp(entity, Prop_Send, "m_iTeamNum", 1);
-	int targetTeam       = (TestFlags(flags, RocketFlag_IsNeutral)) ? 0 : GetAnalogueTeam(team);
 	int deflectionCount  = RocketEventDeflections[index];
-	float modifier       = CalculateModifier(rocketClass, deflectionCount);
-	
-	// --- Handle paused state: bounce unpauses are handled here (timer-based) ---
-	// Drag unpauses are handled per-frame in HomingRocketThink for sub-100ms precision.
-	if (RocketHomingPaused[index] && !RocketIsDragPause[index])
-	{
-		// Process pending deflection on the logic timer (bounce unpause)
-		if (deflectionCount > RocketDeflections[index])
-		{
-			if (!ProcessDeflection(index, entity, rocketClass, flags, team, targetTeam, deflectionCount, modifier, true))
-			{
-				RocketHomingPaused[index] = false;
-				return;
-			}
-		}
 
-		// Apply parameters once on unpause and re-enable smooth homing
-		ApplyRocketParameters(index);
-		RocketHomingPaused[index] = false;
-	}
+	// Bounce unpause now happens per-frame in HomingRocketThink via RocketClassBounceControl ticks.
+	// Drag is also per-frame in HomingRocketThink via RocketClassSteeringControl. Nothing pause-related
+	// runs on this ~10Hz logic timer anymore.
 
 	// --- Elevation (runs at logic timer rate when smooth elevation is off) ---
 	if (!(deflectionCount > RocketDeflections[index]))

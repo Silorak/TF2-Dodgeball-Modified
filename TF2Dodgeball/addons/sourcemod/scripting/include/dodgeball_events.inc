@@ -269,12 +269,60 @@ public void OnObjectDeflected(Event event, char[] eventName, bool dontBroadcast)
 		int newTeam = GetEntProp(entity, Prop_Send, "m_iTeamNum");
 		UpdateCritGlow(index, entity, newTeam);
 	}
+
+	// --- Record event tick for deferred eye-angle read in HomingRocketThink ---
+	// The event handler does NOT read eye angles. It records the moment and the deflector.
+	// HomingRocketThink reads eye angles after the per-class "steering control" ticks
+	// have elapsed. That gap is the drag window — mouse movement during it is captured
+	// when the read finally fires.
+	RocketDragEventTick[index] = GetGameTickCount();
 }
 
 /**
- * This hook runs every server frame.
- * It's responsible for the smooth "homing" behaviour.
- * "legacy homing" is handled by the logic timer OnDodgeBallGameFrame (~10Hz).
+ * Per-rocket think dispatch. Called from OnGameFrame() per valid rocket.
+ *
+ * Warning: this MUST stay driven from OnGameFrame, not from SDKHook_Think.
+ * SDKHook_Think fires at the entity's native think rate. For
+ * `tf_projectile_rocket` that's only the rocket's own lifetime/fuel schedule
+ * (~10 Hz at best), NOT per-tick like it is for players. Driving homing from
+ * SDKHook_Think produces ~10 Hz homing, visible sine-wave motion from the
+ * engine-gravity vs our-correction mismatch, and rockets that "fly to space"
+ * against moving targets. OnGameFrame iteration is the supported path.
+ *
+ * Dispatches:
+ *   - HomingRocketThink (per-tick, internal "think interval" gating)
+ *   - RocketLegacyThink (10 Hz gated internally)
+ *   - SharedRocketThink (10 Hz gated internally)
+ */
+void OnRocketThink(int index)
+{
+	float now = GetGameTime();
+
+	// Per-tick behaviour dispatch
+	if (RocketClassBehaviour[RocketClass[index]] == Behaviour_Homing)
+	{
+		HomingRocketThink(index);
+	}
+
+	// 10 Hz logic (legacy-behaviour think + shared think: sounds, delays, non-smooth elevation).
+	// Gated internally to preserve the original timing of these systems.
+	// FPS_LOGIC_INTERVAL = 0.1 in tfdb.inc.
+	if ((now - RocketLastLogicThink[index]) >= FPS_LOGIC_INTERVAL)
+	{
+		RocketLastLogicThink[index] = now;
+
+		if (RocketClassBehaviour[RocketClass[index]] == Behaviour_LegacyHoming)
+		{
+			RocketLegacyThink(index);
+		}
+		SharedRocketThink(index);
+	}
+}
+
+/**
+ * Per-tick iterator. Drives per-rocket OnRocketThink dispatch.
+ * Fires every server tick (66-128 Hz). This is the reliable tick source for
+ * projectile-entity logic — SDKHook_Think is NOT (see OnRocketThink docblock).
  */
 public void OnGameFrame()
 {
@@ -283,10 +331,7 @@ public void OnGameFrame()
 	int index = -1;
 	while ((index = FindNextValidRocket(index)) != -1)
 	{
-		if (RocketClassBehaviour[RocketClass[index]] == Behaviour_Homing)
-		{
-			HomingRocketThink(index);
-		}
+		OnRocketThink(index);
 	}
 }
 
@@ -452,9 +497,9 @@ public Action OnTouch(int entity, int other)
 	}
 
 	// Pause homing — rocket flies freely with bounce velocity until
-	// the logic timer re-enables it (bounce pauses use timer, not per-frame drag).
-	RocketHomingPaused[index] = true;
-	RocketIsDragPause[index] = false;
+	// HomingRocketThink re-enables it after per-class "bounce control" ticks.
+	RocketHomingPaused[index]    = true;
+	RocketBounceEventTick[index] = GetGameTickCount();
 
 	TeleportEntity(entity, NULL_VECTOR, newAngles, bounceVec);
 	RocketBounces[index]++;

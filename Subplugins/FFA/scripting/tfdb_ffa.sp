@@ -136,7 +136,8 @@ public void OnClientDisconnect(int client)
 	if (((GetTeamAliveClientCount(team) - view_as<int>(IsPlayerAlive(client))) == 0) &&
 	    ((GetTeamAliveClientCount(otherTeam) - 1) >= 1))
 	{
-		ChangeAliveClientTeam(GetRandomTeamAliveClient(otherTeam), team);
+		int swap = GetRandomTeamAliveClient(otherTeam);
+		if (swap != -1) ChangeAliveClientTeam(swap, team);
 	}
 }
 
@@ -148,9 +149,10 @@ public void OnClientConnected(int client)
 public void OnPlayerTeam(Event event, char[] eventName, bool dontBroadcast)
 {
 	int client  = GetClientOfUserId(event.GetInt("userid"));
+	if (client == 0) return;
 	int team    = event.GetInt("team");
 	int oldTeam = event.GetInt("oldteam");
-	
+
 	if (!FFAEnabled ||
 	    !CvarSwitchTeams.BoolValue ||
 	    (CvarDisableOnBot.BoolValue && BotCount) ||
@@ -171,7 +173,8 @@ public void OnPlayerTeam(Event event, char[] eventName, bool dontBroadcast)
 		         ((GetTeamAliveClientCount(oldTeam) - view_as<int>(IsPlayerAlive(client))) == 0) &&
 		         ((GetTeamAliveClientCount(team) - 1) >= 1))
 		{
-			ChangeAliveClientTeam(GetRandomTeamAliveClient(team), oldTeam);
+			int swap = GetRandomTeamAliveClient(team);
+			if (swap != -1) ChangeAliveClientTeam(swap, oldTeam);
 		}
 	}
 	
@@ -212,7 +215,8 @@ public void OnPlayerDeath(Event event, char[] eventName, bool dontBroadcast)
 	}
 	
 	int victim = GetClientOfUserId(event.GetInt("userid"));
-	
+	if (victim == 0) return;
+
 	int team = GetClientTeam(victim);
 	
 	if (team <= 1) return; // ...
@@ -224,7 +228,8 @@ public void OnPlayerDeath(Event event, char[] eventName, bool dontBroadcast)
 	
 	if (((GetTeamAliveClientCount(team) - 1) == 0) && ((GetTeamAliveClientCount(otherTeam) - 1) >= 1))
 	{
-		ChangeAliveClientTeam(GetRandomTeamAliveClient(otherTeam), team);
+		int swap = GetRandomTeamAliveClient(otherTeam);
+		if (swap != -1) ChangeAliveClientTeam(swap, team);
 	}
 }
 
@@ -522,14 +527,33 @@ public Action TFDB_OnRocketCreatedPre(int index, int &rocketClass, RocketFlags &
 
 void ExecuteDisableConfig()
 {
-	char configPath[64]; CvarDisableConfig.GetString(configPath, sizeof(configPath));
-	ServerCommand("exec \"%s\"", configPath);
+	char configPath[PLATFORM_MAX_PATH]; CvarDisableConfig.GetString(configPath, sizeof(configPath));
+	if (configPath[0] == '\0') return;
+	ExecCfgIfExists(configPath, "disable");
 }
 
 void ExecuteEnableConfig()
 {
-	char configPath[64]; CvarEnableConfig.GetString(configPath, sizeof(configPath));
-	ServerCommand("exec \"%s\"", configPath);
+	char configPath[PLATFORM_MAX_PATH]; CvarEnableConfig.GetString(configPath, sizeof(configPath));
+	if (configPath[0] == '\0') return;
+	ExecCfgIfExists(configPath, "enable");
+}
+
+// Server cfgs live under the game's cfg/ folder. SM's FileExists with
+// use_valve_fs=true + "GAME" path id resolves relative to the mod dir,
+// which is the correct scope for "cfg/<relPath>".
+// Validate existence before issuing `exec` so missing files become a single
+// log line instead of a silent no-op.
+static void ExecCfgIfExists(const char[] relPath, const char[] label)
+{
+	char resolved[PLATFORM_MAX_PATH];
+	FormatEx(resolved, sizeof(resolved), "cfg/%s", relPath);
+	if (!FileExists(resolved, true, "GAME"))
+	{
+		LogMessage("[FFA] %s config not found: %s — skipping exec", label, resolved);
+		return;
+	}
+	ServerCommand("exec \"%s\"", relPath);
 }
 
 int GetTeamAliveClientCount(int team)
