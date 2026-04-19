@@ -118,7 +118,7 @@ bool        RocketHomingPaused[MAX_ROCKETS];     // true between OnTouch bounce 
 int         RocketDragEventTick[MAX_ROCKETS];     // GetGameTickCount() when object_deflected fired; read by HomingRocketThink after steering-control ticks
 int         RocketBounceEventTick[MAX_ROCKETS];   // GetGameTickCount() when OnTouch bounce happened; unpause after bounce-control ticks
 float       RocketNextHomingThink[MAX_ROCKETS];   // GetGameTime() when the homing-lerp block is next eligible. Only gated when class sets "think interval" > 0.
-float       RocketLastLogicThink[MAX_ROCKETS];    // GetGameTime() of last shared/legacy-think call (10 Hz gate inside per-tick SDKHook_Think)
+float       RocketLastLogicThink[MAX_ROCKETS];    // GetGameTime() of last shared/legacy-think call (10 Hz gate inside OnRocketThink)
 int         RocketCritGlow[MAX_ROCKETS];         // Entity ref for server-managed crit glow particle
 int         RocketCritGlowTeam[MAX_ROCKETS];     // Team the current crit glow was created for (avoids same-team recreate)
 bool        RocketIsCritical[MAX_ROCKETS];       // Whether this rocket rolled crit (damage x3, no m_bCritical networking)

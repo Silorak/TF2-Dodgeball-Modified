@@ -277,7 +277,7 @@ bool DebugActive = false;
 int  BotDebugTick[MAXPLAYERS + 1];  // Per-bot tick counter (was global, caused 4x logging with 4 bots)
 int  DebugSampleRate = 10;          // Log every N ticks (10 = ~6.6 samples/sec at 66 tick)
 int  DebugLinesWritten = 0;
-#define DEBUG_MAX_LINES 50000        // Rotate log file after this many lines (~7.5k per bot per minute at rate=10)
+#define DEBUG_MAX_LINES 50000        // Rotate log file after this many lines (~400/bot/minute at rate=10, 66 tick)
 char DebugLogPath[PLATFORM_MAX_PATH];
 File DebugFile = null;               // File handle for high-frequency writes (avoids console spam)
 
@@ -517,7 +517,7 @@ public void OnPluginStart() {
     
     // === ADMIN Commands ===
     RegAdminCmd("sm_botadmin", Cmd_BotAdmin, ADMFLAG_KICK, "[ADMIN] Open bot administration menu.");
-    RegAdminCmd("sm_setbottype", Cmd_SetBotType, ADMFLAG_KICK, "[ADMIN] Set bot type: 0-3");
+    RegAdminCmd("sm_setbottype", Cmd_SetBotType, ADMFLAG_KICK, "[ADMIN] Set bot type by class index (see pvb.cfg for available classes).");
     RegAdminCmd("sm_reloadbotcfg", Cmd_ReloadConfig, ADMFLAG_KICK, "[ADMIN] Reload pvb.cfg");
     RegAdminCmd("sm_resetbrain", Cmd_ResetBrain, ADMFLAG_ROOT, "[ROOT] Reset bot brain (all learning data).");
     RegAdminCmd("sm_botdebug", Cmd_BotDebug, ADMFLAG_ROOT, "[ROOT] Toggle persistent bot debug logging to CSV.");

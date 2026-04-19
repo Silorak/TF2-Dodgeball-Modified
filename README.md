@@ -53,7 +53,7 @@ A modular plugin suite built around a shared native API. The core plugin handles
 
 **Self-learning bot (PvB)** — Pyro dodgeball bot with persistent per-class SQLite brain. Learns per-opponent trick preferences, drifts reaction time with success/failure, tracks map-level danger heatmaps, runs league-style self-play for diversity. Capability-by-presence config: remove keys from `pvb.cfg` and the bot becomes physically incapable of that behavior (no orbits, no evasion, no CQC, no idle — or permanent idle with `idle_chance 100`). Multi-rocket threat detection forces defensive stance when two rockets converge. Team-join protection (ported from Guardian) prevents humans landing on the bot's team.
 
-**Anti-cheat** — Server-side detection targeted at free-paste cheats (cathook, fedoraware, lmaobox free tier). Six detections: AntiAim (impossible pitch), OneTickM2 (1-tick airblast signature), ReactTimeFloor (deflects below 120 ms physiological floor), DragSnapback (Redirect+AntiCheatCompat pattern), AirblastFacing (PSilent/choked-tick signature), SnapAim. Cumulative threshold scoring with configurable kick/ban actions and admin immunity. Does NOT target paid cheats with active AC bypass.
+**Anti-cheat** — Server-side detection targeted at common public-tier cheats. Six detections: AntiAim (impossible pitch), OneTickM2 (1-tick airblast signature), ReactTimeFloor (deflects below 120 ms physiological floor), DragSnapback (snap-airblast-restore pattern), AirblastFacing (tick-choking silent-aim signature), SnapAim. Cumulative threshold scoring with configurable kick/ban actions and admin immunity. Does NOT target paid-tier cheats with active AC bypass.
 
 **Per-map configs** — Override any setting for specific maps by creating `configs/dodgeball/tfdb_mapname.cfg`. The gamemode activates automatically on maps prefixed `tfdb_`, `db_`, or `dbs_` (including Workshop maps).
 
@@ -283,9 +283,14 @@ Create `configs/dodgeball/tfdb_mapname.cfg` (e.g. `tfdb_stadium_b3.cfg`) to over
 
 ## Subplugins
 
-### Guardian
+Click a section to expand details. Summaries stay visible for quick scanning.
+
+<details>
+<summary><b>Guardian</b> — 1-vs-all boss mode</summary>
 
 One player per round becomes the Guardian — a boss on BLU with boosted HP, a visible boss health bar, player glow, and two configurable abilities. Everyone else fights on RED. Guardian is blocked when bots (including PvB bots) are on the server, or during FFA rounds.
+
+**Commands**
 
 | Command | Permission | Description |
 |---------|------------|-------------|
@@ -293,85 +298,140 @@ One player per round becomes the Guardian — a boss on BLU with boosted HP, a v
 | `sm_guardianclass <class>` | CONFIG | Set guardian class for next round |
 | `sm_removeguardian` | CONFIG | Remove the current Guardian mid-round |
 | `sm_guardian` | Public | Toggle opt-out from being selected |
-| `sm_dguardian` | CHEATS | Toggle debug mode (spawns bots, verbose logging) |
+| `sm_dguardian` | ROOT | Toggle debug mode (spawns bots, verbose logging) |
 
-### PlayerVsBot (PvB)
+**Configured via** `configs/dodgeball/guardian.cfg` — classes, abilities, HUD position, selection chance.
+
+</details>
+
+<details>
+<summary><b>PlayerVsBot (PvB)</b> — self-learning dodgeball bot</summary>
 
 Self-learning Pyro dodgeball bot. Configured via `configs/dodgeball/pvb.cfg`.
 
+**Features**
+
 - **Persistent learning** — SQLite brain stored in `addons/sourcemod/data/sqlite/tfdb_pvb.sq3`. Per-class policy tables, reaction-time drift, per-opponent behavioral profile (keyed on SteamID), and per-map danger heatmaps.
 - **Six decision types** — airblast timing, trick selection, aim offset, movement mode, orbit choice, evasion. Each keyed on discretized world state + opponent tendency.
-- **Credit-assignment-aware rewards** — DEFLECT credits timing/aim/trick fully and positioning at half; DEATH inverts. Continuous shaping rewards (near-miss penalties, positional heuristics) fill the silence between deflect/death events.
-- **Multi-rocket awareness** — when 2+ rockets converge, bot forces defensive stance and blocks orbit entry (prevents back-phase into second rocket).
-- **Shared base policy** — new class types inherit aggregate wisdom from a type-agnostic key; mature classes diverge to their own policy. Accelerates learning for fresh additions.
-- **League-style self-play** — training mode detects monocultures and spawns exploiters of underdog types to force adaptation.
-- **Team-join protection** — 3-layer defense (command listener + `player_team` hook + reactive polling) prevents humans from landing on the bot's team. Training mode force-moves humans to spectator.
+- **Credit-assignment-aware rewards** — DEFLECT credits timing/aim/trick fully and positioning at half; DEATH inverts. Continuous shaping rewards fill the silence between deflect/death events.
+- **Multi-rocket awareness** — when 2+ rockets converge, bot forces defensive stance and blocks orbit entry.
+- **Shared base policy** — new class types inherit aggregate wisdom from a type-agnostic key; mature classes diverge to their own policy.
+- **League-style self-play** — training mode detects monocultures and spawns exploiters to force adaptation.
+- **Team-join protection** — 3-layer defense prevents humans from landing on the bot's team. Training mode force-moves humans to spectator.
 - **Capability-by-presence config** — remove keys from `pvb.cfg` and the bot loses that behavior entirely.
 
 Auto-locks `tf_bot_quota_mode normal` on plugin load + every map start so the server never auto-fills with vanilla Pyro bots.
 
+**Commands**
+
 | Command | Permission | Description |
 |---------|------------|-------------|
-| `sm_votepvb` / `sm_votebot` / `sm_botvote` | Public | Start enable-vote (if off) or disable-vote (if on) |
+| `sm_votepvb` / `sm_votebot` / `sm_botvote` | Public | Vote to enable the PvB bot |
 | `sm_pvb` | CONFIG | Admin toggle (bypasses vote) |
 | `sm_trainbots` | ROOT | Spawn training bots (bot-vs-bot self-play) |
+| `sm_setbottype <index>` | KICK | Set bot class (see `pvb.cfg` for indices) |
+| `sm_reloadbotcfg` | KICK | Reload `pvb.cfg` without map change |
 
-### AntiCheat
+</details>
 
-Server-side cheat detection. Targets free-paste cheats (cathook, fedoraware, lmaobox free tier) — **not** paid cheats with active AC bypass.
+<details>
+<summary><b>AntiCheat</b> — server-side detection (6 categories)</summary>
 
-Six active detections:
+Server-side cheat detection. Targets common public-tier cheats — **not** paid-tier cheats with active AC bypass.
+
+**Detections**
 
 | Detection | Catches | Decays? | Weight |
 |---|---|---|---|
-| `AntiAim` | Pitch outside ±89° (Amalgam antiaim) | No | 5 |
+| `AntiAim` | Pitch outside ±89° (engine-impossible) | No | 5 |
 | `ReactTimeFloor` | Deflect <120 ms from rocket becoming incoming | No | 8 |
 | `OneTickM2` | IN_ATTACK2 held for exactly 1 tick, streak ≥3 | Yes | 6 |
-| `DragSnapback` | Redirect+AntiCheatCompat post-control-delay pattern | Yes | 4 |
+| `DragSnapback` | Post-control-delay snap-and-return pattern | Yes | 4 |
 | `AirblastFacing` | 3 consecutive deflects while not facing rocket | Yes | 4 |
 | `SnapAim` | >35° single-tick angle snap + airblast + return | Yes | 5 |
 
-Admin commands: `sm_ac_status` (flag-gated), `sm_ac_reset <player>`, `sm_ac_debug_player <player>`. Companion `tfdb_ac_debug.smx` provides per-client usercmd CSV logging for triage.
+**Cvars** — see Configuration section above for the full cvar table.
 
-### FFA
+**Commands**
+
+| Command | Permission | Description |
+|---------|------------|-------------|
+| `sm_ac_status` | BAN | Show live suspicion scores for all players |
+| `sm_ac_reset <player>` | ROOT | Reset detection counters for one player |
+| `sm_ac_debug_player <player>` | ROOT | Toggle per-client usercmd CSV logging |
+
+Companion plugin `tfdb_ac_debug.smx` provides the per-client CSV logging for triage — enable with `sm_ac_debug_player`.
+
+</details>
+
+<details>
+<summary><b>FFA</b> — free-for-all mode</summary>
 
 Free-for-all mode. Enables friendly fire so rockets target everyone. Toggled via vote or admin command. Automatically blocked during Guardian rounds.
 
-### Votes
+</details>
+
+<details>
+<summary><b>Votes</b> — in-game voting system</summary>
 
 Player voting system for enabling/disabling game features mid-match.
 
-### Speedometer
+</details>
 
-Real-time HUD displaying current rocket speed in MPH. Positioned to not overlap with Guardian HUD.
+<details>
+<summary><b>Speedometer</b> — real-time rocket speed HUD</summary>
 
-### Trails
+Real-time HUD displaying current rocket speed in MPH. Positioned to not overlap with Guardian HUD. Players can toggle with a client cookie (persists across sessions).
 
-Visual sprite-based trail effects on rockets. Players can toggle visibility with `sm_rockettrails` and `sm_rocketspritetrails`.
+</details>
 
-### AntiSnipe
+<details>
+<summary><b>Trails</b> — sprite + particle rocket trails</summary>
 
-Blocks players from interfering with rockets at long distances using CollisionHook. Requires the CollisionHook extension.
+Visual sprite-based trail effects on rockets. Players can toggle visibility with `sm_rockettrails` and `sm_rocketspritetrails`. Configured in rocket class blocks in `general.cfg` (trail fields are commented out by default — see `guide.md` for enabling).
 
-### Menu
+</details>
 
-In-game admin menu for adjusting dodgeball settings without editing config files.
+<details>
+<summary><b>AntiSnipe</b> — long-distance rocket interference blocker</summary>
 
-### ExtraEvents
+Blocks players from interfering with rockets at long distances using CollisionHook. Requires the CollisionHook extension. Warns at load time if the extension is missing.
 
-Adds the `on destroyed` event for rockets that explode without killing a player. Required if your rocket class configs use that event.
+</details>
 
-### Print
+<details>
+<summary><b>Menu</b> — in-game admin config menu</summary>
 
-Enhanced chat formatting for event commands. Provides `tf_dodgeball_print` with color tag support (`{olive}`, `{red}`, `##@owner##` team-color substitutions, etc.).
+In-game admin menu for adjusting dodgeball settings without editing config files. Live reload option picks up disk changes to `general.cfg`.
+
+| Command | Permission | Description |
+|---|---|---|
+| `sm_tfdb` | CONFIG | Open the admin menu |
+
+</details>
+
+<details>
+<summary><b>ExtraEvents</b> — additional rocket event hooks</summary>
+
+Adds the `on destroyed` event for rockets that explode without killing a player. Required if your rocket class configs use that event in `general.cfg`.
+
+</details>
+
+<details>
+<summary><b>Print</b> — chat color formatting</summary>
+
+Enhanced chat formatting for event commands. Provides `tf_dodgeball_print` with color tag support (`{olive}`, `{red}`, `##@owner##` team-color substitutions, etc.). See `guide.md` for the full color tag list.
+
+</details>
 
 ---
 
 ## Developer API
 
-Include the relevant `.inc` in your plugin. Core provides 130+ natives; Guardian and PvB expose state-query natives for cross-plugin coordination.
+Include the relevant `.inc` in your plugin. Core provides 130+ natives; Guardian and PvB expose state-query natives for cross-plugin coordination. Click a section to see the main natives and forwards.
 
-### Core — `tfdb.inc`
+<details>
+<summary><b>Core</b> — <code>tfdb.inc</code> (130+ natives)</summary>
 
 ```sourcepawn
 #include <tfdb>
@@ -390,7 +450,7 @@ TFDB_CreateRocket(int spawner, int spawnerClass, int team)
 TFDB_DestroyRocket(int iIndex)
 ```
 
-Forwards:
+**Forwards**
 
 ```sourcepawn
 TFDB_OnRocketCreated(int iIndex, int iEntity)
@@ -400,7 +460,12 @@ TFDB_OnRocketSteal(int iIndex, int iOwner, int iTarget, int iStealCount)
 TFDB_OnRocketsConfigExecuted(const char[] configFile)
 ```
 
-### Guardian — `tfdb_guardian.inc`
+Full reference: [`tfdb.inc`](TF2Dodgeball/addons/sourcemod/scripting/include/tfdb.inc).
+
+</details>
+
+<details>
+<summary><b>Guardian</b> — <code>tfdb_guardian.inc</code></summary>
 
 ```sourcepawn
 #include <tfdb_guardian>
@@ -410,7 +475,12 @@ TFDB_GetGuardian()           // int:  guardian client index, or 0
 TFDB_IsNextRoundGuardian()   // bool: will next round be guardian?
 ```
 
-### PlayerVsBot — `tfdb_pvb.inc`
+Use these if your subplugin needs to refuse activation while a Guardian round is live.
+
+</details>
+
+<details>
+<summary><b>PlayerVsBot</b> — <code>tfdb_pvb.inc</code></summary>
 
 ```sourcepawn
 #include <tfdb_pvb>
@@ -421,35 +491,64 @@ TFDB_IsPvBTraining()         // bool: training mode active (bot-vs-bot)
 
 Use these if your subplugin needs to defer to PvB — e.g., refuse to activate a conflicting mode while PvB owns the round.
 
+</details>
+
 > Full API documentation available in the `.inc` headers under `addons/sourcemod/scripting/include/`.
 
 ---
 
 ## Troubleshooting
 
+Click a category to expand relevant issues.
+
+<details>
+<summary><b>Install & load</b> — plugin not loading, dependencies</summary>
+
 **Dodgeball not activating** — The gamemode only activates on maps prefixed `tfdb_`, `db_`, or `dbs_` (including Workshop maps). Check that `dodgeball.smx` is loaded with `sm plugins list` in server console.
-
-**Guardian not triggering** — Guardian is automatically blocked when bots are on the server (on RED or BLU teams). Kick all bots first. It's also blocked during FFA rounds, PvB rounds, and when fewer than 2 eligible players are present. Check `logs/guardian_select.log` for detailed selection diagnostics.
-
-**Guardian abilities not working** — Abilities only unlock after `arena_round_start` fires (when players can move). Check that your `guardian.cfg` has valid ability types and buttons.
-
-**Rockets not homing** — Make sure `general.cfg` has `"behaviour" "homing"` on your rocket class. The `"legacy homing"` mode behaves differently. Check that `dodgeball_enable.cfg` is being exec'd.
 
 **Subplugin not loading** — Make sure the `.smx` file is in `addons/sourcemod/plugins/` (not still in the `Subplugins/` source folder). Check `sm plugins list` and the SourceMod error log for dependency issues.
 
 **TF2Attributes errors** — Make sure both `tf2attributes.smx` (extension) and `gamedata/tf2.attributes.txt` are installed. Guardian's health and ability system requires this. Download from [FlaminSarge/tf2attributes](https://github.com/FlaminSarge/tf2attributes).
 
+</details>
+
+<details>
+<summary><b>Rockets</b> — homing, model, feel</summary>
+
+**Rockets not homing** — Make sure `general.cfg` has `"behaviour" "homing"` on your rocket class. The `"legacy homing"` mode behaves differently. Check that `dodgeball_enable.cfg` is being exec'd.
+
+**Rockets feel sticky or unflickable after deflect** — Check `"steering control"` on the affected class. Higher values (5-8) give a wider drag window. Set `"control delay"` to 0 for immediate post-read homing; 0.1+ for a coast period.
+
+**Nuke rocket renders as ERROR model / red cube** — Your server has `sv_pure 1` (or higher) without a whitelist for `models/custom/dodgeball/`. The nuke's custom model (`models/custom/dodgeball/nuke/nuke.mdl`) is being blocked by pure mode. Either add the custom path to `cfg/pure_server_whitelist.txt`, set `sv_pure 0` / `-1`, or clear the `"model"` field on the nuke class in `general.cfg` to fall back to the default rocket model.
+
+</details>
+
+<details>
+<summary><b>Guardian</b> — not triggering, abilities broken</summary>
+
+**Guardian not triggering** — Guardian is automatically blocked when bots are on the server (on RED or BLU teams). Kick all bots first. It's also blocked during FFA rounds, PvB rounds, and when fewer than 2 eligible players are present. Check `logs/guardian_select.log` for detailed selection diagnostics.
+
+**Guardian abilities not working** — Abilities only unlock after `arena_round_start` fires (when players can move). Check that your `guardian.cfg` has valid ability types and buttons.
+
+</details>
+
+<details>
+<summary><b>PlayerVsBot (PvB)</b> — bot replaced, team mixing</summary>
+
 **PvB bot replaced by dumb vanilla bot after map change** — Your server has `tf_bot_quota_mode fill` or `match`. PvB auto-sets it to `normal` on plugin load + each map start, but some map configs override it. Add `sm_cvar tf_bot_quota_mode normal` to your `cfg/sourcemod/dodgeball_enable.cfg` as a belt-and-suspenders.
 
-**PvB bot renders as ERROR model / red cube** — Your server has `sv_pure 1` (or higher) without a whitelist for `models/custom/dodgeball/`. Add the custom path to `cfg/pure_server_whitelist.txt`, or set `sv_pure 0` / `-1` on your server.
+**Players spawning on the bot's team briefly** — Should no longer happen after the team-join protection layer landed. If you see it, confirm `tfdb_pvb.smx` is loaded and the `player_team` event hook + command listener registered successfully in the server console at plugin load.
 
-**Players spawning on the bot's team briefly** — Should no longer happen as of the April 2026 team-join protection layer. If you see it, confirm `tfdb_pvb.smx` is loaded and the `player_team` event hook + command listener registered successfully in the server console at plugin load.
+</details>
+
+<details>
+<summary><b>AntiCheat</b> — false positives, late load</summary>
 
 **AntiCheat flagging legit pros** — Run with `tfdb_ac_action 0` (log only) first; review detection distributions per player before kicking/banning. Raise `tfdb_ac_action_threshold` if pros trip via SnapAim or AirblastFacing (both have residual FP risk).
 
-**AntiCheat not detecting on late plugin load** — Timers are created in `OnMapStart`. If you load the plugin mid-map, the plugin auto-triggers `OnMapStart` on late load (as of April 2026). If you see "timers not firing" errors on old builds, just change map.
+**AntiCheat not detecting on late plugin load** — Timers are created in `OnMapStart`. The plugin now auto-triggers `OnMapStart` when loaded mid-map. If you see "timers not firing" on older builds, just change map.
 
-**Rockets feel sticky or unflickable after deflect** — Check `"steering control"` on the affected class. Higher values (5-8) give a wider drag window. Set `"control delay"` to 0 for immediate post-read homing; 0.1+ for a coast period.
+</details>
 
 ---
 

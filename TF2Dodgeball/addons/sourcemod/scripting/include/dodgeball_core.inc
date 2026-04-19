@@ -161,9 +161,9 @@ void DisableDodgeBall()
 }
 
 /**
- * This is the main logic timer for the gamemode.
- * It handles rocket spawning and the logic for "legacy homing" rockets.
- * It also calls shared logic functions like sound updates.
+ * Spawner bookkeeping timer — creates new rockets when NextSpawnTime elapses.
+ * Per-rocket think (homing, legacy-behaviour step, shared logic) runs in
+ * OnRocketThink, dispatched from OnGameFrame — not here.
  */
 public Action OnDodgeBallGameFrame(Handle timer, any data)
 {
@@ -196,8 +196,8 @@ public Action OnDodgeBallGameFrame(Handle timer, any data)
 		}
 	}
 
-	// Per-rocket think (legacy-behaviour step + shared logic) now runs inside OnRocketThink
-	// via SDKHook_Think per entity, gated internally to 10 Hz. This timer only handles
+	// Per-rocket think (legacy-behaviour step + shared logic) runs inside OnRocketThink,
+	// dispatched from OnGameFrame and gated internally to 10 Hz. This timer only handles
 	// spawner bookkeeping now — rockets manage their own cadence.
 
 	return Plugin_Continue;

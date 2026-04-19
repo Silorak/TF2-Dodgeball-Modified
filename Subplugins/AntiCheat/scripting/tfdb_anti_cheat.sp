@@ -1368,18 +1368,18 @@ void AnalyzeAirblastTiming(int client, int ticksMargin)
 // ============================================================================
 
 /**
- * Convert raw detection counts into a weighted score and take action
- * if the threshold is exceeded.
- *
- * Different detection types have different confidence levels:
- * - Snapback/SilentAim: HIGH confidence (hard to false-positive)
- * - MoveFix: HIGH confidence (mathematically precise signature)
- * - PerfectTiming: MEDIUM confidence (good players CAN be fast)
- * - SnapAim: MEDIUM confidence (high-DPI mice produce large deltas)
- * - FrozenSnap: LOW confidence (could be alt-tabbing)
- */
-/**
  * Calculate the weighted score for a player from raw detection counts.
+ *
+ * Confidence tiers (reflected in the weights below):
+ * - AntiAim, ReactTimeFloor: CRITICAL — physiological / engine-level
+ *   impossibilities. Zero-FP by design. Do not decay.
+ * - OneTickM2: HIGH — free-paste cheat fingerprint, streak-gated.
+ * - DragSnapback, AirblastFacing: HIGH — specific behavioral signatures,
+ *   streak-gated for FP reduction.
+ * - SnapAim: MEDIUM — tuned (35° threshold + plugin-modified angle gate)
+ *   but high-DPI flicks can still false-positive.
+ * - ConsistentTiming, PerfectStreak: MEDIUM — auto-airblast timing
+ *   regularity; legit chain play can mimic briefly.
  */
 int CalculateScore(int client)
 {

@@ -565,8 +565,9 @@ void HomingRocketThink(int index)
 }
 
 /**
- * Handles logic that is shared between all rocket behaviours, like sounds and delay checks.
- * This is called from the logic timer in dodgeball_core.inc
+ * Handles logic that is shared between all rocket behaviours (sounds, delay checks,
+ * elevation step, no-target handling). Called from OnRocketThink (in events.inc)
+ * under a ~10 Hz gate via RocketLastLogicThink.
  */
 void SharedRocketThink(int index)
 {
@@ -580,7 +581,7 @@ void SharedRocketThink(int index)
 
 	// Bounce unpause now happens per-frame in HomingRocketThink via RocketClassBounceControl ticks.
 	// Drag is also per-frame in HomingRocketThink via RocketClassSteeringControl. Nothing pause-related
-	// runs on this ~10Hz logic timer anymore.
+	// runs on this ~10 Hz logic gate anymore.
 
 	// --- Elevation (runs at logic timer rate when smooth elevation is off) ---
 	if (!(deflectionCount > RocketDeflections[index]))
