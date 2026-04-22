@@ -24,6 +24,7 @@ A modular plugin suite built around a shared native API. The core plugin handles
 | **Guardian** | `tfdb_guardian.smx` | 1-vs-all boss mode with configurable classes and abilities |
 | **FFA** | `tfdb_ffa.smx` | Free-for-all mode with friendly fire |
 | **PlayerVsBot** | `tfdb_pvb.smx` | Self-learning dodgeball AI with capability-driven config |
+| **DeathMatch** | `tfdb_deathmatch.smx` | Never-Ending Rounds + Solo queue (based on Mikah's NER/SOLO) |
 | **AntiCheat** | `tfdb_anti_cheat.smx` | Server-side cheat detection (+ `tfdb_ac_debug.smx` debug companion) |
 | **Votes** | `tfdb_votes.smx` | Player voting system |
 | **Menu** | `tfdb_menu.smx` | In-game admin settings menu |
@@ -356,7 +357,47 @@ Companion plugin `tfdb_ac_debug.smx` provides the per-client CSV logging for tri
 <details>
 <summary><b>FFA</b> — free-for-all mode</summary>
 
-Free-for-all mode. Enables friendly fire so rockets target everyone. Toggled via vote or admin command. Automatically blocked during Guardian rounds.
+Free-for-all mode. Enables friendly fire so rockets target everyone. Toggled via vote or admin command. Automatically blocked during Guardian rounds. **Coexists with DeathMatch** — NER behavior adapts to skip team swaps when FFA is active.
+
+</details>
+
+<details>
+<summary><b>DeathMatch</b> — Never-Ending Rounds + Solo queue</summary>
+
+Based on **Mikah's** *NER/SOLO Standalone plugin For Dodgeball* (v1.5.3), rewritten for TFDB v2.2.0. Two modes that work together or independently:
+
+- **NER (Never-Ending Rounds)** — when a team would lose, a player from the winning team is swapped over to keep the round going. Great for small servers where a round would otherwise end in seconds.
+- **Solo queue** — players can toggle solo to sit out mid-round. They die immediately and are respawned whenever a team empties (with optional priority over NER team-swaps).
+
+Players get a short damage-immunity window after any DeathMatch respawn. A horn plays to signal the respawn.
+
+**Mutually exclusive** with Guardian and PvB (team-management conflict). **Coexists with FFA** — NER adapts to respawn players in-place instead of swapping teams when FFA is on.
+
+**Commands**
+
+| Command | Permission | Description |
+|---|---|---|
+| `sm_solo` | Public | Toggle solo (join/leave the queue) |
+| `sm_votener` | Public | Vote to toggle Never-Ending Rounds |
+| `sm_dm_ner` | CONFIG | Admin toggle NER directly (bypasses vote) |
+
+<details>
+<summary><b>Cvars</b></summary>
+
+Auto-created in `cfg/sourcemod/tfdb_deathmatch.cfg` on first run.
+
+| Cvar | Default | Purpose |
+|---|---|---|
+| `tfdb_dm_ner_enabled` | `1` | Enable NER feature |
+| `tfdb_dm_ner_force` | `0` | Force NER on (cannot be disabled by vote or admin) |
+| `tfdb_dm_ner_force_start` | `0` | Turn NER on at map start |
+| `tfdb_dm_ner_vote_timeout` | `120` | NER vote cooldown in seconds |
+| `tfdb_dm_solo_enabled` | `1` | Enable solo queue |
+| `tfdb_dm_solo_priority` | `1` | Respawn soloers before switching alive teammates |
+| `tfdb_dm_horn_volume` | `0.5` | Volume (0–1) of the respawn horn |
+| `tfdb_dm_respawn_protection` | `2.0` | Seconds of damage immunity after a DM respawn |
+
+</details>
 
 </details>
 
@@ -539,6 +580,19 @@ Click a category to expand relevant issues.
 
 </details>
 
+<details>
+<summary><b>DeathMatch</b> — NER/Solo not activating, cosmetics wrong color</summary>
+
+**`sm_dm_ner` says "cannot activate"** — DeathMatch refuses when Guardian or PvB is active. Disable those first (`sm_votepvb` / `sm_removeguardian`) or wait for the round to end.
+
+**NER swapped me to the other team but my cosmetic is still the old team color** — Fixed. DeathMatch does a two-pass wearable fix (immediate + next-frame) on every swap. If you somehow still hit it, a manual respawn resolves it.
+
+**NER "works" in FFA but feels weird** — By design. When FFA is active, NER respawns players on whichever team they were on (no cross-team swap), since FFA has already neutralized team sides.
+
+**Soloer list truncated** — The announce buffer is 512 chars (~30–40 names). Servers with that many simultaneous soloers almost certainly don't exist, but if yours does, raise `listBuffer` size in `tfdb_deathmatch.sp`.
+
+</details>
+
 ---
 
 ## Credits
@@ -550,6 +604,7 @@ Click a category to expand relevant issues.
 | **ClassicGuzzi** | Dodgeball Redux |
 | **BloodyNightmare & Mitchell** | Airblast Prevention |
 | **x07x08** | Major Advancements |
+| **Mikah** | NER/SOLO Standalone plugin (basis of DeathMatch) |
 | **Silorak** | Current Maintainer |
 
 And the entire SourceMod community for their continued support.

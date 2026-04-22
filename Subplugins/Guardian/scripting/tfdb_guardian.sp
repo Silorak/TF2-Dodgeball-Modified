@@ -11,6 +11,7 @@
 #include <tfdb>
 #include <tfdb_guardian>
 #include <tfdb_pvb>
+#include <tfdb_deathmatch>
 #include <tf2attributes>
 
 #define PLUGIN_NAME        "[TFDB] Guardian"
@@ -681,6 +682,16 @@ bool CanActivateGuardian()
 	    TFDB_IsPvBActive())
 	{
 		GuardianLog("CanActivateGuardian - false: PvB is active");
+		return false;
+	}
+
+	// DeathMatch mutual exclusion — NER swaps teams, which conflicts with
+	// Guardian's boss-on-BLU rule. See frameworks/deathmatch-mutual-exclusion.
+	if (LibraryExists("tfdb_deathmatch") &&
+	    GetFeatureStatus(FeatureType_Native, "TFDB_IsDeathMatchActive") == FeatureStatus_Available &&
+	    TFDB_IsDeathMatchActive())
+	{
+		GuardianLog("CanActivateGuardian - false: DeathMatch is active");
 		return false;
 	}
 

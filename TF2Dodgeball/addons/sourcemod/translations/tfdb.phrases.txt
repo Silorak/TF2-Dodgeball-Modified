@@ -1138,4 +1138,115 @@
 		"en"		"[{olive}TFDB{default}] Type new max deflections."
 	}
 
+	// ========================================================================
+	//  DeathMatch (NER + Solo)
+	// ========================================================================
+
+	"DeathMatch_NER_Enabled"
+	{
+		"en"		"[{olive}TFDB{default}] {darkmagenta}NER{default} is now {community}enabled{default}."
+	}
+
+	"DeathMatch_NER_Disabled"
+	{
+		"en"		"[{olive}TFDB{default}] {darkmagenta}NER{default} is now {red}disabled{default}."
+	}
+
+	"DeathMatch_NER_Disabled_Not_Enough_Players"
+	{
+		"en"		"[{olive}TFDB{default}] {darkmagenta}NER{default} is now {red}disabled{default} (not enough players)."
+	}
+
+	"DeathMatch_NER_Disabled_Conflict"
+	{
+		"en"		"[{olive}TFDB{default}] {darkmagenta}NER{default} was {red}disabled{default} (Guardian or PvB became active)."
+	}
+
+	"DeathMatch_NER_Not_Allowed"
+	{
+		"en"		"[{olive}TFDB{default}] {darkmagenta}NER{default} is currently {red}disabled{default}."
+	}
+
+	"DeathMatch_NERVote_Cooldown"
+	{
+		"#format"	"{1:.0f}"
+		"en"		"[{olive}TFDB{default}] {darkmagenta}NER{default} vote is on cooldown for {darkorange}{1}{default} more seconds."
+	}
+
+	"DeathMatch_NERVote_Failed"
+	{
+		"en"		"[{olive}TFDB{default}] {darkmagenta}NER{default} vote {red}failed{default}."
+	}
+
+	"DeathMatch_Blocked_Conflict"
+	{
+		"en"		"[{olive}TFDB{default}] {darkmagenta}DeathMatch{default} cannot activate while Guardian or PvB is running."
+	}
+
+	"DeathMatch_Vote_Conflict"
+	{
+		"en"		"[{olive}TFDB{default}] Another vote is already in progress."
+	}
+
+	"DeathMatch_Solo_Toggled_On"
+	{
+		"en"		"[{olive}TFDB{default}] {darkmagenta}Solo{default} is now {community}enabled{default}."
+	}
+
+	"DeathMatch_Solo_Toggled_Off"
+	{
+		"en"		"[{olive}TFDB{default}] {darkmagenta}Solo{default} is now {red}disabled{default}."
+	}
+
+	"DeathMatch_Solo_Not_Allowed"
+	{
+		"en"		"[{olive}TFDB{default}] {darkmagenta}Solo{default} is currently {red}disabled{default}."
+	}
+
+	"DeathMatch_Solo_Not_Possible_Last_Alive"
+	{
+		"en"		"[{olive}TFDB{default}] {darkmagenta}Solo{default} can {red}not{default} be enabled \u2014 you are the last player alive."
+	}
+
+	"DeathMatch_Solo_Not_Possible_No_Teammates"
+	{
+		"en"		"[{olive}TFDB{default}] Your {darkmagenta}solo{default} was {red}disabled{default} \u2014 no alive teammates."
+	}
+
+	"DeathMatch_Solo_Not_Possible_NER_Would_End"
+	{
+		"en"		"[{olive}TFDB{default}] Your {darkmagenta}solo{default} was {red}disabled{default} \u2014 NER would have ended otherwise."
+	}
+
+	"DeathMatch_Solo_Disabled_By_Config"
+	{
+		"en"		"[{olive}TFDB{default}] Your {darkmagenta}solo{default} was {red}disabled{default} by a config change."
+	}
+
+	"DeathMatch_Solo_Notify_Not_Respawned"
+	{
+		"en"		"[{olive}TFDB{default}] You'll be respawned at the end of the round ({darkmagenta}solo{default} enabled)."
+	}
+
+	"DeathMatch_Solo_Notify_Not_Respawned_Mid_Round"
+	{
+		"en"		"[{olive}TFDB{default}] You'll be respawned when one team empties ({darkmagenta}solo{default} enabled)."
+	}
+
+	"DeathMatch_Solo_Announce_Soloers"
+	{
+		"#format"	"{1:s}"
+		"en"		"[{olive}TFDB{default}] {darkmagenta}Soloers{default}: {darkorange}{1}{default}"
+	}
+
+	"DeathMatch_Vote_Menu_Title_Enable"
+	{
+		"en"		"Enable NER mode?"
+	}
+
+	"DeathMatch_Vote_Menu_Title_Disable"
+	{
+		"en"		"Disable NER mode?"
+	}
+
 }

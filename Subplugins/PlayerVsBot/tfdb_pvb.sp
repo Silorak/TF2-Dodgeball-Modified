@@ -13,6 +13,7 @@
 #undef REQUIRE_PLUGIN
 #tryinclude <tfdb>
 #tryinclude <tfdb_guardian>
+#tryinclude <tfdb_deathmatch>
 #define REQUIRE_PLUGIN
 
 #define PLUGIN_VERSION "2.2.0"
@@ -842,6 +843,16 @@ void EnablePvB() {
         if (TFDB_IsGuardianActive()) {
             CPrintToChatAll("{olive}[TFDB]{default} Cannot enable PvB while a Guardian round is active.");
             LogMessage("[PvB] EnablePvB refused: TFDB_IsGuardianActive() returned true");
+            return;
+        }
+    }
+
+    // DeathMatch (NER / Solo) mutual exclusion — DM swaps teams which corrupts
+    // the PvB bot-vs-humans team layout. See frameworks/deathmatch-mutual-exclusion.
+    if (GetFeatureStatus(FeatureType_Native, "TFDB_IsDeathMatchActive") == FeatureStatus_Available) {
+        if (TFDB_IsDeathMatchActive()) {
+            CPrintToChatAll("{olive}[TFDB]{default} Cannot enable PvB while DeathMatch (NER/Solo) is active.");
+            LogMessage("[PvB] EnablePvB refused: TFDB_IsDeathMatchActive() returned true");
             return;
         }
     }
