@@ -226,6 +226,12 @@ float NextShapingReward[MAXPLAYERS + 1];
 // Flushed on round end and map end via FlushBrainWrites().
 StringMap BrainWriteQueue = null;
 
+// When true, QueueBrainWrite silently drops incoming writes and FlushBrainWrites
+// bails at its top. Set during admin brain-reset DELETE so late writes from
+// in-flight timers don't recreate rows that were meant to be wiped. Cleared by
+// the reset-success callback. See ai-bots/pvb-brain-reset-protocol.md.
+bool BrainDraining = false;
+
 // Multi-loop WASD orbit state
 int OrbitPhaseIdx[MAXPLAYERS + 1];        // Current WASD phase (1-4)
 float OrbitPhaseEnd[MAXPLAYERS + 1];   // When current phase expires
@@ -682,6 +688,20 @@ public void SQL_LoadBrain(Database db, DBResultSet results, const char[] error, 
 
 public void SQL_Generic(Database db, DBResultSet results, const char[] error, any data) {
     if (error[0] != '\0') LogError("[PvB] DB Error: %s", error);
+}
+
+// Completion callback for admin brain-reset DELETEs. Clears BrainDraining so
+// normal writes resume, then reloads the in-memory brain from the (now empty
+// or pruned) table. If the DELETE failed we still clear the flag — keeping it
+// set would permanently block writes; the error is logged and the admin can retry.
+public void SQL_BrainResetComplete(Database db, DBResultSet results, const char[] error, any data) {
+    if (error[0] != '\0') {
+        LogError("[PvB] Brain reset DELETE failed: %s", error);
+    }
+    BrainDraining = false;
+    if (db != null) {
+        db.Query(SQL_LoadBrain, "SELECT state_key, trick_id, weight FROM bot_brain_v3");
+    }
 }
 
 // ============================================================================
@@ -1288,29 +1308,56 @@ public Action Cmd_ResetBrain(int client, int args) {
     return Plugin_Handled;
 }
 
+// Admin-issued full brain wipe. Drain-flush-delete protocol:
+//   1. Set BrainDraining (QueueBrainWrite + FlushBrainWrites now bail).
+//   2. FlushBrainWrites persists any pending queue — then we clear BrainMemory.
+//   3. Issue DELETE via the threaded driver; driver serializes it after the
+//      flush's COMMIT so no race.
+//   4. Completion callback (SQL_BrainResetComplete) clears BrainDraining.
+// Late writes arriving between step 1 and step 4 are silently dropped, which
+// is correct — the admin asked for a wipe. See ai-bots/pvb-brain-reset-protocol.md.
 void ResetAllBrainData() {
+    BrainDraining = true;
+
+    // Persist anything already queued (so if the DELETE fails, we haven't lost
+    // pre-reset state). Runs synchronously from the caller's POV — FlushBrainWrites
+    // fires its queries through the serialized driver.
+    if (BrainWriteQueue != null) {
+        // Bypass the BrainDraining gate for this one intentional flush.
+        BrainDraining = false;
+        FlushBrainWrites();
+        BrainDraining = true;
+    }
+
     if (BrainMemory != null) {
         BrainMemory.Clear();
     }
     if (BrainDB != null) {
-        BrainDB.Query(SQL_Generic, "DELETE FROM bot_brain_v3");
+        BrainDB.Query(SQL_BrainResetComplete, "DELETE FROM bot_brain_v3");
+    } else {
+        BrainDraining = false;  // no DB, nothing will call back
     }
 }
 
 void ResetBrainForType(int botType) {
-    // Delete all keys that contain the type prefix
-    if (BrainDB != null) {
-        char query[256];
-        FormatEx(query, sizeof(query), "DELETE FROM bot_brain_v3 WHERE state_key LIKE '%%_t%d_%%'", botType);
-        BrainDB.Query(SQL_Generic, query);
+    BrainDraining = true;
+
+    if (BrainWriteQueue != null) {
+        BrainDraining = false;
+        FlushBrainWrites();
+        BrainDraining = true;
     }
-    
-    // For in-memory, we'd need to iterate - simpler to just reload
+
     if (BrainMemory != null) {
         BrainMemory.Clear();
     }
     if (BrainDB != null) {
-        BrainDB.Query(SQL_LoadBrain, "SELECT state_key, trick_id, weight FROM bot_brain_v3");
+        char query[256];
+        FormatEx(query, sizeof(query), "DELETE FROM bot_brain_v3 WHERE state_key LIKE '%%_t%d_%%'", botType);
+        BrainDB.Query(SQL_BrainResetComplete, query);
+        // reload happens on the reset-complete callback's follow-up
+    } else {
+        BrainDraining = false;
     }
 }
 
@@ -4132,6 +4179,7 @@ void AdjustBrain(const char[] brainKey, int optionId, int adjustment, const int[
 // (key, option) overwrite — latest weight wins. Flushed via FlushBrainWrites.
 void QueueBrainWrite(const char[] brainKey, int optionId, int weight) {
     if (BrainWriteQueue == null) return;
+    if (BrainDraining) return;  // reset in progress; drop write
     char qkey[72];
     FormatEx(qkey, sizeof(qkey), "%s|%d", brainKey, optionId);
     BrainWriteQueue.SetValue(qkey, weight);
@@ -4142,6 +4190,7 @@ void QueueBrainWrite(const char[] brainKey, int optionId, int weight) {
 // repeated writes to the same cell.
 void FlushBrainWrites() {
     if (BrainWriteQueue == null || BrainDB == null) return;
+    if (BrainDraining) return;  // reset in progress; skip this flush cycle
     int n = BrainWriteQueue.Size;
     if (n == 0) return;
 

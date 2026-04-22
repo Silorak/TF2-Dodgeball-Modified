@@ -10,6 +10,7 @@
 
 #include <tfdb>
 #include <tfdb_guardian>
+#include <tfdb_pvb>
 #include <tf2attributes>
 
 #define PLUGIN_NAME        "[TFDB] Guardian"
@@ -283,7 +284,7 @@ public Action Listener_BlockBLUJoin(int client, const char[] command, int argc)
 	if (client == guardianClient && IsPlayerAlive(client))
 	{
 		GuardianLog("[CMD] " ... "BlockBLUJoin - BLOCKED '%s' from guardian %N (client=%d) - guardian is alive on BLU", command, client, client);
-		CPrintToChat(client, "{red}[TFDB] You cannot use '%s' while you are the Guardian!", command);
+		CPrintToChat(client, "%t", "Guardian_CmdBlocked", command);
 		return Plugin_Handled;
 	}
 
@@ -291,7 +292,7 @@ public Action Listener_BlockBLUJoin(int client, const char[] command, int argc)
 	if (strcmp(command, "autoteam", false) == 0)
 	{
 		GuardianLog("[CMD] " ... "BlockBLUJoin - autoteam from %N (client=%d team=%d) - redirecting to RED", client, client, GetClientTeam(client));
-		CPrintToChat(client, "{olive}[TFDB]{default} Guardian round active. Moving you to {red}RED{default}.");
+		CPrintToChat(client, "%t", "Guardian_MovedToRed");
 		FakeClientCommandEx(client, "jointeam red");
 		return Plugin_Handled;
 	}
@@ -304,7 +305,7 @@ public Action Listener_BlockBLUJoin(int client, const char[] command, int argc)
 		if (strcmp(arg, "blue", false) == 0 || strcmp(arg, "3", false) == 0 || strcmp(arg, "auto", false) == 0)
 		{
 			GuardianLog("[CMD] " ... "BlockBLUJoin - jointeam %s from %N (client=%d team=%d) - redirecting to RED", arg, client, client, GetClientTeam(client));
-			CPrintToChat(client, "{olive}[TFDB]{default} Guardian round active. Moving you to {red}RED{default}.");
+			CPrintToChat(client, "%t", "Guardian_MovedToRed");
 			FakeClientCommandEx(client, "jointeam red");
 			return Plugin_Handled;
 		}
@@ -672,6 +673,17 @@ bool CanActivateGuardian()
 	// Bots are gone - reset so the message shows again if bots rejoin
 	botMessageShown = false;
 
+	// Explicit PvB mutual exclusion — HasActiveBots() is imprecise (a PvB round
+	// with 0 live bots between spawns wouldn't trip it). See
+	// frameworks/guardian-pvb-mutual-exclusion.md in the wiki.
+	if (LibraryExists("tfdb_pvb") &&
+	    GetFeatureStatus(FeatureType_Native, "TFDB_IsPvBActive") == FeatureStatus_Available &&
+	    TFDB_IsPvBActive())
+	{
+		GuardianLog("CanActivateGuardian - false: PvB is active");
+		return false;
+	}
+
 	if (IsFFAActive())
 	{
 		GuardianLog("CanActivateGuardian - false: FFA active");
@@ -829,13 +841,13 @@ public Action Command_GuardianOptOut(int client, int args)
 	if (guardianOptOut[client])
 	{
 		if (optOutMinPlayers > 0)
-			CPrintToChat(client, "{olive}[TFDB]{default} You have {red}opted out{default} of being Guardian. (Ignored if fewer than %d players)", optOutMinPlayers);
+			CPrintToChat(client, "%t", "Guardian_OptedOutMin", optOutMinPlayers);
 		else
-			CPrintToChat(client, "{olive}[TFDB]{default} You have {red}opted out{default} of being Guardian.");
+			CPrintToChat(client, "%t", "Guardian_OptedOut");
 	}
 	else
 	{
-		CPrintToChat(client, "{olive}[TFDB]{default} You have {green}opted in{default} to being Guardian.");
+		CPrintToChat(client, "%t", "Guardian_OptedIn");
 	}
 
 	return Plugin_Handled;

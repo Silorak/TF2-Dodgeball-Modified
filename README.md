@@ -37,15 +37,13 @@ A modular plugin suite built around a shared native API. The core plugin handles
 
 > **Note:** Push prevention, noblock, and target lock are built into core and configured via `general.cfg`. The old standalone AirblastPrevention, NoBlock, and AntiSwitch subplugins have been removed.
 
-> **Architecture:** No DHooks. Per-rocket logic runs via `OnRocketThink()` called from `OnGameFrame()` — **not** from `SDKHook_Think`. The engine-side Think schedule on `tf_projectile_rocket` is sparse (~10 Hz) and won't drive per-tick homing. One 10 Hz spawner timer + `OnGameFrame` per-rocket iteration is the pattern. See `dodgeball_rockets.inc` and `dodgeball_events.inc` inline comments for the full rationale.
-
 ---
 
 ## Features
 
 **Gameplay** — Steal and delay prevention built-in. Dual homing modes (smooth `homing` or classic `legacy homing`). Per-class cadence via `"think interval"` — 20 Hz for authentic YADB/Damizean feel, per-tick for modern smooth. Bouncing rockets with player-controlled force bouncing. "Keep Direction" (popular Redux feature). Neutral rockets, per-class damage, and configurable kill events.
 
-**Drag mechanics** — Emergent drag by default (one eye-angle read at the airblast event, no polling window) — the legacy feel without the sticky polling of modern forks. Tunable per-class via `"steering control"` (pre-read drag window, ticks) and `"bounce control"` (post-bounce blind window, ticks). Design flicky or heavy rockets without touching core code.
+**Drag mechanics** — Emergent drag by default (one eye-angle read at the airblast event, no polling window) — the legacy feel without the sticky polling of modern forks. Tunable per-class via `"steering control"` (pre-read drag window, seconds) and `"bounce control"` (post-bounce blind window, seconds). Design flicky or heavy rockets without touching core code.
 
 **Rocket classes** — Fully configurable with custom models, sounds, speeds, damage, turn rates, and bounce limits. Event commands with `@rocket`, `@owner`, `@target`, `@speed` placeholders. Experimental scaling modes for orbit tightness and target-speed-based acceleration. See [`configs/dodgeball/guide.md`](TF2Dodgeball/addons/sourcemod/configs/dodgeball/guide.md) for the full field reference and ready-made recipes (sniper, boulder, nuke, Damizean-authentic, competitive default).
 
@@ -143,11 +141,9 @@ Compile `dodgeball.sp` first (it generates `tfdb.inc` natives). Then compile sub
 
 ---
 
-## Configuration
+## Core Configuration
 
-### Core — `configs/dodgeball/general.cfg`
-
-The main configuration file. Defines rocket classes, spawner behavior, and built-in features (push prevention, noblock, target lock, max velocity override). Deliberately kept minimal — one-line comments only. Fields are ordered top-down by how often you'll tune them.
+The core plugin uses one file: `configs/dodgeball/general.cfg`. It defines rocket classes, spawner behavior, and built-in features (push prevention, noblock, target lock, max velocity override). Deliberately kept minimal — one-line comments only. Fields are ordered top-down by how often you'll tune them.
 
 **For the full reference** (every field explained, rocket-design recipes, dormant features, troubleshooting), see [`guide.md`](TF2Dodgeball/addons/sourcemod/configs/dodgeball/guide.md) in the same folder.
 
@@ -169,9 +165,9 @@ The main configuration file. Defines rocket classes, spawner behavior, and built
     "damage increment"    "25"
     "critical chance"     "100"
 
-    // Drag / bounce feel (ticks at 66-tickrate, 1 tick ≈ 15ms)
-    "steering control"    "3"       // pre-read drag window. 0=tight, 3=master, 5-8=heavy
-    "bounce control"      "3"       // post-bounce blind window
+    // Drag / bounce feel (seconds, auto-scaled to any tickrate — see guide.md)
+    "steering control"    "0.045"   // 0=tight, 0.045=master, 0.091=heavy
+    "bounce control"      "0.045"
     "bounce scale"        "0.8"     // velocity kept per bounce
     "max bounces"         "10000"
 
@@ -188,19 +184,44 @@ The main configuration file. Defines rocket classes, spawner behavior, and built
 
 | Feel | `steering control` | `bounce control` | `think interval` |
 |---|---|---|---|
-| Modern smooth (default) | 3 | 3 | 0 (per-tick) |
-| Heavy, sticky | 7 | 7 | 0 |
-| Snappy, instant | 1 | 0 | 0 |
-| Damizean-authentic (YADB 1.4.2) | 3 | 3 | 0.05 (20 Hz) |
-| Chunky old-2.2.0 legacy | 3 | 3 | 0.1 (10 Hz) |
+| Modern smooth (default) | 0.045 | 0.045 | 0 (per-tick) |
+| Heavy, sticky | 0.106 | 0.106 | 0 |
+| Snappy, instant | 0.015 | 0 | 0 |
+| Damizean-authentic (YADB 1.4.2) | 0.045 | 0.045 | 0.05 (20 Hz) |
+| Chunky old-2.2.0 legacy | 0.045 | 0.045 | 0.1 (10 Hz) |
 
 When `think interval > 0`, turn rate applies **raw per fire** (no tick-scale compensation), so Damizean-era turn-rate values (e.g. 0.233) produce Damizean-era rotation rates.
 
 </details>
 
-### Guardian — `configs/dodgeball/guardian.cfg`
+Subplugin-specific configs (guardian.cfg, pvb.cfg, AntiCheat cvars) are documented under each subplugin in the [Subplugins](#subplugins) section below.
 
-Configures guardian mode: enable/disable, selection chance per round, HUD position/color, and guardian classes with abilities.
+### Per-map Overrides
+
+Create `configs/dodgeball/tfdb_mapname.cfg` (e.g. `tfdb_stadium_b3.cfg`) to override any value from `general.cfg` for that specific map. Only include the values you want to change — everything else inherits from `general.cfg`.
+
+---
+
+## Subplugins
+
+Click a section to expand details. Summaries stay visible for quick scanning.
+
+<details>
+<summary><b>Guardian</b> — 1-vs-all boss mode</summary>
+
+One player per round becomes the Guardian — a boss on BLU with boosted HP, a visible boss health bar, player glow, and two configurable abilities. Everyone else fights on RED. Guardian is blocked when bots (including PvB bots) are on the server, or during FFA rounds.
+
+**Commands**
+
+| Command | Permission | Description |
+|---------|------------|-------------|
+| `sm_forceguardian <player> [class]` | CONFIG | Force a player as Guardian next round |
+| `sm_guardianclass <class>` | CONFIG | Set guardian class for next round |
+| `sm_removeguardian` | CONFIG | Remove the current Guardian mid-round |
+| `sm_guardian` | Public | Toggle opt-out from being selected |
+| `sm_dguardian` | ROOT | Toggle debug mode (spawns bots, verbose logging) |
+
+**Configured via** `configs/dodgeball/guardian.cfg` — classes, abilities, HUD position, selection chance.
 
 <details>
 <summary><b>Guardian class example</b></summary>
@@ -242,66 +263,6 @@ Configures guardian mode: enable/disable, selection chance per round, HUD positi
 
 </details>
 
-### PlayerVsBot — `configs/dodgeball/pvb.cfg`
-
-Per-class bot tunings, vote thresholds, training-mode limits, and learning toggles. Bot classes are declared in the `classes` block. **Capability-by-presence**: if you remove a key from a class block, the bot becomes physically incapable of that behavior — not just "chance 0."
-
-<details>
-<summary><b>Capability-by-presence reference</b></summary>
-
-| Remove these keys | Result |
-|---|---|
-| `orbit_time`, `orbit_max_loops`, `orbit_chance` (any one gone = all gone) | Bot never orbits |
-| `evade_chance` | Bot never jumps/crouches to evade |
-| All four `cqc_*_dist` keys | Bot ignores close-quarters distance thresholds |
-| `idle_chance` | Bot never stands still |
-| `idle_chance "100"` (keep, set to 100) | Bot is permanently idle (same as `statue_like 1` but works on any class) |
-
-</details>
-
-### AntiCheat — cvars (auto-created by `tfdb_ac_enabled`)
-
-Edit via `cfg/sourcemod/tfdb_anticheat.cfg` (auto-created on first run).
-
-| Cvar | Default | Purpose |
-|---|---|---|
-| `tfdb_ac_enabled` | `1` | Master toggle |
-| `tfdb_ac_action` | `1` | `0` = log only, `1` = kick, `2` = ban |
-| `tfdb_ac_action_threshold` | `30` | Cumulative score before action fires |
-| `tfdb_ac_ban_duration` | `1440` | Minutes; `0` = permanent |
-| `tfdb_ac_immunity_flag` | `b` | Admin flag letter granting immunity |
-| `tfdb_ac_admin_hud` | `1` | Show live scores to admins |
-| `tfdb_ac_log_level` | `1` | `0` silent, `1` detections, `2` verbose, `3` debug |
-
-**Deploy advice:** run `tfdb_ac_action 0` (log only) for a week → review `addons/sourcemod/logs/tfdb_ac/` → raise to `1` (kick) once pros aren't flagged → `2` (ban) only after FP rate is confirmed low.
-
-### Per-map Overrides
-
-Create `configs/dodgeball/tfdb_mapname.cfg` (e.g. `tfdb_stadium_b3.cfg`) to override any value from `general.cfg` for that specific map. Only include the values you want to change — everything else inherits from `general.cfg`.
-
----
-
-## Subplugins
-
-Click a section to expand details. Summaries stay visible for quick scanning.
-
-<details>
-<summary><b>Guardian</b> — 1-vs-all boss mode</summary>
-
-One player per round becomes the Guardian — a boss on BLU with boosted HP, a visible boss health bar, player glow, and two configurable abilities. Everyone else fights on RED. Guardian is blocked when bots (including PvB bots) are on the server, or during FFA rounds.
-
-**Commands**
-
-| Command | Permission | Description |
-|---------|------------|-------------|
-| `sm_forceguardian <player> [class]` | CONFIG | Force a player as Guardian next round |
-| `sm_guardianclass <class>` | CONFIG | Set guardian class for next round |
-| `sm_removeguardian` | CONFIG | Remove the current Guardian mid-round |
-| `sm_guardian` | Public | Toggle opt-out from being selected |
-| `sm_dguardian` | ROOT | Toggle debug mode (spawns bots, verbose logging) |
-
-**Configured via** `configs/dodgeball/guardian.cfg` — classes, abilities, HUD position, selection chance.
-
 </details>
 
 <details>
@@ -331,6 +292,22 @@ Auto-locks `tf_bot_quota_mode normal` on plugin load + every map start so the se
 | `sm_trainbots` | ROOT | Spawn training bots (bot-vs-bot self-play) |
 | `sm_setbottype <index>` | KICK | Set bot class (see `pvb.cfg` for indices) |
 | `sm_reloadbotcfg` | KICK | Reload `pvb.cfg` without map change |
+| `sm_resetbrain` | ROOT | Wipe learned bot brain data (safe during active rounds) |
+
+<details>
+<summary><b>Capability-by-presence reference</b></summary>
+
+Remove a key from a bot class block in `pvb.cfg` and the bot becomes physically incapable of that behavior — not "chance 0", fully absent.
+
+| Remove these keys | Result |
+|---|---|
+| `orbit_time`, `orbit_max_loops`, `orbit_chance` (any one gone = all gone) | Bot never orbits |
+| `evade_chance` | Bot never jumps/crouches to evade |
+| All four `cqc_*_dist` keys | Bot ignores close-quarters distance thresholds |
+| `idle_chance` | Bot never stands still |
+| `idle_chance "100"` (keep, set to 100) | Bot is permanently idle (same as `statue_like 1` but works on any class) |
+
+</details>
 
 </details>
 
@@ -350,7 +327,19 @@ Server-side cheat detection. Targets common public-tier cheats — **not** paid-
 | `AirblastFacing` | 3 consecutive deflects while not facing rocket | Yes | 4 |
 | `SnapAim` | >35° single-tick angle snap + airblast + return | Yes | 5 |
 
-**Cvars** — see Configuration section above for the full cvar table.
+**Cvars** — auto-created in `cfg/sourcemod/tfdb_anticheat.cfg` on first run.
+
+| Cvar | Default | Purpose |
+|---|---|---|
+| `tfdb_ac_enabled` | `1` | Master toggle |
+| `tfdb_ac_action` | `1` | `0` = log only, `1` = kick, `2` = ban |
+| `tfdb_ac_action_threshold` | `30` | Cumulative score before action fires |
+| `tfdb_ac_ban_duration` | `1440` | Minutes; `0` = permanent |
+| `tfdb_ac_immunity_flag` | `b` | Admin flag letter granting immunity |
+| `tfdb_ac_admin_hud` | `1` | Show live scores to admins |
+| `tfdb_ac_log_level` | `1` | `0` silent, `1` detections, `2` verbose, `3` debug |
+
+**Deploy advice:** run `tfdb_ac_action 0` (log only) for a week → review `addons/sourcemod/logs/tfdb_ac/` → raise to `1` (kick) once pros aren't flagged → `2` (ban) only after FP rate is confirmed low.
 
 **Commands**
 
@@ -402,7 +391,7 @@ Blocks players from interfering with rockets at long distances using CollisionHo
 <details>
 <summary><b>Menu</b> — in-game admin config menu</summary>
 
-In-game admin menu for adjusting dodgeball settings without editing config files. Live reload option picks up disk changes to `general.cfg`.
+In-game admin menu for adjusting dodgeball settings without editing config files. Live reload option picks up disk changes to `general.cfg`. Per-class feel knobs (speed, turn rate, damage, **steering control**, **bounce control**, **think interval**) are tunable live — changes apply on next rocket spawn.
 
 | Command | Permission | Description |
 |---|---|---|

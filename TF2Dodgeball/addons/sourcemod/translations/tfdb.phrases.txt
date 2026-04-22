@@ -368,6 +368,24 @@
 		"#format"	"{1:i}"
 		"en"		"[{olive}TFDB{default}] Type in chat the new bounce scale within {darkorange}{1}{default} seconds."
 	}
+
+	"Menu_SteeringControl"
+	{
+		"#format"	"{1:i}"
+		"en"		"[{olive}TFDB{default}] Type in chat the new steering control (seconds, e.g. 0.045) within {darkorange}{1}{default} seconds."
+	}
+
+	"Menu_BounceControl"
+	{
+		"#format"	"{1:i}"
+		"en"		"[{olive}TFDB{default}] Type in chat the new bounce control (seconds, e.g. 0.045) within {darkorange}{1}{default} seconds."
+	}
+
+	"Menu_ThinkInterval"
+	{
+		"#format"	"{1:i}"
+		"en"		"[{olive}TFDB{default}] Type in chat the new think interval (seconds, 0 = per-tick) within {darkorange}{1}{default} seconds."
+	}
 	
 	"Menu_MaxRockets"
 	{
@@ -525,6 +543,51 @@
 	{
 		"#format"	"{1:.2f}"
 		"en"		"[{olive}TFDB{default}] Changed rocket class bounce scale to {darkorange}{1}{default}."
+	}
+
+	"Menu_ChangedSteeringControl"
+	{
+		"#format"	"{1:.3f}"
+		"en"		"[{olive}TFDB{default}] Changed rocket class steering control to {darkorange}{1}{default}s."
+	}
+
+	"Menu_ChangedBounceControl"
+	{
+		"#format"	"{1:.3f}"
+		"en"		"[{olive}TFDB{default}] Changed rocket class bounce control to {darkorange}{1}{default}s."
+	}
+
+	"Menu_ChangedThinkInterval"
+	{
+		"#format"	"{1:.3f}"
+		"en"		"[{olive}TFDB{default}] Changed rocket class think interval to {darkorange}{1}{default}s."
+	}
+
+	"Guardian_CmdBlocked"
+	{
+		"#format"	"{1:s}"
+		"en"		"{red}[TFDB] You cannot use '{1}' while you are the Guardian!"
+	}
+
+	"Guardian_MovedToRed"
+	{
+		"en"		"{olive}[TFDB]{default} Guardian round active. Moving you to {red}RED{default}."
+	}
+
+	"Guardian_OptedOutMin"
+	{
+		"#format"	"{1:d}"
+		"en"		"{olive}[TFDB]{default} You have {red}opted out{default} of being Guardian. (Ignored if fewer than {1} players)"
+	}
+
+	"Guardian_OptedOut"
+	{
+		"en"		"{olive}[TFDB]{default} You have {red}opted out{default} of being Guardian."
+	}
+
+	"Guardian_OptedIn"
+	{
+		"en"		"{olive}[TFDB]{default} You have {green}opted in{default} to being Guardian."
 	}
 	
 	"Menu_ChangedMaxRockets"

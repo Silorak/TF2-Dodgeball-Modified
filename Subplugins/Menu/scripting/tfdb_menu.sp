@@ -61,6 +61,9 @@ enum RocketClassMenu
 	RocketClassMenu_OrbitTightness,
 	RocketClassMenu_MaxSpeed,
 	RocketClassMenu_MaxDeflections,
+	RocketClassMenu_SteeringControl,
+	RocketClassMenu_BounceControl,
+	RocketClassMenu_ThinkInterval,
 	SizeOfRocketClassMenu
 };
 
@@ -117,6 +120,9 @@ enum struct RocketClass
 	float          OrbitTightness;
 	float          MaxSpeed;
 	int            MaxDeflections;
+	float          SteeringControlSec;
+	float          BounceControlSec;
+	float          ThinkInterval;
 
 	void Destroy()
 	{
@@ -194,7 +200,10 @@ char strRocketClassMenu[view_as<int>(SizeOfRocketClassMenu) - 1][] =
 	"Bounce scale",
 	"Orbit tightness",
 	"Max speed",
-	"Max deflections"
+	"Max deflections",
+	"Steering control (sec)",
+	"Bounce control (sec)",
+	"Think interval (sec)"
 };
 
 char strSpawnerClassMenu[view_as<int>(SizeOfSpawnerClassMenu) - 1][] =
@@ -217,11 +226,15 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
 	LoadTranslations("tfdb.phrases.txt");
-	
+
 	RegAdminCmd("sm_tfdb", CmdDodgeballMenu, ADMFLAG_CONFIG, "Dodgeball admin menu.");
-	
+
 	CvarSayHookTimeout = CreateConVar("tf_dodgeball_sayhook_timeout", "15.0", "Chat hook time span", _, true, 0.0);
-	
+
+	// Prime TrailsLoaded for servers where Trails loaded before Menu (OnLibraryAdded
+	// won't fire retroactively). Sprite menu entries are gated on this flag.
+	TrailsLoaded = LibraryExists("tfdbtrails");
+
 	if (!TFDB_IsDodgeballEnabled()) return;
 	
 	char mapName[64]; GetCurrentMap(mapName, sizeof(mapName));
@@ -990,6 +1003,24 @@ public int RocketClassOptionsMenuHandler(Menu menu, MenuAction menuActions, int 
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 
+				case RocketClassMenu_SteeringControl :
+				{
+					CPrintToChat(iParam1, "%t", "Menu_SteeringControl", CvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_Reset");
+				}
+
+				case RocketClassMenu_BounceControl :
+				{
+					CPrintToChat(iParam1, "%t", "Menu_BounceControl", CvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_Reset");
+				}
+
+				case RocketClassMenu_ThinkInterval :
+				{
+					CPrintToChat(iParam1, "%t", "Menu_ThinkInterval", CvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_Reset");
+				}
+
 			}
 			
 			ClientRocketClassMenu[iParam1]  = option;
@@ -1463,6 +1494,21 @@ public Action OnClientSayCommand(int client, const char[] strCommand, const char
 	SpawnerClassMenu iSpawnerClassOption = ClientSpawnerClassMenu[client];
 	int rocketClass  = ClientRocketClass[client];
 	
+	// Sprite options fail fast if Trails subplugin unloaded between menu display
+	// and input submission. Natives are MarkNativeAsOptional so compile is fine,
+	// but calling an unbound native throws a runtime error.
+	if ((iRocketClassOption == RocketClassMenu_SpriteColor ||
+	     iRocketClassOption == RocketClassMenu_SpriteLifetime ||
+	     iRocketClassOption == RocketClassMenu_SpriteStartWidth ||
+	     iRocketClassOption == RocketClassMenu_SpriteEndWidth) && !TrailsLoaded)
+	{
+		CPrintToChat(client, "{olive}[TFDB]{default} Trails plugin not loaded \u2014 sprite settings unavailable.");
+		ClientRocketClassMenu[client]  = RocketClassMenu_None;
+		ClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+		ClientRocketClass[client]  = -1;
+		return Plugin_Stop;
+	}
+
 	switch (iRocketClassOption)
 	{
 		case RocketClassMenu_SpriteColor :
@@ -1944,6 +1990,62 @@ public Action OnClientSayCommand(int client, const char[] strCommand, const char
 			return Plugin_Stop;
 		}
 
+		case RocketClassMenu_SteeringControl :
+		{
+			// Menu input is seconds (matches cfg). Native takes real server ticks.
+			float fSec = StringToFloat(args);
+			float cachedSec = SavedRocketClasses[rocketClass].SteeringControlSec;
+			float useSec = (fSec == -1.0) ? cachedSec : fSec;
+			int ticks = (useSec <= 0.0) ? 0 : RoundToNearest(useSec / GetTickInterval());
+			if (useSec > 0.0 && ticks < 1) ticks = 1;
+
+			TFDB_SetRocketClassSteeringControl(rocketClass, ticks);
+
+			LogAction(client, -1, "\"%L\" changed rocket class steering control to %.3fs (%d ticks)", client, useSec, ticks);
+			CPrintToChat(client, "%t", "Menu_ChangedSteeringControl", useSec);
+
+			ClientRocketClassMenu[client]  = RocketClassMenu_None;
+			ClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			ClientRocketClass[client]  = -1;
+			return Plugin_Stop;
+		}
+
+		case RocketClassMenu_BounceControl :
+		{
+			float fSec = StringToFloat(args);
+			float cachedSec = SavedRocketClasses[rocketClass].BounceControlSec;
+			float useSec = (fSec == -1.0) ? cachedSec : fSec;
+			int ticks = (useSec <= 0.0) ? 0 : RoundToNearest(useSec / GetTickInterval());
+			if (useSec > 0.0 && ticks < 1) ticks = 1;
+
+			TFDB_SetRocketClassBounceControl(rocketClass, ticks);
+
+			LogAction(client, -1, "\"%L\" changed rocket class bounce control to %.3fs (%d ticks)", client, useSec, ticks);
+			CPrintToChat(client, "%t", "Menu_ChangedBounceControl", useSec);
+
+			ClientRocketClassMenu[client]  = RocketClassMenu_None;
+			ClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			ClientRocketClass[client]  = -1;
+			return Plugin_Stop;
+		}
+
+		case RocketClassMenu_ThinkInterval :
+		{
+			// Native already takes seconds. 0 = per-tick, 0.05 = 20Hz, 0.1 = 10Hz.
+			float fSec = StringToFloat(args);
+			float useSec = (fSec < 0.0) ? SavedRocketClasses[rocketClass].ThinkInterval : fSec;
+
+			TFDB_SetRocketClassThinkInterval(rocketClass, useSec);
+
+			LogAction(client, -1, "\"%L\" changed rocket class think interval to %.3fs", client, useSec);
+			CPrintToChat(client, "%t", "Menu_ChangedThinkInterval", useSec);
+
+			ClientRocketClassMenu[client]  = RocketClassMenu_None;
+			ClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			ClientRocketClass[client]  = -1;
+			return Plugin_Stop;
+		}
+
 	}
 	
 	switch (iSpawnerClassOption)
@@ -2184,7 +2286,10 @@ void ParseClasses(KeyValues kvConfig)
 		
 		SavedRocketClasses[index].ElevationRate     = kvConfig.GetFloat("elevation rate");
 		SavedRocketClasses[index].ElevationLimit    = kvConfig.GetFloat("elevation limit");
-		SavedRocketClasses[index].ControlDelay      = kvConfig.GetFloat("control delay");
+		SavedRocketClasses[index].ControlDelay        = kvConfig.GetFloat("control delay");
+		SavedRocketClasses[index].SteeringControlSec  = kvConfig.GetFloat("steering control", 0.045);
+		SavedRocketClasses[index].BounceControlSec    = kvConfig.GetFloat("bounce control", 0.045);
+		SavedRocketClasses[index].ThinkInterval       = kvConfig.GetFloat("think interval", 0.0);
 		SavedRocketClasses[index].BounceScale       = kvConfig.GetFloat("bounce scale", 1.0);
 		SavedRocketClasses[index].OrbitTightness    = kvConfig.GetFloat("orbit tightness", 0.0);
 		SavedRocketClasses[index].MaxSpeed          = kvConfig.GetFloat("max speed", 0.0);

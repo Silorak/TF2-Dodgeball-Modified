@@ -778,16 +778,16 @@ native float TFDB_GetRocketClassBounceMaxVerticalSpeed(int iClass);
 /** Sets bounce vertical speed cap (HU/s). */
 native void TFDB_SetRocketClassBounceMaxVerticalSpeed(int iClass, float fMaxVerticalSpeed);
 
-/** Gets per-class steering control in server ticks (the drag window after object_deflected). */
+/** Gets per-class steering control in REAL server ticks (already scaled for this server's tickrate). */
 native int TFDB_GetRocketClassSteeringControl(int iClass);
 
-/** Sets per-class steering control in server ticks (the drag window after object_deflected). */
+/** Sets per-class steering control in REAL server ticks (not baseline-66 cfg ticks). */
 native void TFDB_SetRocketClassSteeringControl(int iClass, int iTicks);
 
-/** Gets per-class bounce control in server ticks (the blind window after a bounce before homing resumes). */
+/** Gets per-class bounce control in REAL server ticks (already scaled for this server's tickrate). */
 native int TFDB_GetRocketClassBounceControl(int iClass);
 
-/** Sets per-class bounce control in server ticks (the blind window after a bounce before homing resumes). */
+/** Sets per-class bounce control in REAL server ticks (not baseline-66 cfg ticks). */
 native void TFDB_SetRocketClassBounceControl(int iClass, int iTicks);
 
 /** Gets per-class homing think interval in seconds. 0 = per-tick (default). 0.05 = 20 Hz Damizean-authentic cadence. */

@@ -58,8 +58,23 @@ void CreateRocket(int spawnerEntity, int spawnerClass, int team, int rocketClass
 
 	int targetTeam = (TestFlags(flags, RocketFlag_IsNeutral)) ? 0 : GetAnalogueTeam(team);
 	int target     = SelectTarget(targetTeam);
-	int owner      = SelectTarget(GetAnalogueTeam(GetClientTeam(target)));
-	
+
+	// Abort spawn cleanly when no valid target exists (empty team, round transition, etc.).
+	// Per SelectTarget contract: -1 is legitimate, callers must validate before
+	// any client native. See concepts/select-target-contract.md in the wiki.
+	if (target <= 0 || target > MaxClients || !IsClientInGame(target))
+	{
+		AcceptEntityInput(entity, "Kill");
+		return;
+	}
+
+	int owner = SelectTarget(GetAnalogueTeam(GetClientTeam(target)));
+	if (owner <= 0 || owner > MaxClients || !IsClientInGame(owner))
+	{
+		AcceptEntityInput(entity, "Kill");
+		return;
+	}
+
 	SetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity", owner);
 	int weapon = GetPlayerWeaponSlot(owner, TFWeaponSlot_Primary);
 	SetEntPropEnt(entity, Prop_Send, "m_hOriginalLauncher", weapon == -1 ? entity : weapon);
@@ -907,6 +922,16 @@ void CheckRoundDelays(int index)
 	else
 	{
 		RocketSpeed[index] += CvarDelayPreventionSpeedup.FloatValue;
+
+		// Honor per-class speed limit (same contract as OnRocketDeflected at L384).
+		// Anti-stall speedup must not let a rocket exceed its documented cap.
+		int rocketClass = RocketClass[index];
+		if (TestFlags(RocketInstanceFlags[index], RocketFlag_IsSpeedLimited) &&
+		    RocketSpeed[index] > RocketClassSpeedLimit[rocketClass])
+		{
+			RocketSpeed[index] = RocketClassSpeedLimit[rocketClass];
+		}
+		RocketMphSpeed[index] = RocketSpeed[index] * HAMMER_TO_MPH;
 	}
 }
 

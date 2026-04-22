@@ -305,6 +305,12 @@ void ExecuteCommands(DataPack dataPack, int rocketClass, int rocket, int owner, 
 /**
  * Parses a dodgeball configuration file (KeyValues format).
  * Loads general settings, rocket classes, and spawner classes.
+ *
+ * Free-and-rebuild on every call: stale class / spawner / preset arrays are
+ * wiped first so mid-map `sm_tfdb_refresh_rockets` works cleanly. Subplugins
+ * that cache class indices (e.g. Menu) must rebuild on the
+ * TFDB_OnRocketsConfigExecuted forward fired at the end of this function.
+ * See concepts/rocket-class-config-fields.md in the wiki.
  */
 void ParseConfigurations(char[] configFile = "general.cfg")
 {
@@ -315,6 +321,12 @@ void ParseConfigurations(char[] configFile = "general.cfg")
 	LogMessage("Executing configuration file %s", path);
 
 	if (!FileExists(path, true)) return;
+
+	// Wipe stale state before reparse. Rockets in flight keep their arrays;
+	// only class/spawner/preset definitions are rebuilt.
+	DestroyRocketClasses();
+	DestroySpawners();
+	PresetCount = 0;
 
 	KeyValues config = new KeyValues("TF2_Dodgeball");
 	if (!config.ImportFromFile(path)) SetFailState("[TFDB] Error while parsing configuration file: %s", path);
@@ -478,16 +490,18 @@ void ParseClasses(KeyValues config)
 		// Scaling mode: bounce vertical scale
 		RocketClassBounceVerticalScale[index] = config.GetFloat("bounce vertical ratio", 1.0);
 		RocketClassBounceMaxVerticalSpeed[index] = config.GetFloat("bounce max vertical speed", 0.0);
-		// Steering control (server ticks): drag window between object_deflected and eye-angle read.
-		// Per-class knob. Higher = more time for the deflector to flick the rocket before the
-		// direction is committed. Default 3 (~45ms @ 66tick, master-like). 0 = tight, 5-8 = loose/heavy.
-		RocketClassSteeringControl[index] = config.GetNum("steering control", 3);
-		if (RocketClassSteeringControl[index] < 0) RocketClassSteeringControl[index] = 0;
+		// Steering control: drag window between object_deflected and eye-angle read.
+		// Cfg value is seconds. Converted to real ticks so the window is identical
+		// in real time across 66/100/128-tick servers. Default 0.045 = master-like.
+		float cfgSteering = config.GetFloat("steering control", 0.045);
+		if (cfgSteering < 0.0) cfgSteering = 0.0;
+		RocketClassSteeringControl[index] = SecondsToTicks(cfgSteering);
 
-		// Bounce control (server ticks): post-bounce blind window before homing resumes.
-		// Per-class. 0 = instant homing resume, 3 = ~45ms (approximates old 10 Hz), 5-8 = heavy.
-		RocketClassBounceControl[index] = config.GetNum("bounce control", 3);
-		if (RocketClassBounceControl[index] < 0) RocketClassBounceControl[index] = 0;
+		// Bounce control: post-bounce blind window before homing resumes.
+		// Cfg value is seconds. Default 0.045 = master-like.
+		float cfgBounce = config.GetFloat("bounce control", 0.045);
+		if (cfgBounce < 0.0) cfgBounce = 0.0;
+		RocketClassBounceControl[index] = SecondsToTicks(cfgBounce);
 
 		// Think interval (seconds): how often the homing lerp runs.
 		// 0    = per-tick (default, current smooth behavior)
@@ -563,9 +577,12 @@ void ParseSpawners(KeyValues config)
 	SpawnersTrie.GetValue("blu", DefaultBluSpawner);
 }
 
-/** Parses the "presets" section of the config (gameplay preset definitions). */
+/** Parses the "presets" section of the config (gameplay preset definitions).
+ *  Resets PresetCount so mid-map config reload doesn't double-count.
+ */
 void ParsePresets(KeyValues config)
 {
+	PresetCount = 0;
 	config.GotoFirstSubKey();
 	do
 	{

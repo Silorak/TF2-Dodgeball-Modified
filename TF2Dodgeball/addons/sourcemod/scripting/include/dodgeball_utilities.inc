@@ -8,6 +8,21 @@
  * TF2 Dodgeball plugin.
  */
  
+/**
+ * Converts a duration in seconds to server ticks on the current tickrate.
+ * Used to author drag / bounce windows in real time (seconds) in cfg files
+ * so feel is identical across 66 / 100 / 128-tick servers.
+ *
+ * 0.0 returns 0 (no window). Any positive value returns at least 1 tick so a
+ * tiny cfg value doesn't round to 0.
+ */
+stock int SecondsToTicks(float seconds)
+{
+	if (seconds <= 0.0) return 0;
+	int out = RoundToNearest(seconds / GetTickInterval());
+	return (out < 1) ? 1 : out;
+}
+
 stock void StopSoundToAll(int channel, const char[] sound)
 {
 	for (int client = 1; client <= MaxClients; client++)

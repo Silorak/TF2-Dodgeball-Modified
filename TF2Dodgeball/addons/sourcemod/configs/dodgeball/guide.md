@@ -30,8 +30,8 @@ The fields you'll tune 90% of the time, with a one-sentence description.
 | `turn rate increment` | Turn rate added per deflection | 0.01–0.03 |
 | `damage` | Base damage on hit | 40–200 |
 | `damage increment` | Damage added per deflection | 25–200 |
-| `steering control` | Pre-read drag window in **ticks** (1 tick ≈ 15ms at 66 tickrate) | 0–8 |
-| `bounce control` | Post-bounce blind ticks before homing resumes | 0–8 |
+| `steering control` | Pre-read drag window in **seconds** (auto-converts to ticks for any tickrate) | 0.000–0.150 |
+| `bounce control` | Post-bounce blind window in **seconds** | 0.000–0.150 |
 | `bounce scale` | Speed kept per wall bounce (1.0 = perfect elastic) | 0.5–1.0 |
 | `think interval` | Homing cadence override (0 = per-tick, 0.05 = 20Hz, 0.1 = 10Hz) | 0 or 0.05 |
 | `critical chance` | % chance the rocket is a crit | 0–100 |
@@ -47,7 +47,7 @@ A rocket's life, in order:
 1. **Spawn** — `on spawn` fires. Speed, turn rate, damage are set from class defaults.
 2. **Fly** — per tick (or per `think interval`), the rocket turns toward its target by `turn rate` degrees.
 3. **Player airblasts** — the rocket enters the drag window.
-   - For `steering control` ticks, the rocket flies its current direction (blind)
+   - For `steering control` seconds, the rocket flies its current direction (blind)
    - At window expiry, the plugin reads the player's **eye angles** and commits the new direction
    - If `control delay > 0`, adds extra blind time after the eye read
 4. **Deflect** — `on deflect` fires. Speed, turn rate, damage each increase by their `increment`. Rocket re-targets an enemy.
@@ -65,11 +65,28 @@ TFDB has TWO separate blind windows:
 
 | Window | When | Field | Typical |
 |---|---|---|---|
-| **Pre-read drag** | Between airblast and eye-angle read | `steering control` (ticks) | 3 ticks (~45ms) |
-| **Post-bounce commit** | Between wall bounce and homing resume | `bounce control` (ticks) | 3 ticks (~45ms) |
+| **Pre-read drag** | Between airblast and eye-angle read | `steering control` (seconds) | 0.045 (~45ms) |
+| **Post-bounce commit** | Between wall bounce and homing resume | `bounce control` (seconds) | 0.045 (~45ms) |
 | (Optional) **Post-read commit** | AFTER eye read, before homing | `control delay` (seconds) | 0 |
 
 Most classes leave `control delay` at 0. Use `steering control` for drag feel and `bounce control` for bounce feel.
+
+### Feel guide
+
+`steering control` and `bounce control` are in **seconds**. The plugin converts to real server ticks at config load, so the feel is identical on 66/100/128-tick servers.
+
+| seconds | feel |
+|---|---|
+| 0.000 | instant — no window |
+| 0.015 | very tight |
+| 0.030 | tight |
+| **0.045** | **master-like (default)** |
+| 0.060 | slight weight |
+| 0.075 | noticeable drag |
+| **0.091** | **heavy drag** |
+| 0.106 | sluggish |
+| 0.121 | very sluggish |
+| 0.150+ | laggy-feeling |
 
 ---
 
@@ -97,8 +114,8 @@ Most classes leave `control delay` at 0. Use `steering control` for drag feel an
 
 | Field | Type | Description |
 |---|---|---|
-| `steering control` | int ticks | Pre-read drag window. 0 = unflickable (instant). 3 = master-like. 5–8 = heavy drag. |
-| `bounce control` | int ticks | Post-bounce blind time before homing resumes. 0 = instant. 3 ≈ old behavior. 5–8 = committed. |
+| `steering control` | float seconds | Pre-read drag window. 0 = unflickable (instant). 0.045 = master-like. 0.091 = heavy. Auto-scales across tickrates. |
+| `bounce control` | float seconds | Post-bounce blind time before homing resumes. 0 = instant. 0.045 ≈ old behavior. 0.091 = committed. |
 | `bounce scale` | float | Velocity multiplier on bounce. 1.0 = elastic. 0.8 = lose 20% per bounce. 0.5 = cut in half. |
 | `control delay` | float seconds | Extra blind period AFTER eye-read. Most classes use 0. Set to 0.1 for "legacy feel." |
 | `think interval` | float seconds | Homing cadence. 0 = per-tick (smooth, default). 0.05 = 20Hz (Damizean authentic). 0.1 = 10Hz (classic chunky). |
@@ -238,7 +255,7 @@ Fast rocket with tight control. Rewards quick reflexes.
     "damage"                 "60"
     "damage increment"       "40"
     "critical chance"        "100"
-    "steering control"       "1"          // very tight, unflickable
+    "steering control"       "0.015"      // very tight, unflickable
     "bounce control"         "0"          // instant re-home
     "bounce scale"           "1.0"        // keeps all speed
     "max bounces"            "5"
@@ -264,8 +281,8 @@ Slow, high damage, committed direction.
     "damage"                 "150"
     "damage increment"       "100"
     "critical chance"        "50"
-    "steering control"       "8"          // heavy drag
-    "bounce control"         "8"          // long commit after bounce
+    "steering control"       "0.121"      // heavy drag
+    "bounce control"         "0.121"      // long commit after bounce
     "bounce scale"           "0.6"        // bounces lose significant speed
     "max bounces"            "20"
     "keep direction"         "1"
@@ -289,8 +306,8 @@ Slow, high damage, committed direction.
     "damage"                 "100"
     "damage increment"       "50"
     "critical chance"        "10"
-    "steering control"       "3"
-    "bounce control"         "3"
+    "steering control"       "0.045"
+    "bounce control"         "0.045"
     "bounce scale"           "0.8"
     "max bounces"            "10000"
     "think interval"         "0.05"       // KEY: 20Hz homing, raw turn rate
@@ -318,8 +335,8 @@ Single-hit lethal. Slow but relentless.
     "critical chance"        "100"
     "max bounces"            "0"          // no bounces; explodes on impact
     "bounce scale"           "1.0"
-    "steering control"       "3"
-    "bounce control"         "3"
+    "steering control"       "0.045"
+    "bounce control"         "0.045"
     "elevation rate"         "0.1237"
     "elevation limit"        "0.1237"
     "can be stolen"          "1"
@@ -344,8 +361,8 @@ The community-standard middle ground. What `common` is set to in shipped config.
     "damage"                 "40"
     "damage increment"       "25"
     "critical chance"        "100"
-    "steering control"       "3"
-    "bounce control"         "3"
+    "steering control"       "0.045"
+    "bounce control"         "0.045"
     "bounce scale"           "0.8"
     "max bounces"            "10000"
     "keep direction"         "1"
@@ -424,7 +441,7 @@ Makes elevation ramp continuously per-frame instead of stepped ~10Hz. Visual cha
 ### "My rocket is uncatchable"
 
 Usually `steering control` is too high combined with high `turn rate`. Try:
-- Lower `steering control` to 0–3
+- Lower `steering control` to 0–0.045
 - Lower `turn rate` below 0.25
 - Add `control delay "0.05"` (brief post-read pause) — makes the drag window more visible
 
