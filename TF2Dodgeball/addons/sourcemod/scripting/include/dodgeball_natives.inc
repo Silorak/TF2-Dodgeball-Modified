@@ -279,18 +279,16 @@ TFDB_NATIVE_GET(Native_GetRocketClassCritChance,            RocketClassCritChanc
 TFDB_NATIVE_SET(Native_SetRocketClassCritChance,            RocketClassCritChance)
 TFDB_NATIVE_GET(Native_GetRocketClassTargetWeight,          RocketClassTargetWeight)
 TFDB_NATIVE_SET(Native_SetRocketClassTargetWeight,          RocketClassTargetWeight)
-TFDB_NATIVE_GET(Native_GetRocketClassBounceScale,           RocketClassBounceScale)
-TFDB_NATIVE_SET(Native_SetRocketClassBounceScale,           RocketClassBounceScale)
 TFDB_NATIVE_GET(Native_GetRocketClassOrbitTightness,        RocketClassOrbitTightness)
 TFDB_NATIVE_SET(Native_SetRocketClassOrbitTightness,        RocketClassOrbitTightness)
 TFDB_NATIVE_GET(Native_GetRocketClassMaxSpeed,              RocketClassMaxSpeed)
 TFDB_NATIVE_SET(Native_SetRocketClassMaxSpeed,              RocketClassMaxSpeed)
 TFDB_NATIVE_GET(Native_GetRocketClassMaxDeflections,        RocketClassMaxDeflections)
 TFDB_NATIVE_SET(Native_SetRocketClassMaxDeflections,        RocketClassMaxDeflections)
-TFDB_NATIVE_GET(Native_GetRocketClassBounceVerticalScale,   RocketClassBounceVerticalScale)
-TFDB_NATIVE_SET(Native_SetRocketClassBounceVerticalScale,   RocketClassBounceVerticalScale)
-TFDB_NATIVE_GET(Native_GetRocketClassBounceMaxVerticalSpeed, RocketClassBounceMaxVerticalSpeed)
-TFDB_NATIVE_SET(Native_SetRocketClassBounceMaxVerticalSpeed, RocketClassBounceMaxVerticalSpeed)
+TFDB_NATIVE_GET(Native_GetRocketClassBounceCeiling,         RocketClassBounceCeiling)
+TFDB_NATIVE_SET(Native_SetRocketClassBounceCeiling,         RocketClassBounceCeiling)
+TFDB_NATIVE_GET(Native_GetRocketClassCritGlowStack,         RocketClassCritGlowStack)
+TFDB_NATIVE_SET(Native_SetRocketClassCritGlowStack,         RocketClassCritGlowStack)
 
 public any Native_GetRocketClassSteeringControl(Handle plugin, int numParams) {
 	return RocketClassSteeringControl[GetNativeCell(1)];
@@ -521,6 +519,19 @@ public any Native_SetRocketClassCmdsOnKill(Handle plugin, int numParams) {
 	DataPack clonedPack = view_as<DataPack>(CloneHandle(cmds, GetMyHandle()));
 	delete RocketClassCmdsOnKill[rocketClass];
 	RocketClassCmdsOnKill[rocketClass] = clonedPack;
+	return 0;
+}
+
+public any Native_GetRocketClassCmdsOnSpawnKill(Handle plugin, int numParams) {
+	return CloneHandle(RocketClassCmdsOnSpawnKill[GetNativeCell(1)], plugin);
+}
+
+public any Native_SetRocketClassCmdsOnSpawnKill(Handle plugin, int numParams) {
+	int rocketClass = GetNativeCell(1);
+	DataPack cmds = view_as<DataPack>(GetNativeCell(2));
+	DataPack clonedPack = view_as<DataPack>(CloneHandle(cmds, GetMyHandle()));
+	delete RocketClassCmdsOnSpawnKill[rocketClass];
+	RocketClassCmdsOnSpawnKill[rocketClass] = clonedPack;
 	return 0;
 }
 

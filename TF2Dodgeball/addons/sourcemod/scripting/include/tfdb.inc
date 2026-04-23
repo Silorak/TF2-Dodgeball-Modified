@@ -33,6 +33,7 @@
 // ---- Maximum structure sizes ----------------------------------------------------
 #define MAX_ROCKETS             100
 #define MAX_ROCKET_CLASSES      50
+#define MAX_CRIT_STACK          10    /**< Hard cap on crit glow particles per rocket. */
 #define MAX_SPAWNER_CLASSES     50
 #define MAX_SPAWN_POINTS        100
 #define MAX_PRESETS             16
@@ -80,7 +81,8 @@ enum RocketFlags
 	RocketFlag_NoBounceDrags    = 1 << 21,  /**< Can't drag while bouncing */
 	RocketFlag_OnNoTargetCmd    = 1 << 22,  /**< Execute commands when no target */
 	RocketFlag_CanBeStolen      = 1 << 23,  /**< Rocket can be stolen by other players */
-	RocketFlag_StealTeamCheck   = 1 << 24   /**< Only teammates can steal */
+	RocketFlag_StealTeamCheck   = 1 << 24,  /**< Only teammates can steal */
+	RocketFlag_OnSpawnKillCmd   = 1 << 25   /**< Execute commands on spawn kill (deflections == 0) */
 };
 
 /**
@@ -725,6 +727,15 @@ native DataPack TFDB_GetRocketClassCmdsOnKill(int iClass);
 native void TFDB_SetRocketClassCmdsOnKill(int iClass, DataPack hCmds);
 
 /**
+ * Gets the commands to execute when rocket kills without being deflected (spawn kill).
+ * @note You MUST call delete on the returned DataPack Handle when finished, or your plugin will leak memory.
+ */
+native DataPack TFDB_GetRocketClassCmdsOnSpawnKill(int iClass);
+
+/** Sets the commands to execute when rocket kills without being deflected (spawn kill). */
+native void TFDB_SetRocketClassCmdsOnSpawnKill(int iClass, DataPack hCmds);
+
+/**
  * Gets the commands to execute when rocket explodes.
  * @note You MUST call delete on the returned DataPack Handle when finished, or your plugin will leak memory.
  */
@@ -741,12 +752,6 @@ native DataPack TFDB_GetRocketClassCmdsOnNoTarget(int iClass);
 
 /** Sets the commands to execute when rocket has no target. */
 native void TFDB_SetRocketClassCmdsOnNoTarget(int iClass, DataPack hCmds);
-
-/** Gets the bounce velocity scale factor. */
-native float TFDB_GetRocketClassBounceScale(int iClass);
-
-/** Sets the bounce velocity scale factor. */
-native void TFDB_SetRocketClassBounceScale(int iClass, float fScale);
 
 /** Gets the orbit coefficient used when orbit scaling mode is enabled. */
 native float TFDB_GetRocketClassOrbitTightness(int iClass);
@@ -766,17 +771,21 @@ native int TFDB_GetRocketClassMaxDeflections(int iClass);
 /** Sets class max deflections used by target speed scaling mode. */
 native void TFDB_SetRocketClassMaxDeflections(int iClass, int iMaxDeflections);
 
-/** Gets vertical bounce scale ratio. */
-native float TFDB_GetRocketClassBounceVerticalScale(int iClass);
+/** Gets the per-class bounce arc height ceiling in HU. 0 = no clamp. */
+native float TFDB_GetRocketClassBounceCeiling(int iClass);
 
-/** Sets vertical bounce scale ratio. */
-native void TFDB_SetRocketClassBounceVerticalScale(int iClass, float fScale);
+/** Sets the per-class bounce arc height ceiling in HU. 0 = no clamp.
+ *  When >0, upward bounces are clamped so the peak height never exceeds this
+ *  value. Horizontal components are boosted to preserve total speed. */
+native void TFDB_SetRocketClassBounceCeiling(int iClass, float fCeiling);
 
-/** Gets bounce vertical speed cap (HU/s). */
-native float TFDB_GetRocketClassBounceMaxVerticalSpeed(int iClass);
+/** Gets the per-class crit glow stack count (1..MAX_CRIT_STACK). Default 1. */
+native int TFDB_GetRocketClassCritGlowStack(int iClass);
 
-/** Sets bounce vertical speed cap (HU/s). */
-native void TFDB_SetRocketClassBounceMaxVerticalSpeed(int iClass, float fMaxVerticalSpeed);
+/** Sets the per-class crit glow stack count. 1 = default single glow.
+ *  Higher values stack N critical_rocket particles at the same attachment
+ *  for a denser/brighter glow effect. Clamped to [1, MAX_CRIT_STACK]. */
+native void TFDB_SetRocketClassCritGlowStack(int iClass, int iStack);
 
 /** Gets per-class steering control in REAL server ticks (already scaled for this server's tickrate). */
 native int TFDB_GetRocketClassSteeringControl(int iClass);
@@ -1024,22 +1033,28 @@ public void __pl_TFDB_SetNTVOptional()
 	MarkNativeAsOptional("TFDB_SetRocketClassCmdsOnDeflect");
 	MarkNativeAsOptional("TFDB_GetRocketClassCmdsOnKill");
 	MarkNativeAsOptional("TFDB_SetRocketClassCmdsOnKill");
+	MarkNativeAsOptional("TFDB_GetRocketClassCmdsOnSpawnKill");
+	MarkNativeAsOptional("TFDB_SetRocketClassCmdsOnSpawnKill");
 	MarkNativeAsOptional("TFDB_GetRocketClassCmdsOnExplode");
 	MarkNativeAsOptional("TFDB_SetRocketClassCmdsOnExplode");
 	MarkNativeAsOptional("TFDB_GetRocketClassCmdsOnNoTarget");
 	MarkNativeAsOptional("TFDB_SetRocketClassCmdsOnNoTarget");
-	MarkNativeAsOptional("TFDB_GetRocketClassBounceScale");
-	MarkNativeAsOptional("TFDB_SetRocketClassBounceScale");
 	MarkNativeAsOptional("TFDB_GetRocketClassOrbitTightness");
 	MarkNativeAsOptional("TFDB_SetRocketClassOrbitTightness");
 	MarkNativeAsOptional("TFDB_GetRocketClassMaxSpeed");
 	MarkNativeAsOptional("TFDB_SetRocketClassMaxSpeed");
 	MarkNativeAsOptional("TFDB_GetRocketClassMaxDeflections");
 	MarkNativeAsOptional("TFDB_SetRocketClassMaxDeflections");
-	MarkNativeAsOptional("TFDB_GetRocketClassBounceVerticalScale");
-	MarkNativeAsOptional("TFDB_SetRocketClassBounceVerticalScale");
-	MarkNativeAsOptional("TFDB_GetRocketClassBounceMaxVerticalSpeed");
-	MarkNativeAsOptional("TFDB_SetRocketClassBounceMaxVerticalSpeed");
+	MarkNativeAsOptional("TFDB_GetRocketClassBounceCeiling");
+	MarkNativeAsOptional("TFDB_SetRocketClassBounceCeiling");
+	MarkNativeAsOptional("TFDB_GetRocketClassCritGlowStack");
+	MarkNativeAsOptional("TFDB_SetRocketClassCritGlowStack");
+	MarkNativeAsOptional("TFDB_GetRocketClassSteeringControl");
+	MarkNativeAsOptional("TFDB_SetRocketClassSteeringControl");
+	MarkNativeAsOptional("TFDB_GetRocketClassBounceControl");
+	MarkNativeAsOptional("TFDB_SetRocketClassBounceControl");
+	MarkNativeAsOptional("TFDB_GetRocketClassThinkInterval");
+	MarkNativeAsOptional("TFDB_SetRocketClassThinkInterval");
 	MarkNativeAsOptional("TFDB_CreateRocket");
 	MarkNativeAsOptional("TFDB_DestroyRocket");
 	MarkNativeAsOptional("TFDB_DestroyRockets");

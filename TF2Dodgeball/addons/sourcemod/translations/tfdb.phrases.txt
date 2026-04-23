@@ -363,12 +363,6 @@
 		"en"		"[{olive}TFDB{default}] Type in chat the new maximum bounces within {darkorange}{1}{default} seconds."
 	}
 	
-	"Menu_BounceScale"
-	{
-		"#format"	"{1:i}"
-		"en"		"[{olive}TFDB{default}] Type in chat the new bounce scale within {darkorange}{1}{default} seconds."
-	}
-
 	"Menu_SteeringControl"
 	{
 		"#format"	"{1:i}"
@@ -386,7 +380,19 @@
 		"#format"	"{1:i}"
 		"en"		"[{olive}TFDB{default}] Type in chat the new think interval (seconds, 0 = per-tick) within {darkorange}{1}{default} seconds."
 	}
-	
+
+	"Menu_BounceCeiling"
+	{
+		"#format"	"{1:i}"
+		"en"		"[{olive}TFDB{default}] Type in chat the new bounce ceiling (HU, 0 = disabled) within {darkorange}{1}{default} seconds."
+	}
+
+	"Menu_CritGlowStack"
+	{
+		"#format"	"{1:i}"
+		"en"		"[{olive}TFDB{default}] Type in chat the new crit glow stack (1-10) within {darkorange}{1}{default} seconds."
+	}
+
 	"Menu_MaxRockets"
 	{
 		"#format"	"{1:i}"
@@ -539,12 +545,6 @@
 		"en"		"[{olive}TFDB{default}] Changed rocket class maximum bounces to {darkorange}{1}{default}."
 	}
 	
-	"Menu_ChangedBounceScale"
-	{
-		"#format"	"{1:.2f}"
-		"en"		"[{olive}TFDB{default}] Changed rocket class bounce scale to {darkorange}{1}{default}."
-	}
-
 	"Menu_ChangedSteeringControl"
 	{
 		"#format"	"{1:.3f}"
@@ -561,6 +561,18 @@
 	{
 		"#format"	"{1:.3f}"
 		"en"		"[{olive}TFDB{default}] Changed rocket class think interval to {darkorange}{1}{default}s."
+	}
+
+	"Menu_ChangedBounceCeiling"
+	{
+		"#format"	"{1:.0f}"
+		"en"		"[{olive}TFDB{default}] Changed rocket class bounce ceiling to {darkorange}{1}{default} HU."
+	}
+
+	"Menu_ChangedCritGlowStack"
+	{
+		"#format"	"{1:i}"
+		"en"		"[{olive}TFDB{default}] Changed rocket class crit glow stack to {darkorange}{1}{default}."
 	}
 
 	"Guardian_CmdBlocked"
@@ -1205,17 +1217,17 @@
 
 	"DeathMatch_Solo_Not_Possible_Last_Alive"
 	{
-		"en"		"[{olive}TFDB{default}] {darkmagenta}Solo{default} can {red}not{default} be enabled \u2014 you are the last player alive."
+		"en"		"[{olive}TFDB{default}] {darkmagenta}Solo{default} can {red}not{default} be enabled — you are the last player alive."
 	}
 
 	"DeathMatch_Solo_Not_Possible_No_Teammates"
 	{
-		"en"		"[{olive}TFDB{default}] Your {darkmagenta}solo{default} was {red}disabled{default} \u2014 no alive teammates."
+		"en"		"[{olive}TFDB{default}] Your {darkmagenta}solo{default} was {red}disabled{default} — no alive teammates."
 	}
 
 	"DeathMatch_Solo_Not_Possible_NER_Would_End"
 	{
-		"en"		"[{olive}TFDB{default}] Your {darkmagenta}solo{default} was {red}disabled{default} \u2014 NER would have ended otherwise."
+		"en"		"[{olive}TFDB{default}] Your {darkmagenta}solo{default} was {red}disabled{default} — DeathMatch would have ended otherwise."
 	}
 
 	"DeathMatch_Solo_Disabled_By_Config"
@@ -1287,6 +1299,69 @@
 	"Menu_Title_ApplyPreset"
 	{
 		"en"		"Apply preset:"
+	}
+
+	// ========================================================================
+	//  PvB admin menu titles
+	// ========================================================================
+
+	"PvB_Menu_Admin_Panel"
+	{
+		"#format"	"{1:s},{2:s}"
+		"en"		"=== PvB Admin Panel ===\nStatus: {1} | Type: {2}"
+	}
+
+	"PvB_Menu_Choose_Type"
+	{
+		"#format"	"{1:s}"
+		"en"		"Choose Bot Type\nCurrent: {1}"
+	}
+
+	"PvB_Menu_Brain_Mgmt"
+	{
+		"en"		"Brain Management"
+	}
+
+	"PvB_Menu_Speech"
+	{
+		"#format"	"{1:s}"
+		"en"		"Speech Settings\nSpeech: {1}"
+	}
+
+	"PvB_Menu_Vote_Disable"
+	{
+		"en"		"Vote: Disable PvB Bot?\n(Return to normal match)"
+	}
+
+	"PvB_Menu_Choose_Opponent"
+	{
+		"en"		"Choose your opponent:"
+	}
+
+	"PvB_Menu_Vote_Type"
+	{
+		"en"		"Vote: Which bot type?"
+	}
+
+	"PvB_Menu_Info_Active"
+	{
+		"#format"	"{1:s},{2:d}"
+		"en"		"PvB Bot Info\nStatus: ACTIVE\nType: {1}\nRound Deflects: {2}"
+	}
+
+	"PvB_Menu_Info_Inactive"
+	{
+		"en"		"PvB Bot Info\nStatus: INACTIVE"
+	}
+
+	"FFA_Vote_Menu_Title_Enable"
+	{
+		"en"		"Enable FFA mode?"
+	}
+
+	"FFA_Vote_Menu_Title_Disable"
+	{
+		"en"		"Disable FFA mode?"
 	}
 
 }

@@ -94,7 +94,7 @@ void CreateRocket(int spawnerEntity, int spawnerClass, int team, int rocketClass
 	RocketBounceEventTick[index]  = 0;
 	RocketNextHomingThink[index]  = 0.0;
 	RocketLastLogicThink[index]   = 0.0;
-	RocketCritGlow[index]           = INVALID_ENT_REFERENCE;
+	for (int i = 0; i < MAX_CRIT_STACK; i++) RocketCritGlow[index][i] = INVALID_ENT_REFERENCE;
 	RocketCritGlowTeam[index]       = 0;
 	RocketIsCritical[index]         = isCrit;
 	RocketLastDeflectionTime[index] = GetGameTime();
@@ -152,17 +152,15 @@ void DestroyRocket(int index)
 {
 	if (!IsValidRocket(index)) return;
 
-	// Clean up server-managed crit glow particle
-	if (RocketCritGlow[index] != INVALID_ENT_REFERENCE)
+	// Clean up server-managed crit glow particle stack
+	for (int i = 0; i < MAX_CRIT_STACK; i++)
 	{
-		int glow = EntRefToEntIndex(RocketCritGlow[index]);
-		if (glow != -1 && IsValidEntity(glow))
-		{
-			RemoveEntity(glow);
-		}
-		RocketCritGlow[index] = INVALID_ENT_REFERENCE;
-		RocketCritGlowTeam[index] = 0;
+		if (RocketCritGlow[index][i] == INVALID_ENT_REFERENCE) continue;
+		int glow = EntRefToEntIndex(RocketCritGlow[index][i]);
+		if (glow != -1 && IsValidEntity(glow)) RemoveEntity(glow);
+		RocketCritGlow[index][i] = INVALID_ENT_REFERENCE;
 	}
+	RocketCritGlowTeam[index] = 0;
 
 	int entity = EntRefToEntIndex(RocketEntity[index]);
 	if (entity != INVALID_ENT_REFERENCE && IsValidEntity(entity))
@@ -186,8 +184,9 @@ void DestroyRockets()
 }
 
 /**
- * Creates or replaces the server-managed crit glow particle on a rocket.
+ * Creates or replaces the server-managed crit glow particle stack on a rocket.
  * Uses proper SetParent attachment for smooth following without position sync.
+ * The stack count is per-class via cfg key "crit glow stack" (1 = default).
  *
  * @param index    The rocket's internal index.
  * @param entity   The rocket entity index.
@@ -195,11 +194,17 @@ void DestroyRockets()
  */
 void UpdateCritGlow(int index, int entity, int team)
 {
-	// Same-team skip: if the current glow is already the correct team color,
-	// don't destroy and recreate it.
-	if (RocketCritGlow[index] != INVALID_ENT_REFERENCE && RocketCritGlowTeam[index] == team)
+	int rocketClass = RocketClass[index];
+	int stack = RocketClassCritGlowStack[rocketClass];
+	if (stack < 1)              stack = 1;
+	if (stack > MAX_CRIT_STACK) stack = MAX_CRIT_STACK;
+
+	// Same-team skip: if the current stack is already the correct team color
+	// and the first entry is still alive, assume the rest are too — don't
+	// destroy and recreate.
+	if (RocketCritGlow[index][0] != INVALID_ENT_REFERENCE && RocketCritGlowTeam[index] == team)
 	{
-		int existingGlow = EntRefToEntIndex(RocketCritGlow[index]);
+		int existingGlow = EntRefToEntIndex(RocketCritGlow[index][0]);
 		if (existingGlow != -1 && IsValidEntity(existingGlow))
 		{
 			return;
@@ -214,23 +219,28 @@ void UpdateCritGlow(int index, int entity, int team)
 	else
 		particleName = "eyeboss_projectile";
 
-	// Spawn parented persistent glow via shared helper. Attaches to "trail" attachment
-	// on the rocket model if one exists, otherwise to parent origin.
-	int newGlow = SpawnParticleSystem(particleName, NULL_VECTOR, NULL_VECTOR, entity, "trail", 0.0, 0.0);
-	if (newGlow == -1) return;
-
-	// Clean up old glow if exists
-	if (RocketCritGlow[index] != INVALID_ENT_REFERENCE)
+	// Clean up old stack first so we don't leak any lingering entries.
+	for (int i = 0; i < MAX_CRIT_STACK; i++)
 	{
-		int oldGlow = EntRefToEntIndex(RocketCritGlow[index]);
+		if (RocketCritGlow[index][i] == INVALID_ENT_REFERENCE) continue;
+		int oldGlow = EntRefToEntIndex(RocketCritGlow[index][i]);
 		if (oldGlow != -1 && IsValidEntity(oldGlow))
 		{
 			AcceptEntityInput(oldGlow, "Stop");
 			RemoveEntity(oldGlow);
 		}
+		RocketCritGlow[index][i] = INVALID_ENT_REFERENCE;
 	}
 
-	RocketCritGlow[index]     = EntIndexToEntRef(newGlow);
+	// Spawn N parented particles at the rocket's "trail" attachment (or origin
+	// fallback). All emit from the same spot → denser/brighter glow.
+	for (int i = 0; i < stack; i++)
+	{
+		int newGlow = SpawnParticleSystem(particleName, NULL_VECTOR, NULL_VECTOR, entity, "trail", 0.0, 0.0);
+		if (newGlow == -1) continue;
+		RocketCritGlow[index][i] = EntIndexToEntRef(newGlow);
+	}
+
 	RocketCritGlowTeam[index] = team;
 }
 
@@ -250,18 +260,19 @@ bool IsValidRocket(int index)
 
 	// Rocket entity was destroyed by the engine (shot down, exploded, etc.)
 	// without going through DestroyRocket. Clean up the server-managed crit
-	// glow particle so it doesn't linger at the rocket's last position.
-	if (RocketCritGlow[index] != INVALID_ENT_REFERENCE)
+	// glow particle stack so they don't linger at the rocket's last position.
+	for (int i = 0; i < MAX_CRIT_STACK; i++)
 	{
-		int glow = EntRefToEntIndex(RocketCritGlow[index]);
+		if (RocketCritGlow[index][i] == INVALID_ENT_REFERENCE) continue;
+		int glow = EntRefToEntIndex(RocketCritGlow[index][i]);
 		if (glow != -1 && IsValidEntity(glow))
 		{
 			AcceptEntityInput(glow, "Stop");
 			RemoveEntity(glow);
 		}
-		RocketCritGlow[index] = INVALID_ENT_REFERENCE;
-		RocketCritGlowTeam[index] = 0;
+		RocketCritGlow[index][i] = INVALID_ENT_REFERENCE;
 	}
+	RocketCritGlowTeam[index] = 0;
 
 	RocketIsValid[index] = false;
 	RocketCount--;

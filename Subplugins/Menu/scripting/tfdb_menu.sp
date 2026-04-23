@@ -54,16 +54,18 @@ enum RocketClassMenu
 	RocketClassMenu_CmdsOnSpawn,
 	RocketClassMenu_CmdsOnDeflect,
 	RocketClassMenu_CmdsOnKill,
+	RocketClassMenu_CmdsOnSpawnKill,
 	RocketClassMenu_CmdsOnExplode,
 	RocketClassMenu_CmdsOnNoTarget,
 	RocketClassMenu_MaxBounces,
-	RocketClassMenu_BounceScale,
 	RocketClassMenu_OrbitTightness,
 	RocketClassMenu_MaxSpeed,
 	RocketClassMenu_MaxDeflections,
 	RocketClassMenu_SteeringControl,
 	RocketClassMenu_BounceControl,
 	RocketClassMenu_ThinkInterval,
+	RocketClassMenu_BounceCeiling,
+	RocketClassMenu_CritGlowStack,
 	SizeOfRocketClassMenu
 };
 
@@ -113,22 +115,25 @@ enum struct RocketClass
 	DataPack       CmdsOnSpawn;
 	DataPack       CmdsOnDeflect;
 	DataPack       CmdsOnKill;
+	DataPack       CmdsOnSpawnKill;
 	DataPack       CmdsOnExplode;
 	DataPack       CmdsOnNoTarget;
 	int            MaxBounces;
-	float          BounceScale;
 	float          OrbitTightness;
 	float          MaxSpeed;
 	int            MaxDeflections;
 	float          SteeringControlSec;
 	float          BounceControlSec;
 	float          ThinkInterval;
+	float          BounceCeiling;
+	int            CritGlowStack;
 
 	void Destroy()
 	{
 		delete this.CmdsOnSpawn;
 		delete this.CmdsOnDeflect;
 		delete this.CmdsOnKill;
+		delete this.CmdsOnSpawnKill;
 		delete this.CmdsOnExplode;
 		delete this.CmdsOnNoTarget;
 	}
@@ -194,16 +199,18 @@ char strRocketClassMenu[view_as<int>(SizeOfRocketClassMenu) - 1][] =
 	"Spawn commands",
 	"Deflect commands",
 	"Kill commands",
+	"Spawn-kill commands",
 	"Explode commands",
 	"No target commands",
 	"Maximum bounces",
-	"Bounce scale",
 	"Orbit tightness",
 	"Max speed",
 	"Max deflections",
 	"Steering control (sec)",
 	"Bounce control (sec)",
-	"Think interval (sec)"
+	"Think interval (sec)",
+	"Bounce ceiling (HU)",
+	"Crit glow stack"
 };
 
 char strSpawnerClassMenu[view_as<int>(SizeOfSpawnerClassMenu) - 1][] =
@@ -984,12 +991,6 @@ public int RocketClassOptionsMenuHandler(Menu menu, MenuAction menuActions, int 
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 				
-				case RocketClassMenu_BounceScale :
-				{
-					CPrintToChat(iParam1, "%t", "Menu_BounceScale", CvarSayHookTimeout.IntValue);
-					CPrintToChat(iParam1, "%t", "Menu_Reset");
-				}
-
 				case RocketClassMenu_OrbitTightness :
 				{
 					CPrintToChat(iParam1, "%t", "Menu_OrbitTightness");
@@ -1023,6 +1024,18 @@ public int RocketClassOptionsMenuHandler(Menu menu, MenuAction menuActions, int 
 				case RocketClassMenu_ThinkInterval :
 				{
 					CPrintToChat(iParam1, "%t", "Menu_ThinkInterval", CvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_Reset");
+				}
+
+				case RocketClassMenu_BounceCeiling :
+				{
+					CPrintToChat(iParam1, "%t", "Menu_BounceCeiling", CvarSayHookTimeout.IntValue);
+					CPrintToChat(iParam1, "%t", "Menu_Reset");
+				}
+
+				case RocketClassMenu_CritGlowStack :
+				{
+					CPrintToChat(iParam1, "%t", "Menu_CritGlowStack", CvarSayHookTimeout.IntValue);
 					CPrintToChat(iParam1, "%t", "Menu_Reset");
 				}
 
@@ -1943,22 +1956,6 @@ public Action OnClientSayCommand(int client, const char[] strCommand, const char
 			return Plugin_Stop;
 		}
 		
-		case RocketClassMenu_BounceScale :
-		{
-			float fScale = StringToFloat(args);
-			
-			TFDB_SetRocketClassBounceScale(rocketClass, fScale == -1.0 ? SavedRocketClasses[rocketClass].BounceScale : fScale);
-			
-			LogAction(client, -1, "\"%L\" changed rocket class bounce scale to %.2f", client, fScale);
-			CPrintToChat(client, "%t", "Menu_ChangedBounceScale", fScale);
-			
-			ClientRocketClassMenu[client]  = RocketClassMenu_None;
-			ClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
-			ClientRocketClass[client]  = -1;
-			
-			return Plugin_Stop;
-		}
-
 		case RocketClassMenu_OrbitTightness :
 		{
 			float fTightness = StringToFloat(args);
@@ -2047,6 +2044,42 @@ public Action OnClientSayCommand(int client, const char[] strCommand, const char
 
 			LogAction(client, -1, "\"%L\" changed rocket class think interval to %.3fs", client, useSec);
 			CPrintToChat(client, "%t", "Menu_ChangedThinkInterval", useSec);
+
+			ClientRocketClassMenu[client]  = RocketClassMenu_None;
+			ClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			ClientRocketClass[client]  = -1;
+			return Plugin_Stop;
+		}
+
+		case RocketClassMenu_BounceCeiling :
+		{
+			// Ceiling in HU. 0 = disabled. Enter -1 to reset to cfg value.
+			float fCeiling = StringToFloat(args);
+			float useCeiling = (fCeiling < 0.0) ? SavedRocketClasses[rocketClass].BounceCeiling : fCeiling;
+
+			TFDB_SetRocketClassBounceCeiling(rocketClass, useCeiling);
+
+			LogAction(client, -1, "\"%L\" changed rocket class bounce ceiling to %.0f HU", client, useCeiling);
+			CPrintToChat(client, "%t", "Menu_ChangedBounceCeiling", useCeiling);
+
+			ClientRocketClassMenu[client]  = RocketClassMenu_None;
+			ClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
+			ClientRocketClass[client]  = -1;
+			return Plugin_Stop;
+		}
+
+		case RocketClassMenu_CritGlowStack :
+		{
+			// Stack size 1..MAX_CRIT_STACK. Enter -1 to reset to cfg value.
+			int iStack = StringToInt(args);
+			int useStack = (iStack < 0) ? SavedRocketClasses[rocketClass].CritGlowStack : iStack;
+			if (useStack < 1)              useStack = 1;
+			if (useStack > MAX_CRIT_STACK) useStack = MAX_CRIT_STACK;
+
+			TFDB_SetRocketClassCritGlowStack(rocketClass, useStack);
+
+			LogAction(client, -1, "\"%L\" changed rocket class crit glow stack to %d", client, useStack);
+			CPrintToChat(client, "%t", "Menu_ChangedCritGlowStack", useStack);
 
 			ClientRocketClassMenu[client]  = RocketClassMenu_None;
 			ClientSpawnerClassMenu[client] = SpawnerClassMenu_None;
@@ -2298,7 +2331,10 @@ void ParseClasses(KeyValues kvConfig)
 		SavedRocketClasses[index].SteeringControlSec  = kvConfig.GetFloat("steering control", 0.045);
 		SavedRocketClasses[index].BounceControlSec    = kvConfig.GetFloat("bounce control", 0.045);
 		SavedRocketClasses[index].ThinkInterval       = kvConfig.GetFloat("think interval", 0.0);
-		SavedRocketClasses[index].BounceScale       = kvConfig.GetFloat("bounce scale", 1.0);
+		SavedRocketClasses[index].BounceCeiling       = kvConfig.GetFloat("bounce ceiling", 0.0);
+		SavedRocketClasses[index].CritGlowStack       = kvConfig.GetNum("crit glow stack", 1);
+		if (SavedRocketClasses[index].CritGlowStack < 1)              SavedRocketClasses[index].CritGlowStack = 1;
+		if (SavedRocketClasses[index].CritGlowStack > MAX_CRIT_STACK) SavedRocketClasses[index].CritGlowStack = MAX_CRIT_STACK;
 		SavedRocketClasses[index].OrbitTightness    = kvConfig.GetFloat("orbit tightness", 0.0);
 		SavedRocketClasses[index].MaxSpeed          = kvConfig.GetFloat("max speed", 0.0);
 		SavedRocketClasses[index].MaxDeflections    = kvConfig.GetNum("max deflections", 0);
@@ -2317,7 +2353,10 @@ void ParseClasses(KeyValues kvConfig)
 		
 		kvConfig.GetString("on kill", buffer, sizeof(buffer));
 		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnKillCmd; SavedRocketClasses[index].CmdsOnKill = cmds; }
-		
+
+		kvConfig.GetString("on spawn kill", buffer, sizeof(buffer));
+		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnSpawnKillCmd; SavedRocketClasses[index].CmdsOnSpawnKill = cmds; }
+
 		kvConfig.GetString("on explode", buffer, sizeof(buffer));
 		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnExplodeCmd; SavedRocketClasses[index].CmdsOnExplode = cmds; }
 		
@@ -2477,6 +2516,7 @@ bool IsRocketClassMenuDisabled(RocketClassMenu option)
 	       option == RocketClassMenu_CmdsOnSpawn    ||
 	       option == RocketClassMenu_CmdsOnDeflect  ||
 	       option == RocketClassMenu_CmdsOnKill     ||
+	       option == RocketClassMenu_CmdsOnSpawnKill ||
 	       option == RocketClassMenu_CmdsOnExplode  ||
 	       option == RocketClassMenu_CmdsOnNoTarget ||
 	       (!TrailsLoaded &&

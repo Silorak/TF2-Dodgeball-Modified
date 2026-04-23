@@ -251,11 +251,15 @@ public void OnAllPluginsLoaded()
 
 public void OnLibraryRemoved(const char[] name)
 {
-	// If the core is unloaded at runtime, disable ourselves to avoid
-	// calling stale natives.
+	// If the core unloads at runtime, disable ourselves gracefully rather than
+	// SetFailState'ing — a SetFailState here cascades when the core crashes
+	// (both plugins error into the log at once, tangling the root cause).
+	// We'll simply stop reacting; subsequent native calls are guarded below.
 	if (StrEqual(name, "tfdb"))
 	{
-		SetFailState("[Guardian] tfdb core plugin was unloaded — disabling Guardian.");
+		LogMessage("[Guardian] tfdb core unloaded — disabling Guardian.");
+		enabled      = false;
+		guardianActive = false;
 	}
 }
 

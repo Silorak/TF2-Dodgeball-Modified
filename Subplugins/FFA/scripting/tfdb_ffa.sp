@@ -332,13 +332,14 @@ public void DisableOnBotCallback(ConVar convar, const char[] oldValue, const cha
 
 void StartFFAVote()
 {
-	char mode[16];
-	mode = !FFAEnabled ? "Enable" : "Disable";
-	
 	Menu menu = new Menu(VoteMenuHandler);
 	menu.VoteResultCallback = VoteResultHandler;
-	
-	menu.SetTitle("%s FFA mode?", mode);
+
+	// Vote menu shown to all clients — use server language
+	char title[64];
+	FormatEx(title, sizeof(title), "%T",
+		FFAEnabled ? "FFA_Vote_Menu_Title_Disable" : "FFA_Vote_Menu_Title_Enable", LANG_SERVER);
+	menu.SetTitle(title);
 	
 	menu.AddItem("0", "Yes");
 	menu.AddItem("1", "No");

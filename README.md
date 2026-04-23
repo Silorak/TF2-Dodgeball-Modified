@@ -50,7 +50,7 @@ A modular plugin suite built around a shared native API. The core plugin handles
 
 **Engine cap override** — The `"max velocity"` key in `general.cfg` sets `sv_maxvelocity` on map load (default TF2 cap is 3500 HU/s; raise it for high-speed rallies).
 
-**Rocket classes** — Fully configurable with custom models, sounds, speeds, damage, turn rates, and bounce limits. Event commands with `@rocket`, `@owner`, `@target`, `@speed` placeholders. Experimental scaling modes for orbit tightness and target-speed-based acceleration. See [`configs/dodgeball/guide.md`](TF2Dodgeball/addons/sourcemod/configs/dodgeball/guide.md) for the full field reference and ready-made recipes (sniper, boulder, nuke, Damizean-authentic, competitive default).
+**Rocket classes** — Fully configurable with custom models, sounds, speeds, damage, turn rates, and bounce limits. Event commands with `@rocket`, `@owner`, `@target`, `@speed`, `@deflections` placeholders. Separate `on kill` (deflected kill) and `on spawn kill` (undeflected kill) events for distinct chat messages. `crit glow stack` cosmetic knob stacks fake-crit particles (1-10) for a denser "charged" look on low-damage rockets. Experimental scaling modes for orbit tightness and target-speed-based acceleration. See [`configs/dodgeball/guide.md`](TF2Dodgeball/addons/sourcemod/configs/dodgeball/guide.md) for the full field reference and ready-made recipes (sniper, boulder, nuke, Damizean-authentic, competitive default).
 
 **Guardian mode** — One player becomes a boss on BLU with custom HP, a boss health bar, glow, and two configurable abilities (rage, sprint, pounce, charge, slow). Weighted random class selection. Opt-out system with configurable minimum players. Blocked automatically when bots or FFA are active. 4-layer team-join defense (`jointeam` listener + `player_team` event + timer fallback + spawn catch) prevents non-guardians from landing on BLU.
 
@@ -169,7 +169,7 @@ The core plugin uses one file: `configs/dodgeball/general.cfg`. It defines rocke
 
     "speed"               "975"
     "speed increment"     "260"
-    "turn rate"           "0.2640"
+    "turn rate"           "0.310"
     "turn rate increment" "0.0190"
 
     "damage"              "40"
@@ -179,7 +179,6 @@ The core plugin uses one file: `configs/dodgeball/general.cfg`. It defines rocke
     // Drag / bounce feel (seconds, auto-scaled to any tickrate — see guide.md)
     "steering control"    "0.045"   // 0=tight, 0.045=master, 0.091=heavy
     "bounce control"      "0.045"
-    "bounce scale"        "0.8"     // velocity kept per bounce
     "max bounces"         "10000"
 
     "think interval"      "0"       // 0 = per-tick smooth. 0.05 = 20Hz Damizean.

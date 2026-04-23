@@ -91,7 +91,6 @@ bool MusicEnabled;
 bool UseOrbitCoefficient;
 bool UseTargetSpeedScaling;
 bool UseSmoothElevation;
-bool UseBounceVerticalScale;
 bool Music[view_as<int>(SizeOfMusicsArray)];
 char MusicPath[view_as<int>(SizeOfMusicsArray)][PLATFORM_MAX_PATH];
 bool UseWebPlayer;
@@ -119,7 +118,7 @@ int         RocketDragEventTick[MAX_ROCKETS];     // GetGameTickCount() when obj
 int         RocketBounceEventTick[MAX_ROCKETS];   // GetGameTickCount() when OnTouch bounce happened; unpause after bounce-control ticks
 float       RocketNextHomingThink[MAX_ROCKETS];   // GetGameTime() when the homing-lerp block is next eligible. Only gated when class sets "think interval" > 0.
 float       RocketLastLogicThink[MAX_ROCKETS];    // GetGameTime() of last shared/legacy-think call (10 Hz gate inside OnRocketThink)
-int         RocketCritGlow[MAX_ROCKETS];         // Entity ref for server-managed crit glow particle
+int         RocketCritGlow[MAX_ROCKETS][MAX_CRIT_STACK];  // Stacked entity refs for server-managed crit glow particles (per-class "crit glow stack")
 int         RocketCritGlowTeam[MAX_ROCKETS];     // Team the current crit glow was created for (avoids same-team recreate)
 bool        RocketIsCritical[MAX_ROCKETS];       // Whether this rocket rolled crit (damage x3, no m_bCritical networking)
 int         RocketCount;
@@ -152,15 +151,15 @@ float          RocketClassTargetWeight[MAX_ROCKET_CLASSES];
 DataPack       RocketClassCmdsOnSpawn[MAX_ROCKET_CLASSES];
 DataPack       RocketClassCmdsOnDeflect[MAX_ROCKET_CLASSES];
 DataPack       RocketClassCmdsOnKill[MAX_ROCKET_CLASSES];
+DataPack       RocketClassCmdsOnSpawnKill[MAX_ROCKET_CLASSES];  // Cmds fired when rocket kills with 0 deflections.
 DataPack       RocketClassCmdsOnExplode[MAX_ROCKET_CLASSES];
 DataPack       RocketClassCmdsOnNoTarget[MAX_ROCKET_CLASSES];
 int            RocketClassMaxBounces[MAX_ROCKET_CLASSES];
-float          RocketClassBounceScale[MAX_ROCKET_CLASSES];
+float          RocketClassBounceCeiling[MAX_ROCKET_CLASSES];  // Max bounce arc height in HU. 0 = no clamp. See physics/bounce-ceiling.
+int            RocketClassCritGlowStack[MAX_ROCKET_CLASSES];  // How many crit glow particles stack on rocket (1-MAX_CRIT_STACK). 1 = default.
 float          RocketClassOrbitTightness[MAX_ROCKET_CLASSES];
 float          RocketClassMaxSpeed[MAX_ROCKET_CLASSES];
 int            RocketClassMaxDeflections[MAX_ROCKET_CLASSES];
-float          RocketClassBounceVerticalScale[MAX_ROCKET_CLASSES];
-float          RocketClassBounceMaxVerticalSpeed[MAX_ROCKET_CLASSES];
 int            RocketClassSteeringControl[MAX_ROCKET_CLASSES]; // ticks between object_deflected and eye-angle read (the drag window)
 int            RocketClassBounceControl[MAX_ROCKET_CLASSES];   // ticks between OnTouch bounce and homing resume (the post-bounce blind window)
 float          RocketClassThinkInterval[MAX_ROCKET_CLASSES];    // seconds between homing-lerp applications. 0 = per-tick (default). 0.05 = 20 Hz (Damizean authentic).
@@ -395,22 +394,22 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 	CreateNative("TFDB_SetRocketClassCmdsOnDeflect", Native_SetRocketClassCmdsOnDeflect);
 	CreateNative("TFDB_GetRocketClassCmdsOnKill", Native_GetRocketClassCmdsOnKill);
 	CreateNative("TFDB_SetRocketClassCmdsOnKill", Native_SetRocketClassCmdsOnKill);
+	CreateNative("TFDB_GetRocketClassCmdsOnSpawnKill", Native_GetRocketClassCmdsOnSpawnKill);
+	CreateNative("TFDB_SetRocketClassCmdsOnSpawnKill", Native_SetRocketClassCmdsOnSpawnKill);
 	CreateNative("TFDB_GetRocketClassCmdsOnExplode", Native_GetRocketClassCmdsOnExplode);
 	CreateNative("TFDB_SetRocketClassCmdsOnExplode", Native_SetRocketClassCmdsOnExplode);
 	CreateNative("TFDB_GetRocketClassCmdsOnNoTarget", Native_GetRocketClassCmdsOnNoTarget);
 	CreateNative("TFDB_SetRocketClassCmdsOnNoTarget", Native_SetRocketClassCmdsOnNoTarget);
-	CreateNative("TFDB_GetRocketClassBounceScale", Native_GetRocketClassBounceScale);
-	CreateNative("TFDB_SetRocketClassBounceScale", Native_SetRocketClassBounceScale);
 	CreateNative("TFDB_GetRocketClassOrbitTightness", Native_GetRocketClassOrbitTightness);
 	CreateNative("TFDB_SetRocketClassOrbitTightness", Native_SetRocketClassOrbitTightness);
 	CreateNative("TFDB_GetRocketClassMaxSpeed", Native_GetRocketClassMaxSpeed);
 	CreateNative("TFDB_SetRocketClassMaxSpeed", Native_SetRocketClassMaxSpeed);
 	CreateNative("TFDB_GetRocketClassMaxDeflections", Native_GetRocketClassMaxDeflections);
 	CreateNative("TFDB_SetRocketClassMaxDeflections", Native_SetRocketClassMaxDeflections);
-	CreateNative("TFDB_GetRocketClassBounceVerticalScale", Native_GetRocketClassBounceVerticalScale);
-	CreateNative("TFDB_SetRocketClassBounceVerticalScale", Native_SetRocketClassBounceVerticalScale);
-	CreateNative("TFDB_GetRocketClassBounceMaxVerticalSpeed", Native_GetRocketClassBounceMaxVerticalSpeed);
-	CreateNative("TFDB_SetRocketClassBounceMaxVerticalSpeed", Native_SetRocketClassBounceMaxVerticalSpeed);
+	CreateNative("TFDB_GetRocketClassBounceCeiling",  Native_GetRocketClassBounceCeiling);
+	CreateNative("TFDB_SetRocketClassBounceCeiling",  Native_SetRocketClassBounceCeiling);
+	CreateNative("TFDB_GetRocketClassCritGlowStack",  Native_GetRocketClassCritGlowStack);
+	CreateNative("TFDB_SetRocketClassCritGlowStack",  Native_SetRocketClassCritGlowStack);
 	CreateNative("TFDB_GetRocketClassSteeringControl", Native_GetRocketClassSteeringControl);
 	CreateNative("TFDB_SetRocketClassSteeringControl", Native_SetRocketClassSteeringControl);
 	CreateNative("TFDB_GetRocketClassBounceControl",   Native_GetRocketClassBounceControl);

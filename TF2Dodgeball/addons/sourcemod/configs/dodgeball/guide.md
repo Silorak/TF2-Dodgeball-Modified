@@ -32,7 +32,6 @@ The fields you'll tune 90% of the time, with a one-sentence description.
 | `damage increment` | Damage added per deflection | 25–200 |
 | `steering control` | Pre-read drag window in **seconds** (auto-converts to ticks for any tickrate) | 0.000–0.150 |
 | `bounce control` | Post-bounce blind window in **seconds** | 0.000–0.150 |
-| `bounce scale` | Speed kept per wall bounce (1.0 = perfect elastic) | 0.5–1.0 |
 | `think interval` | Homing cadence override (0 = per-tick, 0.05 = 20Hz, 0.1 = 10Hz) | 0 or 0.05 |
 | `critical chance` | % chance the rocket is a crit | 0–100 |
 
@@ -52,8 +51,7 @@ A rocket's life, in order:
    - If `control delay > 0`, adds extra blind time after the eye read
 4. **Deflect** — `on deflect` fires. Speed, turn rate, damage each increase by their `increment`. Rocket re-targets an enemy.
 5. **Wall bounce** (if it hits a surface):
-   - Velocity reflects off the surface normal
-   - `bounce scale` multiplies the velocity (0.8 = keep 80%)
+   - Velocity reflects off the surface normal via `v' = v − 2(v·n)n` — pure physics, magnitude preserved
    - Rocket enters **bounce control** blind window — flies bounced direction without homing
    - At window expiry, homing resumes toward target
    - `max bounces` caps how many bounces before the rocket explodes
@@ -116,10 +114,10 @@ Most classes leave `control delay` at 0. Use `steering control` for drag feel an
 |---|---|---|
 | `steering control` | float seconds | Pre-read drag window. 0 = unflickable (instant). 0.045 = master-like. 0.091 = heavy. Auto-scales across tickrates. |
 | `bounce control` | float seconds | Post-bounce blind time before homing resumes. 0 = instant. 0.045 ≈ old behavior. 0.091 = committed. |
-| `bounce scale` | float | Velocity multiplier on bounce. 1.0 = elastic. 0.8 = lose 20% per bounce. 0.5 = cut in half. |
 | `control delay` | float seconds | Extra blind period AFTER eye-read. Most classes use 0. Set to 0.1 for "legacy feel." |
 | `think interval` | float seconds | Homing cadence. 0 = per-tick (smooth, default). 0.05 = 20Hz (Damizean authentic). 0.1 = 10Hz (classic chunky). |
 | `max bounces` | int | How many wall bounces before the rocket explodes. 0 = never bounces (explodes on first contact). |
+| `bounce ceiling` | float HU | Max bounce arc height above the bounce point. `0` = no clamp (pure physics). `300-500` = typical tune to prevent high-deflect rockets from launching to the map ceiling. Rocket speed is preserved — excess vertical energy is redistributed to horizontal components. Only affects upward bounces (floor/slope); ceiling bounces (rocket hits ceiling) unaffected. |
 
 ### Damage
 
@@ -128,6 +126,7 @@ Most classes leave `control delay` at 0. Use `steering control` for drag feel an
 | `damage` | float | Base damage. Multiplied by 3 if crit. |
 | `damage increment` | float | Added per deflection. |
 | `critical chance` | int % | 0–100. 100 = always crit. |
+| `crit glow stack` | int | Number of fake-crit glow particles stacked on the rocket's trail attachment. `1` = default single glow. `2-10` = denser visual glow (useful for low-damage rockets that want a "charged" look). Clamped to 1–10. Cosmetic only; does not affect damage. |
 
 ### Targeting behavior
 
@@ -192,7 +191,8 @@ All optional. Leave empty if not used.
 |---|---|---|
 | `on spawn` | Rocket is created | `@name` `@rocket` `@owner` `@target` |
 | `on deflect` | Rocket is airblasted | + `@deflections` `@speed` `@mphspeed` |
-| `on kill` | Rocket kills a player | + `@dead` (the victim) |
+| `on kill` | Rocket kills a player **after at least one deflect** | + `@dead` (the victim) |
+| `on spawn kill` | Rocket kills a player **with zero deflects** (undeflected spawn kill) | same as `on kill` |
 | `on explode` | Rocket kills + this fires ONCE even if it would hit multiple | same as `on kill` |
 | `on no target` | Rocket has no valid target | `@target` becomes the new target |
 | `on destroyed` | Rocket explodes without killing | requires `tfdb_extra_events` subplugin |
@@ -232,6 +232,11 @@ Color tags for `tf_dodgeball_print`:
 Player name color substitutions:
 - `##@owner##` / `##@target##` / `##@dead##` — render with team color
 
+**`on kill` vs `on spawn kill`:**
+- `on kill` fires only when the victim was killed by a **deflected** rocket (`@deflections > 0`).
+- `on spawn kill` fires only when the victim was killed by an **undeflected** rocket (`@deflections == 0`). Used for "X died to a spawn rocket" messages.
+- Both are optional and independent. Leave either blank to suppress that case entirely.
+
 ---
 
 ## Recipes
@@ -257,7 +262,6 @@ Fast rocket with tight control. Rewards quick reflexes.
     "critical chance"        "100"
     "steering control"       "0.015"      // very tight, unflickable
     "bounce control"         "0"          // instant re-home
-    "bounce scale"           "1.0"        // keeps all speed
     "max bounces"            "5"
     "keep direction"         "1"
     "reset bounces"          "1"
@@ -283,7 +287,6 @@ Slow, high damage, committed direction.
     "critical chance"        "50"
     "steering control"       "0.121"      // heavy drag
     "bounce control"         "0.121"      // long commit after bounce
-    "bounce scale"           "0.6"        // bounces lose significant speed
     "max bounces"            "20"
     "keep direction"         "1"
     "reset bounces"          "0"
@@ -308,7 +311,6 @@ Slow, high damage, committed direction.
     "critical chance"        "10"
     "steering control"       "0.045"
     "bounce control"         "0.045"
-    "bounce scale"           "0.8"
     "max bounces"            "10000"
     "think interval"         "0.05"       // KEY: 20Hz homing, raw turn rate
     "keep direction"         "0"
@@ -334,7 +336,6 @@ Single-hit lethal. Slow but relentless.
     "damage increment"       "200"
     "critical chance"        "100"
     "max bounces"            "0"          // no bounces; explodes on impact
-    "bounce scale"           "1.0"
     "steering control"       "0.045"
     "bounce control"         "0.045"
     "elevation rate"         "0.1237"
@@ -356,14 +357,13 @@ The community-standard middle ground. What `common` is set to in shipped config.
     "behaviour"              "homing"
     "speed"                  "975"
     "speed increment"        "260"
-    "turn rate"              "0.264"
+    "turn rate"              "0.310"
     "turn rate increment"    "0.019"
     "damage"                 "40"
     "damage increment"       "25"
     "critical chance"        "100"
     "steering control"       "0.045"
     "bounce control"         "0.045"
-    "bounce scale"           "0.8"
     "max bounces"            "10000"
     "keep direction"         "1"
     "reset bounces"          "1"
@@ -375,23 +375,6 @@ The community-standard middle ground. What `common` is set to in shipped config.
 ## Advanced: dormant features
 
 These are in the code but off by default. Enable only if you know what you're doing.
-
-### `bounce vertical scale` (UDL-inherited)
-
-Clamps the vertical (Z) component of a bounce velocity. Prevents sky-bouncing.
-
-Enable in general settings:
-```
-"bounce vertical scale"  "1"
-```
-
-Then in any class:
-```
-"bounce vertical ratio"      "0.3"   // keep 30% of vertical velocity on bounce
-"bounce max vertical speed"  "400"   // hard cap on vertical speed (HU/s)
-```
-
-Useful for "crawler" classes that should stay near the floor. UDL called this "crawl bounce max up."
 
 ### `orbit coefficient` (experimental)
 
@@ -454,7 +437,7 @@ Check:
 
 ### "Rocket stops turning after hitting a wall"
 
-You set `keep direction "1"` which is correct behavior for most rockets. If you want post-bounce homing to resume, make sure `bounce control` isn't infinite and `bounce scale` > 0.
+You set `keep direction "1"` which is correct behavior for most rockets. If you want post-bounce homing to resume, make sure `bounce control` isn't excessively long.
 
 ### "Rocket explodes on first bounce"
 

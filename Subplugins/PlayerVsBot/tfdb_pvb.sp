@@ -834,27 +834,27 @@ void LockBotQuota() {
 }
 
 void EnablePvB() {
-    // Refuse to activate during a Guardian round. Guardian's own bot-join
-    // handler would cancel itself when our bot joins; avoid that collision
-    // by failing fast. TFDB_IsGuardianActive is marked optional — if Guardian
-    // isn't loaded, GetFeatureStatus returns FeatureStatus_Unavailable and we
-    // skip the check.
-    if (GetFeatureStatus(FeatureType_Native, "TFDB_IsGuardianActive") == FeatureStatus_Available) {
-        if (TFDB_IsGuardianActive()) {
-            CPrintToChatAll("{olive}[TFDB]{default} Cannot enable PvB while a Guardian round is active.");
-            LogMessage("[PvB] EnablePvB refused: TFDB_IsGuardianActive() returned true");
-            return;
-        }
+    // Refuse to activate during a Guardian round. Three-gate check avoids the
+    // "Plugin owning this native is currently paused" exception when the partner
+    // plugin crashed/paused after load — FeatureStatus_Available alone isn't
+    // enough because the native binding survives a pause; LibraryExists is the
+    // authoritative runtime gate.
+    if (LibraryExists("tfdb_guardian") &&
+        GetFeatureStatus(FeatureType_Native, "TFDB_IsGuardianActive") == FeatureStatus_Available &&
+        TFDB_IsGuardianActive()) {
+        CPrintToChatAll("{olive}[TFDB]{default} Cannot enable PvB while a Guardian round is active.");
+        LogMessage("[PvB] EnablePvB refused: TFDB_IsGuardianActive() returned true");
+        return;
     }
 
     // DeathMatch (NER / Solo) mutual exclusion — DM swaps teams which corrupts
-    // the PvB bot-vs-humans team layout. See frameworks/deathmatch-mutual-exclusion.
-    if (GetFeatureStatus(FeatureType_Native, "TFDB_IsDeathMatchActive") == FeatureStatus_Available) {
-        if (TFDB_IsDeathMatchActive()) {
-            CPrintToChatAll("{olive}[TFDB]{default} Cannot enable PvB while DeathMatch (NER/Solo) is active.");
-            LogMessage("[PvB] EnablePvB refused: TFDB_IsDeathMatchActive() returned true");
-            return;
-        }
+    // the PvB bot-vs-humans team layout. Same three-gate pattern as above.
+    if (LibraryExists("tfdb_deathmatch") &&
+        GetFeatureStatus(FeatureType_Native, "TFDB_IsDeathMatchActive") == FeatureStatus_Available &&
+        TFDB_IsDeathMatchActive()) {
+        CPrintToChatAll("{olive}[TFDB]{default} Cannot enable PvB while DeathMatch (NER/Solo) is active.");
+        LogMessage("[PvB] EnablePvB refused: TFDB_IsDeathMatchActive() returned true");
+        return;
     }
 
     LockBotQuota();   // ensure no auto-replacement will fight our tf_bot_add
@@ -1078,9 +1078,11 @@ public Action Cmd_BotAdmin(int client, int args) {
 
 void ShowAdminMainMenu(int client) {
     Menu menu = new Menu(MenuHandler_AdminMain);
-    menu.SetTitle("=== PvB Admin Panel ===\nStatus: %s | Type: %s", 
+    char title[128];
+    FormatEx(title, sizeof(title), "%T", "PvB_Menu_Admin_Panel", client,
         BotEnabled ? "ACTIVE" : "INACTIVE",
         TrainingMode ? "TRAINING" : "Normal");
+    menu.SetTitle(title);
     
     menu.AddItem("toggle", BotEnabled ? "Disable Bot" : "Enable Bot");
     menu.AddItem("type", "Change Bot Type");
@@ -1139,7 +1141,9 @@ void ShowAdminTypeMenu(int client) {
 
     char currentName[32];
     GetBotTypeNameSafe(CfgBotType, currentName, sizeof(currentName));
-    menu.SetTitle("Choose Bot Type\nCurrent: %s", currentName);
+    char title[96];
+    FormatEx(title, sizeof(title), "%T", "PvB_Menu_Choose_Type", client, currentName);
+    menu.SetTitle(title);
 
     for (int t = 0; t < NumBotTypes; t++) {
         char info[8], display[96];
@@ -1179,7 +1183,9 @@ public int MenuHandler_AdminType(Menu menu, MenuAction action, int param1, int p
 
 void ShowAdminBrainMenu(int client) {
     Menu menu = new Menu(MenuHandler_AdminBrain);
-    menu.SetTitle("Brain Management");
+    char title[64];
+    FormatEx(title, sizeof(title), "%T", "PvB_Menu_Brain_Mgmt", client);
+    menu.SetTitle(title);
     
     int brainSize = BrainMemory != null ? BrainMemory.Size : 0;
     char sizeInfo[64];
@@ -1236,7 +1242,9 @@ public int MenuHandler_AdminBrain(Menu menu, MenuAction action, int param1, int 
 
 void ShowAdminSpeechMenu(int client) {
     Menu menu = new Menu(MenuHandler_AdminSpeech);
-    menu.SetTitle("Speech Settings\nSpeech: %s", CfgSpeech ? "ON" : "OFF");
+    char title[64];
+    FormatEx(title, sizeof(title), "%T", "PvB_Menu_Speech", client, CfgSpeech ? "ON" : "OFF");
+    menu.SetTitle(title);
     
     menu.AddItem("toggle", CfgSpeech ? "Disable Speech" : "Enable Speech");
     
@@ -1509,7 +1517,10 @@ void StartDisableVote() {
 
 void ShowDisableVoteMenuToAll() {
     Menu menu = new Menu(MenuHandler_DisableVote);
-    menu.SetTitle("Vote: Disable PvB Bot?\n(Return to normal match)");
+    // Server-language title — this menu goes to all voters at once
+    char title[96];
+    FormatEx(title, sizeof(title), "%T", "PvB_Menu_Vote_Disable", LANG_SERVER);
+    menu.SetTitle(title);
     menu.AddItem("yes", "Yes - Disable Bot");
     menu.AddItem("no", "No - Keep Bot Active");
     menu.ExitButton = false;
@@ -1652,7 +1663,9 @@ public Action Timer_CheckPlayerJoin(Handle timer, int userId) {
 
 void ShowClassPickMenu(int client) {
     Menu menu = new Menu(MenuHandler_ClassPick);
-    menu.SetTitle("Choose your opponent:");
+    char title[64];
+    FormatEx(title, sizeof(title), "%T", "PvB_Menu_Choose_Opponent", client);
+    menu.SetTitle(title);
     for (int t = 0; t < NumBotTypes; t++) {
         char info[8];
         IntToString(t, info, sizeof(info));
@@ -1720,7 +1733,9 @@ void StartClassVote() {
 
 void ShowClassVoteMenu(int client) {
     Menu menu = new Menu(MenuHandler_ClassVote);
-    menu.SetTitle("Vote: Which bot type?");
+    char title[64];
+    FormatEx(title, sizeof(title), "%T", "PvB_Menu_Vote_Type", client);
+    menu.SetTitle(title);
     for (int t = 0; t < NumBotTypes; t++) {
         char info[8];
         IntToString(t, info, sizeof(info));
@@ -1805,11 +1820,13 @@ void ShowBotTypeMenu(int client) {
     char typeName[32];
     GetBotTypeNameSafe(CfgBotType, typeName, sizeof(typeName));
     
+    char title[128];
     if (BotEnabled) {
-        menu.SetTitle("PvB Bot Info\nStatus: ACTIVE\nType: %s\nRound Deflects: %d", typeName, RoundDeflects);
+        FormatEx(title, sizeof(title), "%T", "PvB_Menu_Info_Active", client, typeName, RoundDeflects);
     } else {
-        menu.SetTitle("PvB Bot Info\nStatus: INACTIVE");
+        FormatEx(title, sizeof(title), "%T", "PvB_Menu_Info_Inactive", client);
     }
+    menu.SetTitle(title);
     
     menu.AddItem("stats", "View Bot Stats");
     

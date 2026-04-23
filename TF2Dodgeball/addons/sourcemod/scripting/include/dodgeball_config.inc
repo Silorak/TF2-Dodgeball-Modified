@@ -12,23 +12,26 @@ void DestroyRocketClasses()
 {
 	for (int index = 0; index < RocketClassCount; index++)
 	{
-		DataPack cmdOnSpawn    = RocketClassCmdsOnSpawn[index];
-		DataPack cmdOnKill     = RocketClassCmdsOnKill[index];
-		DataPack cmdOnExplode  = RocketClassCmdsOnExplode[index];
-		DataPack cmdOnDeflect  = RocketClassCmdsOnDeflect[index];
-		DataPack cmdOnNoTarget = RocketClassCmdsOnNoTarget[index];
+		DataPack cmdOnSpawn     = RocketClassCmdsOnSpawn[index];
+		DataPack cmdOnKill      = RocketClassCmdsOnKill[index];
+		DataPack cmdOnSpawnKill = RocketClassCmdsOnSpawnKill[index];
+		DataPack cmdOnExplode   = RocketClassCmdsOnExplode[index];
+		DataPack cmdOnDeflect   = RocketClassCmdsOnDeflect[index];
+		DataPack cmdOnNoTarget  = RocketClassCmdsOnNoTarget[index];
 
-		if (cmdOnSpawn   != null)  delete cmdOnSpawn;
-		if (cmdOnKill    != null)  delete cmdOnKill;
-		if (cmdOnExplode != null)  delete cmdOnExplode;
-		if (cmdOnDeflect != null)  delete cmdOnDeflect;
-		if (cmdOnNoTarget != null) delete cmdOnNoTarget;
+		if (cmdOnSpawn     != null) delete cmdOnSpawn;
+		if (cmdOnKill      != null) delete cmdOnKill;
+		if (cmdOnSpawnKill != null) delete cmdOnSpawnKill;
+		if (cmdOnExplode   != null) delete cmdOnExplode;
+		if (cmdOnDeflect   != null) delete cmdOnDeflect;
+		if (cmdOnNoTarget  != null) delete cmdOnNoTarget;
 
-		RocketClassCmdsOnSpawn[index]    = null;
-		RocketClassCmdsOnKill[index]     = null;
-		RocketClassCmdsOnExplode[index]  = null;
-		RocketClassCmdsOnDeflect[index]  = null;
-		RocketClassCmdsOnNoTarget[index] = null;
+		RocketClassCmdsOnSpawn[index]     = null;
+		RocketClassCmdsOnKill[index]      = null;
+		RocketClassCmdsOnSpawnKill[index] = null;
+		RocketClassCmdsOnExplode[index]   = null;
+		RocketClassCmdsOnDeflect[index]   = null;
+		RocketClassCmdsOnNoTarget[index]  = null;
 	}
 	RocketClassCount = 0;
 }
@@ -306,11 +309,13 @@ void ExecuteCommands(DataPack dataPack, int rocketClass, int rocket, int owner, 
  * Parses a dodgeball configuration file (KeyValues format).
  * Loads general settings, rocket classes, and spawner classes.
  *
- * Free-and-rebuild on every call: stale class / spawner / preset arrays are
- * wiped first so mid-map `sm_tfdb_refresh_rockets` works cleanly. Subplugins
- * that cache class indices (e.g. Menu) must rebuild on the
- * TFDB_OnRocketsConfigExecuted forward fired at the end of this function.
- * See concepts/rocket-class-config-fields.md in the wiki.
+ * IMPORTANT: per-map cfgs (`tfdb_mapname.cfg`) ADD to and override the classes
+ * loaded from `general.cfg` — they do NOT replace them. Wiping state here
+ * between `general.cfg` and `mapname.cfg` parses would leave the server with
+ * zero classes on maps whose cfg only overrides spawners or a subset.
+ *
+ * For a true fresh reload, call `DisableDodgeBall` / `EnableDodgeBall` which
+ * handle cleanup explicitly (see `dodgeball_core.inc:DisableDodgeBall`).
  */
 void ParseConfigurations(char[] configFile = "general.cfg")
 {
@@ -321,12 +326,6 @@ void ParseConfigurations(char[] configFile = "general.cfg")
 	LogMessage("Executing configuration file %s", path);
 
 	if (!FileExists(path, true)) return;
-
-	// Wipe stale state before reparse. Rockets in flight keep their arrays;
-	// only class/spawner/preset definitions are rebuilt.
-	DestroyRocketClasses();
-	DestroySpawners();
-	PresetCount = 0;
 
 	KeyValues config = new KeyValues("TF2_Dodgeball");
 	if (!config.ImportFromFile(path)) SetFailState("[TFDB] Error while parsing configuration file: %s", path);
@@ -353,7 +352,6 @@ void ParseGeneral(KeyValues config)
 	UseOrbitCoefficient   = view_as<bool>(config.GetNum("orbit coefficient", 0));
 	UseTargetSpeedScaling = view_as<bool>(config.GetNum("target speed scaling", 0));
 	UseSmoothElevation    = view_as<bool>(config.GetNum("smooth elevation", 0));
-	UseBounceVerticalScale = view_as<bool>(config.GetNum("bounce vertical scale", 0));
 
 	MusicEnabled = view_as<bool>(config.GetNum("music", 0));
 
@@ -471,7 +469,11 @@ void ParseClasses(KeyValues config)
 		RocketClassElevationLimit[index]    = config.GetFloat("elevation limit");
 		RocketClassControlDelay[index]      = config.GetFloat("control delay");
 		RocketClassMaxBounces[index]        = config.GetNum("max bounces");
-		RocketClassBounceScale[index]       = config.GetFloat("bounce scale", 1.0);
+		RocketClassBounceCeiling[index]     = config.GetFloat("bounce ceiling", 0.0);
+		if (RocketClassBounceCeiling[index] < 0.0) RocketClassBounceCeiling[index] = 0.0;
+		RocketClassCritGlowStack[index]     = config.GetNum("crit glow stack", 1);
+		if (RocketClassCritGlowStack[index] < 1)              RocketClassCritGlowStack[index] = 1;
+		if (RocketClassCritGlowStack[index] > MAX_CRIT_STACK) RocketClassCritGlowStack[index] = MAX_CRIT_STACK;
 		RocketClassPlayerModifier[index]    = config.GetFloat("no. players modifier");
 		RocketClassRocketsModifier[index]   = config.GetFloat("no. rockets modifier");
 		RocketClassTargetWeight[index]      = config.GetFloat("direction to target weight");
@@ -487,9 +489,6 @@ void ParseClasses(KeyValues config)
 			RocketClassSpeedIncrement[index] = (RocketClassMaxSpeed[index] - RocketClassSpeed[index]) / float(RocketClassMaxDeflections[index]);
 		}
 
-		// Scaling mode: bounce vertical scale
-		RocketClassBounceVerticalScale[index] = config.GetFloat("bounce vertical ratio", 1.0);
-		RocketClassBounceMaxVerticalSpeed[index] = config.GetFloat("bounce max vertical speed", 0.0);
 		// Steering control: drag window between object_deflected and eye-angle read.
 		// Cfg value is seconds. Converted to real ticks so the window is identical
 		// in real time across 66/100/128-tick servers. Default 0.045 = master-like.
@@ -521,6 +520,9 @@ void ParseClasses(KeyValues config)
 
 		config.GetString("on kill", buffer, sizeof(buffer));
 		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnKillCmd; RocketClassCmdsOnKill[index] = cmds; }
+
+		config.GetString("on spawn kill", buffer, sizeof(buffer));
+		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnSpawnKillCmd; RocketClassCmdsOnSpawnKill[index] = cmds; }
 
 		config.GetString("on explode", buffer, sizeof(buffer));
 		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnExplodeCmd; RocketClassCmdsOnExplode[index] = cmds; }

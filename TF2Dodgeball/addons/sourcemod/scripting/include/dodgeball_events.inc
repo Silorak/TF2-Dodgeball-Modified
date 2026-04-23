@@ -127,9 +127,16 @@ public void OnPlayerDeath(Event event, char[] eventName, bool dontBroadcast)
 		RocketInstanceFlags[index] |= RocketFlag_Exploded;
 	}
 
-	if (TestFlags(RocketInstanceFlags[index], RocketFlag_OnKillCmd))
+	// "on kill" fires only on deflected kills; "on spawn kill" fires only on undeflected (spawn) kills.
+	if (deflections > 0)
 	{
-		ExecuteCommands(RocketClassCmdsOnKill[rocketClass], rocketClass, inflictor, attacker, target, LastDeadClient, speed, deflections, mphSpeed);
+		if (TestFlags(RocketInstanceFlags[index], RocketFlag_OnKillCmd))
+			ExecuteCommands(RocketClassCmdsOnKill[rocketClass], rocketClass, inflictor, attacker, target, LastDeadClient, speed, deflections, mphSpeed);
+	}
+	else
+	{
+		if (TestFlags(RocketInstanceFlags[index], RocketFlag_OnSpawnKillCmd))
+			ExecuteCommands(RocketClassCmdsOnSpawnKill[rocketClass], rocketClass, inflictor, attacker, target, LastDeadClient, speed, deflections, mphSpeed);
 	}
 }
 
@@ -427,14 +434,12 @@ public Action OnTouch(int entity, int other)
 		return Plugin_Continue;
 	}
 
-	int rocketClass = RocketClass[index];
-
 	float origin[3];
 	GetEntPropVector(entity, Prop_Data, "m_vecOrigin", origin);
 
 	float angles[3];
 	GetEntPropVector(entity, Prop_Data, "m_angRotation", angles);
-	
+
 	float velocity[3];
 	GetEntPropVector(entity, Prop_Data, "m_vecAbsVelocity", velocity);
 
@@ -449,31 +454,50 @@ public Action OnTouch(int entity, int other)
 	float normal[3];
 	TR_GetPlaneNormal(trace, normal);
 	delete trace;
-	
+
 	float dotProduct = GetVectorDotProduct(normal, velocity);
 	ScaleVector(normal, dotProduct);
 	ScaleVector(normal, 2.0);
 
+	// Pure reflection — v' = v - 2(v·n)n. Magnitude preserved, no artificial
+	// dampening. Matches Oracle DB_Reborn's canonical implementation and the
+	// feel the TFDB community expects.
 	float bounceVec[3];
 	SubtractVectors(velocity, normal, bounceVec);
-	ScaleVector(bounceVec, RocketClassBounceScale[rocketClass]);
 
-	// Z-clamp: scale vertical component to prevent extreme vertical bounces
-	if (UseBounceVerticalScale && RocketClassBounceVerticalScale[rocketClass] < 1.0)
+	// Bounce ceiling — per-class cap on peak bounce arc height (HU above bounce
+	// point). Optional, 0 = disabled. Derivation: under gravity g=800, peak
+	// height h = v_z² / (2g), so max allowed v_z = sqrt(2g · h).
+	// Energy redistribution: if v_z is clamped, boost horizontal components
+	// (X,Y) to preserve total |v|. Rocket keeps speed, excess upward energy
+	// becomes forward energy. Only clamps upward bounces (v_z > 0) so ceiling
+	// hits (rocket bouncing DOWN) are unaffected.
+	int rocketClass = RocketClass[index];
+	float ceiling = RocketClassBounceCeiling[rocketClass];
+	if (ceiling > 0.0 && bounceVec[2] > 0.0)
 	{
-		bounceVec[2] *= RocketClassBounceVerticalScale[rocketClass];
-	}
+		float maxVz = SquareRoot(2.0 * 800.0 * ceiling);  // g = 800 HU/s² (Source default)
+		if (bounceVec[2] > maxVz)
+		{
+			float origMagSq = bounceVec[0]*bounceVec[0] + bounceVec[1]*bounceVec[1] + bounceVec[2]*bounceVec[2];
+			float newVzSq   = maxVz * maxVz;
+			float origXYSq  = bounceVec[0]*bounceVec[0] + bounceVec[1]*bounceVec[1];
 
-	// Absolute vertical speed cap (like UDL's crawl bounce max up)
-	if (UseBounceVerticalScale && RocketClassBounceMaxVerticalSpeed[rocketClass] > 0.0)
-	{
-		if (bounceVec[2] > RocketClassBounceMaxVerticalSpeed[rocketClass])
-		{
-			bounceVec[2] = RocketClassBounceMaxVerticalSpeed[rocketClass];
-		}
-		else if (bounceVec[2] < -RocketClassBounceMaxVerticalSpeed[rocketClass])
-		{
-			bounceVec[2] = -RocketClassBounceMaxVerticalSpeed[rocketClass];
+			bounceVec[2] = maxVz;
+
+			// Boost horizontal components to preserve total magnitude.
+			// Skip redistribution on pure-vertical bounces (XY ≈ 0) — would divide by
+			// zero. Rocket just loses speed in that degenerate case (very rare in play).
+			if (origXYSq > 1.0)
+			{
+				float targetXYSq = origMagSq - newVzSq;
+				if (targetXYSq > 0.0)
+				{
+					float xyScale = SquareRoot(targetXYSq / origXYSq);
+					bounceVec[0] *= xyScale;
+					bounceVec[1] *= xyScale;
+				}
+			}
 		}
 	}
 
