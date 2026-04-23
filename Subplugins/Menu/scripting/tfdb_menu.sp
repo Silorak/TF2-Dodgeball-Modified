@@ -1154,8 +1154,8 @@ void DisplayRocketClassFlagsMenu(int client, int classIndex)
 	menu.AddItem("3", "Keep direction", ITEMDRAW_DEFAULT);
 	menu.AddItem("4", "Teamless deflects", ITEMDRAW_DEFAULT);
 	menu.AddItem("5", "Reset bounces", ITEMDRAW_DEFAULT);
-	menu.AddItem("7", "Can be stolen", ITEMDRAW_DEFAULT);
-	menu.AddItem("8", "Steal team check", ITEMDRAW_DEFAULT);
+	menu.AddItem("6", "Can be stolen", ITEMDRAW_DEFAULT);
+	menu.AddItem("7", "Steal team check", ITEMDRAW_DEFAULT);
 	
 	menu.Display(client, MENU_TIME_FOREVER);
 }
@@ -1201,12 +1201,12 @@ public int RocketClassFlagsMenuHandler(Menu menu, MenuAction menuActions, int iP
 					Format(display, sizeof(display), TFDB_GetRocketClassFlags(classIndex) & RocketFlag_ResetBounces ? "[X] %s" : "[ ] %s", display);
 				}
 
-				case 7 :
+				case 6 :
 				{
 					Format(display, sizeof(display), TFDB_GetRocketClassFlags(classIndex) & RocketFlag_CanBeStolen ? "[X] %s" : "[ ] %s", display);
 				}
-				
-				case 8 :
+
+				case 7 :
 				{
 					Format(display, sizeof(display), TFDB_GetRocketClassFlags(classIndex) & RocketFlag_StealTeamCheck ? "[X] %s" : "[ ] %s", display);
 				}
@@ -1248,12 +1248,12 @@ public int RocketClassFlagsMenuHandler(Menu menu, MenuAction menuActions, int iP
 					TFDB_SetRocketClassFlags(classIndex, TFDB_GetRocketClassFlags(classIndex) ^ RocketFlag_ResetBounces);
 				}
 
-				case 7 :
+				case 6 :
 				{
 					TFDB_SetRocketClassFlags(classIndex, TFDB_GetRocketClassFlags(classIndex) ^ RocketFlag_CanBeStolen);
 				}
 				
-				case 8 :
+				case 7 :
 				{
 					TFDB_SetRocketClassFlags(classIndex, TFDB_GetRocketClassFlags(classIndex) ^ RocketFlag_StealTeamCheck);
 				}

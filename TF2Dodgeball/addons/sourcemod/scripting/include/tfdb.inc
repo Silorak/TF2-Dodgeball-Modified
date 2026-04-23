@@ -78,10 +78,10 @@ enum RocketFlags
 	RocketFlag_KeepDirection    = 1 << 18,  /**< Maintain direction after deflect */
 	RocketFlag_TeamlessHits     = 1 << 19,  /**< Can hit players of any team */
 	RocketFlag_ResetBounces     = 1 << 20,  /**< Reset bounce count on deflect */
-	RocketFlag_OnNoTargetCmd    = 1 << 22,  /**< Execute commands when no target */
-	RocketFlag_CanBeStolen      = 1 << 23,  /**< Rocket can be stolen by other players */
-	RocketFlag_StealTeamCheck   = 1 << 24,  /**< Only teammates can steal */
-	RocketFlag_OnSpawnKillCmd   = 1 << 25   /**< Execute commands on spawn kill (deflections == 0) */
+	RocketFlag_OnNoTargetCmd    = 1 << 21,  /**< Execute commands when no target */
+	RocketFlag_CanBeStolen      = 1 << 22,  /**< Rocket can be stolen by other players */
+	RocketFlag_StealTeamCheck   = 1 << 23,  /**< Only teammates can steal */
+	RocketFlag_OnSpawnKillCmd   = 1 << 24   /**< Execute commands on spawn kill (deflections == 0) */
 };
 
 /**
