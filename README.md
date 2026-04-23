@@ -38,16 +38,6 @@ A modular plugin suite built around a shared native API. The core plugin handles
 
 > **Note:** Push prevention, noblock, and target lock are built into core and configured via `general.cfg`. The old standalone AirblastPrevention, NoBlock, and AntiSwitch subplugins have been removed.
 
-> ### ⚠️ Upgrading from a prior version? Read this first.
->
-> **Config format change:** `"steering control"` and `"bounce control"` in rocket-class cfgs are now **seconds** (float), not ticks (integer). Existing cfgs with `"steering control" "3"` must convert to `"steering control" "0.045"`. See [`configs/dodgeball/guide.md`](TF2Dodgeball/addons/sourcemod/configs/dodgeball/guide.md) for the full conversion table.
->
-> **Removed subplugins:** `tfdb_airblast_prevention.smx`, `tfdb_anti_switch.smx`, `tfdb_no_block.smx` are gone. Their features migrated one-to-one to `general.cfg` keys (`push prevention`, `target lock`, `noblock`).
->
-> **Replaced subplugin:** Mikah's `NERandSOLO.smx` is superseded by `tfdb_deathmatch.smx`. Cvars renamed to `tfdb_dm_*` prefix.
->
-> Servers using the shipped `general.cfg` defaults are unaffected — only custom per-class cfg overrides need updating. Full breaking-change list in [CHANGELOG.md](CHANGELOG.md).
-
 ---
 
 ## Features
@@ -398,8 +388,8 @@ Players get a short damage-immunity window after any DeathMatch respawn. A horn 
 | Command | Permission | Description |
 |---|---|---|
 | `sm_solo` | Public | Toggle solo (join/leave the queue) |
-| `sm_votener` | Public | Vote to toggle Never-Ending Rounds |
-| `sm_dm_ner` | CONFIG | Admin toggle NER directly (bypasses vote) |
+| `sm_votedm` | Public | Vote to toggle DeathMatch mode |
+| `sm_dm` | CONFIG | Admin toggle DeathMatch directly (bypasses vote) |
 
 <details>
 <summary><b>Cvars</b></summary>
@@ -635,7 +625,7 @@ Click a category to expand relevant issues.
 <details>
 <summary><b>DeathMatch</b> — NER/Solo not activating, cosmetics wrong color</summary>
 
-**`sm_dm_ner` says "cannot activate"** — DeathMatch refuses when Guardian or PvB is active. Disable those first (`sm_votepvb` / `sm_removeguardian`) or wait for the round to end.
+**`sm_dm` says "cannot activate"** — DeathMatch refuses when Guardian or PvB is active. Disable those first (`sm_votepvb` / `sm_removeguardian`) or wait for the round to end.
 
 **NER swapped me to the other team but my cosmetic is still the old team color** — Fixed. DeathMatch does a two-pass wearable fix (immediate + next-frame) on every swap. If you somehow still hit it, a manual respawn resolves it.
 

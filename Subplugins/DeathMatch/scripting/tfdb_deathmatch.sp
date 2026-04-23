@@ -88,9 +88,9 @@ public void OnPluginStart()
 {
     LoadTranslations("tfdb.phrases.txt");
 
-    RegAdminCmd("sm_dm_ner",   Cmd_ToggleNER, ADMFLAG_CONFIG, "[TFDB] Toggle Never-Ending Rounds mode");
-    RegConsoleCmd("sm_votener", Cmd_VoteNER,                   "Vote to toggle Never-Ending Rounds");
-    RegConsoleCmd("sm_solo",    Cmd_Solo,                      "Join/leave the solo queue (respawn at round end)");
+    RegAdminCmd("sm_dm",     Cmd_ToggleDeathMatch, ADMFLAG_CONFIG, "[TFDB] Toggle DeathMatch mode (NER)");
+    RegConsoleCmd("sm_votedm", Cmd_VoteDeathMatch,                 "Vote to toggle DeathMatch mode");
+    RegConsoleCmd("sm_solo",   Cmd_Solo,                           "Join/leave the solo queue (respawn at round end)");
 
     CvarNERVoteTimeout    = CreateConVar("tfdb_dm_ner_vote_timeout",   "120",  "NER vote cooldown in seconds",                                  _, true, 0.0);
     CvarForceNER          = CreateConVar("tfdb_dm_ner_force",          "0",    "Force NER on (cannot be disabled via vote or admin)",            _, true, 0.0, true, 1.0);
@@ -607,7 +607,7 @@ public Action Cmd_Solo(int client, int args)
     return Plugin_Handled;
 }
 
-public Action Cmd_ToggleNER(int client, int args)
+public Action Cmd_ToggleDeathMatch(int client, int args)
 {
     if (!CvarNEREnabled.BoolValue)
     {
@@ -625,7 +625,7 @@ public Action Cmd_ToggleNER(int client, int args)
     return Plugin_Handled;
 }
 
-public Action Cmd_VoteNER(int client, int args)
+public Action Cmd_VoteDeathMatch(int client, int args)
 {
     if (!CvarNEREnabled.BoolValue)
     {

@@ -1144,38 +1144,38 @@
 
 	"DeathMatch_NER_Enabled"
 	{
-		"en"		"[{olive}TFDB{default}] {darkmagenta}NER{default} is now {community}enabled{default}."
+		"en"		"[{olive}TFDB{default}] {darkmagenta}DeathMatch{default} is now {community}enabled{default}."
 	}
 
 	"DeathMatch_NER_Disabled"
 	{
-		"en"		"[{olive}TFDB{default}] {darkmagenta}NER{default} is now {red}disabled{default}."
+		"en"		"[{olive}TFDB{default}] {darkmagenta}DeathMatch{default} is now {red}disabled{default}."
 	}
 
 	"DeathMatch_NER_Disabled_Not_Enough_Players"
 	{
-		"en"		"[{olive}TFDB{default}] {darkmagenta}NER{default} is now {red}disabled{default} (not enough players)."
+		"en"		"[{olive}TFDB{default}] {darkmagenta}DeathMatch{default} is now {red}disabled{default} (not enough players)."
 	}
 
 	"DeathMatch_NER_Disabled_Conflict"
 	{
-		"en"		"[{olive}TFDB{default}] {darkmagenta}NER{default} was {red}disabled{default} (Guardian or PvB became active)."
+		"en"		"[{olive}TFDB{default}] {darkmagenta}DeathMatch{default} was {red}disabled{default} (Guardian or PvB became active)."
 	}
 
 	"DeathMatch_NER_Not_Allowed"
 	{
-		"en"		"[{olive}TFDB{default}] {darkmagenta}NER{default} is currently {red}disabled{default}."
+		"en"		"[{olive}TFDB{default}] {darkmagenta}DeathMatch{default} is currently {red}disabled{default}."
 	}
 
 	"DeathMatch_NERVote_Cooldown"
 	{
 		"#format"	"{1:.0f}"
-		"en"		"[{olive}TFDB{default}] {darkmagenta}NER{default} vote is on cooldown for {darkorange}{1}{default} more seconds."
+		"en"		"[{olive}TFDB{default}] {darkmagenta}DeathMatch{default} vote is on cooldown for {darkorange}{1}{default} more seconds."
 	}
 
 	"DeathMatch_NERVote_Failed"
 	{
-		"en"		"[{olive}TFDB{default}] {darkmagenta}NER{default} vote {red}failed{default}."
+		"en"		"[{olive}TFDB{default}] {darkmagenta}DeathMatch{default} vote {red}failed{default}."
 	}
 
 	"DeathMatch_Blocked_Conflict"
@@ -1241,12 +1241,12 @@
 
 	"DeathMatch_Vote_Menu_Title_Enable"
 	{
-		"en"		"Enable NER mode?"
+		"en"		"Enable DeathMatch mode?"
 	}
 
 	"DeathMatch_Vote_Menu_Title_Disable"
 	{
-		"en"		"Disable NER mode?"
+		"en"		"Disable DeathMatch mode?"
 	}
 
 	"Menu_Title_WhatChange"
