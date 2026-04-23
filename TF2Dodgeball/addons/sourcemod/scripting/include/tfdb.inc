@@ -1040,8 +1040,6 @@ public void __pl_TFDB_SetNTVOptional()
 	MarkNativeAsOptional("TFDB_SetRocketClassBounceVerticalScale");
 	MarkNativeAsOptional("TFDB_GetRocketClassBounceMaxVerticalSpeed");
 	MarkNativeAsOptional("TFDB_SetRocketClassBounceMaxVerticalSpeed");
-	MarkNativeAsOptional("TFDB_GetRocketClassDragPauseDuration");
-	MarkNativeAsOptional("TFDB_SetRocketClassDragPauseDuration");
 	MarkNativeAsOptional("TFDB_CreateRocket");
 	MarkNativeAsOptional("TFDB_DestroyRocket");
 	MarkNativeAsOptional("TFDB_DestroyRockets");

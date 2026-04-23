@@ -38,6 +38,16 @@ A modular plugin suite built around a shared native API. The core plugin handles
 
 > **Note:** Push prevention, noblock, and target lock are built into core and configured via `general.cfg`. The old standalone AirblastPrevention, NoBlock, and AntiSwitch subplugins have been removed.
 
+> ### ⚠️ Upgrading from a prior version? Read this first.
+>
+> **Config format change:** `"steering control"` and `"bounce control"` in rocket-class cfgs are now **seconds** (float), not ticks (integer). Existing cfgs with `"steering control" "3"` must convert to `"steering control" "0.045"`. See [`configs/dodgeball/guide.md`](TF2Dodgeball/addons/sourcemod/configs/dodgeball/guide.md) for the full conversion table.
+>
+> **Removed subplugins:** `tfdb_airblast_prevention.smx`, `tfdb_anti_switch.smx`, `tfdb_no_block.smx` are gone. Their features migrated one-to-one to `general.cfg` keys (`push prevention`, `target lock`, `noblock`).
+>
+> **Replaced subplugin:** Mikah's `NERandSOLO.smx` is superseded by `tfdb_deathmatch.smx`. Cvars renamed to `tfdb_dm_*` prefix.
+>
+> Servers using the shipped `general.cfg` defaults are unaffected — only custom per-class cfg overrides need updating. Full breaking-change list in [CHANGELOG.md](CHANGELOG.md).
+
 ---
 
 ## Features
@@ -46,6 +56,10 @@ A modular plugin suite built around a shared native API. The core plugin handles
 
 **Drag mechanics** — Emergent drag by default (one eye-angle read at the airblast event, no polling window) — the legacy feel without the sticky polling of modern forks. Tunable per-class via `"steering control"` (pre-read drag window, seconds) and `"bounce control"` (post-bounce blind window, seconds). Design flicky or heavy rockets without touching core code.
 
+**Tickrate-independent feel** — Rocket behavior is identical across 66 / 100 / 128-tick servers. Drag / bounce windows are authored in seconds and auto-convert to real ticks at parse time. Turn rate scales via `GetTickInterval()` per frame. Author your cfg on one server, deploy anywhere without re-tuning.
+
+**Engine cap override** — The `"max velocity"` key in `general.cfg` sets `sv_maxvelocity` on map load (default TF2 cap is 3500 HU/s; raise it for high-speed rallies).
+
 **Rocket classes** — Fully configurable with custom models, sounds, speeds, damage, turn rates, and bounce limits. Event commands with `@rocket`, `@owner`, `@target`, `@speed` placeholders. Experimental scaling modes for orbit tightness and target-speed-based acceleration. See [`configs/dodgeball/guide.md`](TF2Dodgeball/addons/sourcemod/configs/dodgeball/guide.md) for the full field reference and ready-made recipes (sniper, boulder, nuke, Damizean-authentic, competitive default).
 
 **Guardian mode** — One player becomes a boss on BLU with custom HP, a boss health bar, glow, and two configurable abilities (rage, sprint, pounce, charge, slow). Weighted random class selection. Opt-out system with configurable minimum players. Blocked automatically when bots or FFA are active. 4-layer team-join defense (`jointeam` listener + `player_team` event + timer fallback + spawn catch) prevents non-guardians from landing on BLU.
@@ -53,6 +67,10 @@ A modular plugin suite built around a shared native API. The core plugin handles
 **Self-learning bot (PvB)** — Pyro dodgeball bot with persistent per-class SQLite brain. Learns per-opponent trick preferences, drifts reaction time with success/failure, tracks map-level danger heatmaps, runs league-style self-play for diversity. Capability-by-presence config: remove keys from `pvb.cfg` and the bot becomes physically incapable of that behavior (no orbits, no evasion, no CQC, no idle — or permanent idle with `idle_chance 100`). Multi-rocket threat detection forces defensive stance when two rockets converge. Team-join protection (ported from Guardian) prevents humans landing on the bot's team.
 
 **Anti-cheat** — Server-side detection targeted at common public-tier cheats. Six detections: AntiAim (impossible pitch), OneTickM2 (1-tick airblast signature), ReactTimeFloor (deflects below 120 ms physiological floor), DragSnapback (snap-airblast-restore pattern), AirblastFacing (tick-choking silent-aim signature), SnapAim. Cumulative threshold scoring with configurable kick/ban actions and admin immunity. Does NOT target paid-tier cheats with active AC bypass.
+
+**DeathMatch (NER + Solo)** — Never-Ending Rounds keeps small-server rounds alive by swapping players between teams on death. Solo queue lets players sit out and rejoin when a team empties. Per-client respawn protection, two-pass cosmetic team-color fix after swap, FFA coexistence. Mutually exclusive with Guardian and PvB.
+
+**Cross-plugin ecosystem** — Guardian, PvB, and DeathMatch use a three-way mutual-exclusion protocol so they never run simultaneously (team-management conflict). FFA coexists with all three. Plugin-developer friendly: every subplugin registers a library via `RegPluginLibrary` and exposes optional natives (`TFDB_IsGuardianActive`, `TFDB_IsPvBActive`, `TFDB_IsDeathMatchActive`). Third-party plugins can integrate via runtime `LibraryExists` gates without hard dependencies.
 
 **Per-map configs** — Override any setting for specific maps by creating `configs/dodgeball/tfdb_mapname.cfg`. The gamemode activates automatically on maps prefixed `tfdb_`, `db_`, or `dbs_` (including Workshop maps).
 
@@ -95,6 +113,7 @@ tf/
     │   ├── tfdb_guardian.smx               ← optional
     │   ├── tfdb_ffa.smx                    ← optional
     │   ├── tfdb_pvb.smx                    ← optional (PlayerVsBot)
+    │   ├── tfdb_deathmatch.smx             ← optional (NER + Solo queue)
     │   ├── tfdb_anti_cheat.smx             ← optional
     │   ├── tfdb_ac_debug.smx               ← optional (AC debug companion)
     │   ├── tfdb_votes.smx                  ← optional
@@ -123,6 +142,7 @@ tf/
         │   ├── tfdb.inc                    ← core API (130+ natives)
         │   ├── tfdb_guardian.inc           ← guardian API
         │   ├── tfdb_pvb.inc                ← PvB state-query API
+        │   ├── tfdb_deathmatch.inc         ← DeathMatch state-query API
         │   └── tfdbtrails.inc              ← trails API
         └── dodgeball.sp                    ← core source
 ```
@@ -520,6 +540,38 @@ TFDB_IsPvBTraining()         // bool: training mode active (bot-vs-bot)
 ```
 
 Use these if your subplugin needs to defer to PvB — e.g., refuse to activate a conflicting mode while PvB owns the round.
+
+</details>
+
+<details>
+<summary><b>DeathMatch</b> — <code>tfdb_deathmatch.inc</code></summary>
+
+```sourcepawn
+#include <tfdb_deathmatch>
+
+TFDB_IsDeathMatchActive()    // bool: NER running OR soloers queued
+TFDB_IsNEREnabled()          // bool: Never-Ending Rounds specifically
+```
+
+Use these to gate team-management or round-ending logic while DeathMatch owns the round.
+
+</details>
+
+<details>
+<summary><b>Canonical runtime-gated integration pattern</b></summary>
+
+All four optional natives above (`TFDB_IsGuardianActive`, `TFDB_IsPvBActive`, `TFDB_IsPvBTraining`, `TFDB_IsDeathMatchActive`) follow SourceMod's optional-native convention. Your plugin compiles and loads cleanly whether or not the partner plugin is installed.
+
+```sourcepawn
+if (LibraryExists("tfdb_pvb") &&
+    GetFeatureStatus(FeatureType_Native, "TFDB_IsPvBActive") == FeatureStatus_Available &&
+    TFDB_IsPvBActive())
+{
+    // PvB is running — defer or refuse to activate your mode.
+}
+```
+
+Register your own library in `OnPluginStart` via `RegPluginLibrary("your_name")` so partners can check presence symmetrically. Full protocol in `wiki/frameworks/guardian-pvb-deathmatch-mutual-exclusion.md`.
 
 </details>
 

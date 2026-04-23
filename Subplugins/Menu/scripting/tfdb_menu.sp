@@ -330,7 +330,8 @@ void DisplayDodgeballMenu(int client)
 	
 	Menu menu = new Menu(DodgeballMenuHandler);
 	
-	menu.SetTitle("What would you like to change?");
+	char menuTitle[64]; FormatEx(menuTitle, sizeof(menuTitle), "%T", "Menu_Title_WhatChange", client);
+	menu.SetTitle(menuTitle);
 	
 	menu.AddItem("0", "Rockets", ITEMDRAW_DEFAULT);
 	menu.AddItem("1", "Rocket classes", ITEMDRAW_DEFAULT);
@@ -433,7 +434,8 @@ void DisplayRocketsMenu(int client)
 	
 	char strRocketIndex[8], strRocketLongName[48];
 	
-	menu.SetTitle("Active rockets :");
+	char menuTitle[64]; FormatEx(menuTitle, sizeof(menuTitle), "%T", "Menu_Title_ActiveRockets", client);
+	menu.SetTitle(menuTitle);
 	menu.ExitBackButton = true;
 	
 	for (int index = 0; index < MAX_ROCKETS; index++)
@@ -561,7 +563,8 @@ void DisplayRocketTargetMenu(int client, int index)
 	
 	char indexStr[8]; IntToString(index, indexStr, sizeof(indexStr));
 	
-	menu.SetTitle("New rocket target :");
+	char menuTitle[64]; FormatEx(menuTitle, sizeof(menuTitle), "%T", "Menu_Title_NewRocketTarget", client);
+	menu.SetTitle(menuTitle);
 	menu.AddItem(indexStr, "", ITEMDRAW_IGNORE);
 	menu.ExitBackButton = true;
 	
@@ -674,7 +677,8 @@ void DisplayRocketClassMenu(int client, int index)
 	char indexStr[8]; IntToString(index, indexStr, sizeof(indexStr));
 	char rocketLongName[48];
 	
-	menu.SetTitle("New rocket class :");
+	char menuTitle[64]; FormatEx(menuTitle, sizeof(menuTitle), "%T", "Menu_Title_NewRocketClass", client);
+	menu.SetTitle(menuTitle);
 	menu.AddItem(indexStr, "", ITEMDRAW_IGNORE);
 	menu.ExitBackButton = true;
 	
@@ -760,7 +764,8 @@ void DisplayRocketClassesMenu(int client)
 	
 	char className[8], rocketLongName[48];
 	
-	menu.SetTitle("Rocket classes :");
+	char menuTitle[64]; FormatEx(menuTitle, sizeof(menuTitle), "%T", "Menu_Title_RocketClasses", client);
+	menu.SetTitle(menuTitle);
 	menu.ExitBackButton = true;
 	
 	for (int classIndex = 0; classIndex < TFDB_GetRocketClassCount(); classIndex++)
@@ -1278,7 +1283,8 @@ void DisplaySpawnerClassesMenu(int client)
 	
 	char buffer[8];
 	
-	menu.SetTitle("Spawners options :");
+	char menuTitle[64]; FormatEx(menuTitle, sizeof(menuTitle), "%T", "Menu_Title_SpawnersOptions", client);
+	menu.SetTitle(menuTitle);
 	menu.ExitBackButton = true;
 	
 	for (SpawnerClassMenu option = SpawnerClassMenu_MaxRockets; option < SizeOfSpawnerClassMenu; option++)
@@ -1359,7 +1365,8 @@ void DisplaySpawnerClassChancesMenu(int client)
 	
 	char className[8], rocketLongName[48];
 	
-	menu.SetTitle("Rocket classes spawn chances :");
+	char menuTitle[64]; FormatEx(menuTitle, sizeof(menuTitle), "%T", "Menu_Title_SpawnChances", client);
+	menu.SetTitle(menuTitle);
 	menu.ExitBackButton = true;
 	
 	for (int classIndex = 0; classIndex < TFDB_GetRocketClassCount(); classIndex++)
@@ -1424,7 +1431,8 @@ void DisplayPresetsMenu(int client)
 	}
 
 	Menu menu = new Menu(PresetsMenuHandler);
-	menu.SetTitle("Apply preset:");
+	char menuTitle[64]; FormatEx(menuTitle, sizeof(menuTitle), "%T", "Menu_Title_ApplyPreset", client);
+	menu.SetTitle(menuTitle);
 	menu.ExitBackButton = true;
 
 	char presetIndex[8];
