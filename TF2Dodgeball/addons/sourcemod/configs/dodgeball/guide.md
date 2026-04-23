@@ -134,7 +134,6 @@ Most classes leave `control delay` at 0. Use `steering control` for drag feel an
 |---|---|---|
 | `keep direction` | 0/1 | Keep flight direction after surface contact. |
 | `reset bounces` | 0/1 | Reset internal bounce counter on deflect. |
-| `no bounce drags` | 0/1 | Disable dragging after the rocket has bounced. |
 | `neutral rocket` | 0/1 | Ignore team; target anyone. |
 | `teamless deflects` | 0/1 | Anyone can deflect (same as neutral but targeting respects team). |
 | `can be stolen` | 0/1 | Allows off-target players to steal the rocket by airblasting. |

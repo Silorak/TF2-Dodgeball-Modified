@@ -78,7 +78,6 @@ enum RocketFlags
 	RocketFlag_KeepDirection    = 1 << 18,  /**< Maintain direction after deflect */
 	RocketFlag_TeamlessHits     = 1 << 19,  /**< Can hit players of any team */
 	RocketFlag_ResetBounces     = 1 << 20,  /**< Reset bounce count on deflect */
-	RocketFlag_NoBounceDrags    = 1 << 21,  /**< Can't drag while bouncing */
 	RocketFlag_OnNoTargetCmd    = 1 << 22,  /**< Execute commands when no target */
 	RocketFlag_CanBeStolen      = 1 << 23,  /**< Rocket can be stolen by other players */
 	RocketFlag_StealTeamCheck   = 1 << 24,  /**< Only teammates can steal */
@@ -104,8 +103,7 @@ enum RocketState
 	RocketState_Dragging = 1 << 0,  /**< Player is dragging the rocket */
 	RocketState_Bouncing = 1 << 1,  /**< Rocket is bouncing off surfaces */
 	RocketState_Stolen   = 1 << 2,  /**< Rocket was stolen from another player */
-	RocketState_Delayed  = 1 << 3,  /**< Rocket is in delay prevention mode */
-	RocketState_CanDrag  = 1 << 4   /**< Rocket can be dragged by owner */
+	RocketState_Delayed  = 1 << 3   /**< Rocket is in delay prevention mode */
 };
 
 /**

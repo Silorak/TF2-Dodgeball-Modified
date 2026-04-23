@@ -444,7 +444,6 @@ void ParseClasses(KeyValues config)
 		if (config.GetNum("keep direction", 0) == 1)     flags |= RocketFlag_KeepDirection;
 		if (config.GetNum("teamless deflects", 0) == 1)  flags |= RocketFlag_TeamlessHits;
 		if (config.GetNum("reset bounces", 0) == 1)      flags |= RocketFlag_ResetBounces;
-		if (config.GetNum("no bounce drags", 0) == 1)    flags |= RocketFlag_NoBounceDrags;
 		if (config.GetNum("can be stolen", 0) == 1)      flags |= RocketFlag_CanBeStolen;
 		if (config.GetNum("steal team check", 0) == 1)   flags |= RocketFlag_StealTeamCheck;
 

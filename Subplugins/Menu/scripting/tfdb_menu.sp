@@ -1154,7 +1154,6 @@ void DisplayRocketClassFlagsMenu(int client, int classIndex)
 	menu.AddItem("3", "Keep direction", ITEMDRAW_DEFAULT);
 	menu.AddItem("4", "Teamless deflects", ITEMDRAW_DEFAULT);
 	menu.AddItem("5", "Reset bounces", ITEMDRAW_DEFAULT);
-	menu.AddItem("6", "No bounce drags", ITEMDRAW_DEFAULT);
 	menu.AddItem("7", "Can be stolen", ITEMDRAW_DEFAULT);
 	menu.AddItem("8", "Steal team check", ITEMDRAW_DEFAULT);
 	
@@ -1201,12 +1200,7 @@ public int RocketClassFlagsMenuHandler(Menu menu, MenuAction menuActions, int iP
 				{
 					Format(display, sizeof(display), TFDB_GetRocketClassFlags(classIndex) & RocketFlag_ResetBounces ? "[X] %s" : "[ ] %s", display);
 				}
-				
-				case 6 :
-				{
-					Format(display, sizeof(display), TFDB_GetRocketClassFlags(classIndex) & RocketFlag_NoBounceDrags ? "[X] %s" : "[ ] %s", display);
-				}
-				
+
 				case 7 :
 				{
 					Format(display, sizeof(display), TFDB_GetRocketClassFlags(classIndex) & RocketFlag_CanBeStolen ? "[X] %s" : "[ ] %s", display);
@@ -1253,12 +1247,7 @@ public int RocketClassFlagsMenuHandler(Menu menu, MenuAction menuActions, int iP
 				{
 					TFDB_SetRocketClassFlags(classIndex, TFDB_GetRocketClassFlags(classIndex) ^ RocketFlag_ResetBounces);
 				}
-				
-				case 6 :
-				{
-					TFDB_SetRocketClassFlags(classIndex, TFDB_GetRocketClassFlags(classIndex) ^ RocketFlag_NoBounceDrags);
-				}
-				
+
 				case 7 :
 				{
 					TFDB_SetRocketClassFlags(classIndex, TFDB_GetRocketClassFlags(classIndex) ^ RocketFlag_CanBeStolen);
@@ -2302,7 +2291,6 @@ void ParseClasses(KeyValues kvConfig)
 		if (kvConfig.GetNum("keep direction", 0) == 1)     flags |= RocketFlag_KeepDirection;
 		if (kvConfig.GetNum("teamless deflects", 0) == 1)  flags |= RocketFlag_TeamlessHits;
 		if (kvConfig.GetNum("reset bounces", 0) == 1)      flags |= RocketFlag_ResetBounces;
-		if (kvConfig.GetNum("no bounce drags", 0) == 1)    flags |= RocketFlag_NoBounceDrags;
 		if (kvConfig.GetNum("can be stolen", 0) == 1)      flags |= RocketFlag_CanBeStolen;
 		if (kvConfig.GetNum("steal team check", 0) == 1)   flags |= RocketFlag_StealTeamCheck;
 		

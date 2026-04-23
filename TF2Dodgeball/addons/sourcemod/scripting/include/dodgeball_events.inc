@@ -527,10 +527,6 @@ public Action OnTouch(int entity, int other)
 
 	TeleportEntity(entity, NULL_VECTOR, newAngles, bounceVec);
 	RocketBounces[index]++;
-	if (RocketInstanceFlags[index] & RocketFlag_NoBounceDrags)
-	{
-		Internal_SetRocketState(index, (RocketInstanceState[index] & ~RocketState_CanDrag));
-	}
 
 	if ((RocketInstanceState[index] & RocketState_Delayed) || (RocketInstanceFlags[index] & RocketFlag_KeepDirection))
 	{
