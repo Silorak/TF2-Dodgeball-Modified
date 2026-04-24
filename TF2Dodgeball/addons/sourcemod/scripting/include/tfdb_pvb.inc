@@ -31,7 +31,7 @@ public SharedPlugin __pl_tfdb_pvb =
 };
 
 #if !defined REQUIRE_PLUGIN
-public __pl_tfdb_pvb_SetNTVOptional()
+public void __pl_tfdb_pvb_SetNTVOptional()
 {
     MarkNativeAsOptional("TFDB_IsPvBActive");
     MarkNativeAsOptional("TFDB_IsPvBTraining");

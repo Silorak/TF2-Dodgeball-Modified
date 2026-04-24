@@ -54,10 +54,11 @@ public void TFDB_OnRocketsConfigExecuted(const char[] configFile)
 	for (int index = 0; index < RocketClassCount; index++)
 	{
 		delete RocketClassCmdsOnDestroyed[index];
+		RocketClassCmdsOnDestroyed[index] = null;
 	}
-	
+
 	RocketClassCount = 0;
-	
+
 	ParseConfigurations(configFile);
 }
 
@@ -66,8 +67,9 @@ public void OnMapEnd()
 	for (int index = 0; index < RocketClassCount; index++)
 	{
 		delete RocketClassCmdsOnDestroyed[index];
+		RocketClassCmdsOnDestroyed[index] = null;
 	}
-	
+
 	RocketClassCount = 0;
 }
 

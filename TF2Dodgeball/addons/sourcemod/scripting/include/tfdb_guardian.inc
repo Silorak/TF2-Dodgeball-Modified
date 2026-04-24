@@ -36,7 +36,7 @@ public SharedPlugin __pl_tfdb_guardian =
 };
 
 #if !defined REQUIRE_PLUGIN
-public __pl_tfdb_guardian_SetNTVOptional()
+public void __pl_tfdb_guardian_SetNTVOptional()
 {
 	MarkNativeAsOptional("TFDB_IsGuardianActive");
 	MarkNativeAsOptional("TFDB_GetGuardian");

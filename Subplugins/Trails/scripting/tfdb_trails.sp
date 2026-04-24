@@ -127,10 +127,11 @@ public void TFDB_OnRocketsConfigExecuted(const char[] configFile)
 		for (int index = 0; index < RocketClassCount; index++)
 		{
 			delete RocketClassSpriteTrie[index];
+			RocketClassSpriteTrie[index] = null;
 		}
-		
+
 		RocketClassCount = 0;
-		
+
 		ParseConfigurations(configFile);
 	}
 	
@@ -160,7 +161,9 @@ public void OnMapEnd()
 	for (int index = 0; index < RocketClassCount; index++)
 	{
 		delete RocketClassSpriteTrie[index];
+		RocketClassSpriteTrie[index] = null;
 	}
+	RocketClassCount = 0;  // match the post-delete state; prevents stale count on next load.
 
 	// Reap any fake entities still parented to dead rockets. Children of a
 	// dead parent are orphaned (not auto-killed) in Source — without this
@@ -238,11 +241,17 @@ public void OnObjectDeflected(Event event, char[] eventName, bool dontBroadcast)
 public void OnPlayerTeam(Event event, char[] eventName, bool dontBroadcast)
 {
 	int client = GetClientOfUserId(event.GetInt("userid"));
+
+	// Client may have disconnected between event fire and handler dispatch, or
+	// the userid may resolve to 0 (engine sentinel). Either case means nothing
+	// to send particles to — bail before TE_SendToClient(0) errors the frame.
+	if (client <= 0 || !IsClientInGame(client)) return;
+
 	int fakeEntity = -1;
 	int attachPoint;
 	float position[3];
 	ParticleAttachmentType attachType;
-	
+
 	if (event.GetInt("oldteam") == 0 && !ClientShouldSee[client])
 	{
 		for (int rocket = 0; rocket < MAX_ROCKETS; rocket++)

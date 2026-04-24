@@ -30,7 +30,7 @@ public SharedPlugin __pl_tfdb_deathmatch =
 };
 
 #if !defined REQUIRE_PLUGIN
-public __pl_tfdb_deathmatch_SetNTVOptional()
+public void __pl_tfdb_deathmatch_SetNTVOptional()
 {
     MarkNativeAsOptional("TFDB_IsDeathMatchActive");
     MarkNativeAsOptional("TFDB_IsNEREnabled");

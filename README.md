@@ -78,7 +78,7 @@ All dependencies are optional — only install if using the corresponding featur
 
 ### File Structure
 
-The release zip contains two top-level folders. `TF2Dodgeball/` is the core install that maps directly onto your server's `tf/` directory. `Subplugins/` contains source code for optional modules — their compiled `.smx` files are already included in `TF2Dodgeball/`.
+The release zip contains two top-level folders. `TF2Dodgeball/` is the install tree that maps directly onto your server's `tf/` directory, including compiled `.smx` files under `TF2Dodgeball/addons/sourcemod/plugins/`. `Subplugins/` contains source code for optional modules. If you are using a raw source checkout instead of a release zip, compile the subplugins first.
 
 ```
 From this repo                              →  Install to server
@@ -288,7 +288,7 @@ Self-learning Pyro dodgeball bot. Configured via `configs/dodgeball/pvb.cfg`.
 - **Multi-rocket awareness** — when 2+ rockets converge, bot forces defensive stance and blocks orbit entry.
 - **Shared base policy** — new class types inherit aggregate wisdom from a type-agnostic key; mature classes diverge to their own policy.
 - **League-style self-play** — training mode detects monocultures and spawns exploiters to force adaptation.
-- **Team-join protection** — 3-layer defense prevents humans from landing on the bot's team. Training mode force-moves humans to spectator.
+- **Team-join protection** — 3-layer defense prevents humans from landing on the bot's team during normal PvB. Training mode is permissive: humans can join RED, BLU, or spectate — participate or just watch the bots learn.
 - **Capability-by-presence config** — remove keys from `pvb.cfg` and the bot loses that behavior entirely.
 
 Auto-locks `tf_bot_quota_mode normal` on plugin load + every map start so the server never auto-fills with vanilla Pyro bots.
@@ -297,12 +297,17 @@ Auto-locks `tf_bot_quota_mode normal` on plugin load + every map start so the se
 
 | Command | Permission | Description |
 |---------|------------|-------------|
-| `sm_votepvb` / `sm_votebot` / `sm_botvote` | Public | Vote to enable the PvB bot |
-| `sm_pvb` | CONFIG | Admin toggle (bypasses vote) |
-| `sm_trainbots` | ROOT | Spawn training bots (bot-vs-bot self-play) |
+| `sm_votepvb` / `sm_votebot` / `sm_botvote` | Public | Unified vote: pick any bot type, or "Disable bot" if one is active. Early-resolves when all humans have voted; Exit button = abstain |
+| `sm_botmenu` | Public | Info menu — stats, current bot, open vote |
+| `sm_botstats` | Public | Chat-print current bot stats |
+| `sm_pvb` / `sm_spawnpvb` | KICK | Admin toggle (bypasses vote) |
+| `sm_botadmin` | KICK | Admin config / stats menu |
 | `sm_setbottype <index>` | KICK | Set bot class (see `pvb.cfg` for indices) |
 | `sm_reloadbotcfg` | KICK | Reload `pvb.cfg` without map change |
+| `sm_trainbots` | ROOT | Spawn training bots (bot-vs-bot self-play; humans free to join any team) |
+| `sm_stoptraining` | ROOT | Stop training mode and kick training bots |
 | `sm_resetbrain` | ROOT | Wipe learned bot brain data (safe during active rounds) |
+| `sm_botdebug <player>` / `sm_stopdebug` | ROOT | Per-player debug CSV logging |
 
 <details>
 <summary><b>Capability-by-presence reference</b></summary>
@@ -413,7 +418,16 @@ Auto-created in `cfg/sourcemod/tfdb_deathmatch.cfg` on first run.
 <details>
 <summary><b>Votes</b> — in-game voting system</summary>
 
-Player voting system for enabling/disabling game features mid-match.
+Player voting system for enabling/disabling game features mid-match. Every vote command is rate-limited per-client (10s cooldown) on top of the server-wide cooldown, so spammers can't chain calls.
+
+**Commands** (all Public)
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `sm_vrb` | `sm_votebounce`, `sm_voterocketbounce` | Vote to toggle bouncing rockets |
+| `sm_vrc` | `sm_voteclass`, `sm_voterocketclass` | Vote to change rocket class |
+| `sm_vrcount` | `sm_votecount`, `sm_voterocketcount` | Vote to change concurrent rocket count |
+| `sm_vrp` | `sm_votepreset`, `sm_voterocketpreset` | Vote for a rocket preset (see `presets.cfg`) |
 
 </details>
 
@@ -422,12 +436,25 @@ Player voting system for enabling/disabling game features mid-match.
 
 Real-time HUD displaying current rocket speed in MPH. Positioned to not overlap with Guardian HUD. Players can toggle with a client cookie (persists across sessions).
 
+**Commands** (all Public)
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `sm_speedhud` | `sm_shud` | Toggle the speed HUD for your client (persists via cookie) |
+
 </details>
 
 <details>
 <summary><b>Trails</b> — sprite + particle rocket trails</summary>
 
-Visual sprite-based trail effects on rockets. Players can toggle visibility with `sm_rockettrails` and `sm_rocketspritetrails`. Configured in rocket class blocks in `general.cfg` (trail fields are commented out by default — see `guide.md` for enabling).
+Visual sprite-based trail effects on rockets. Configured in rocket class blocks in `general.cfg` (trail fields are commented out by default — see `guide.md` for enabling).
+
+**Commands** (all Public, per-client toggle)
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `sm_rockettrails` | `sm_hidetrails`, `sm_toggletrails` | Toggle particle trails for your client |
+| `sm_rocketsprites` | `sm_rocketspritetrails`, `sm_hidesprites`, `sm_togglesprites` | Toggle sprite trails for your client |
 
 </details>
 
@@ -459,7 +486,16 @@ Adds the `on destroyed` event for rockets that explode without killing a player.
 <details>
 <summary><b>Print</b> — chat color formatting</summary>
 
-Enhanced chat formatting for event commands. Provides `tf_dodgeball_print` with color tag support (`{olive}`, `{red}`, `##@owner##` team-color substitutions, etc.). See `guide.md` for the full color tag list.
+Enhanced chat formatting for event commands. Provides server commands used by rocket-class event strings (`on kill`, `on spawn kill`, etc.) in `general.cfg`. See `guide.md` for the full color tag list and the `##@owner##` team-color substitution syntax.
+
+**Commands** (all `ADMFLAG_CHAT`, used from server-command event strings)
+
+| Command | Description |
+|---------|-------------|
+| `tf_dodgeball_print <message>` | Print to all players with color tag + `##<N>##` team-colored player substitution |
+| `tf_dodgeball_print_c <client> <message>` | Print to a specific client |
+| `tf_dodgeball_phrase <phrase>` | Print a `tfdb.phrases.txt` translation key to all players |
+| `tf_dodgeball_phrase_c <client> <phrase>` | Print a translation key to a specific client |
 
 </details>
 

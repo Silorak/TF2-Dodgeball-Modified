@@ -154,16 +154,14 @@ int TotalDeflects = 0;        // Total deflects achieved
 int TotalKills = 0;           // Kills by bot
 int TotalDeaths = 0;          // Times bot died
 int RoundDeflects = 0;        // Deflects THIS round (for stat display)
-int VotesYes = 0;             // Current vote count
-int VotesNeeded = 0;          // Votes needed to pass
+// (Disable-vote globals removed 2026-04-24 — unified into class vote menu.)
 int VoteMaxPlayers = 12;      // Max players allowed to vote (loaded from config)
-bool VoteActive = false;      // Is a vote in progress
-float VoteEndTime = 0.0;      // When vote ends
-Handle VoteTimer = null;
 
-// Class vote system - players vote for which bot type to play against
-int ClassVotes[MAX_BOT_TYPES];            // Vote count per bot type
-int ClassVoted[MAXPLAYERS + 1]; // Which class this player voted for (-1 = not voted)
+// Class vote system - players vote for which bot type to play against.
+// Array is sized MAX_BOT_TYPES+1: slots 0..NumBotTypes-1 = bot types,
+// slot NumBotTypes = "Disable bot" votes.
+int ClassVotes[MAX_BOT_TYPES + 1];
+int ClassVoted[MAXPLAYERS + 1]; // Which slot this player voted for (-1 = not voted; NumBotTypes = disable)
 bool ClassVoteActive = false; // Is a class vote in progress
 bool SoloMenuShown = false;   // Was the solo player menu shown
 Handle ClassVoteTimer = null;
@@ -186,7 +184,6 @@ int ExploiterTargetType = -1;        // -1 = none; else type index to counter ne
 
 // Per-client
 bool Allowed[MAXPLAYERS + 1];  // autoreflect permission
-bool Voted[MAXPLAYERS + 1];   // Has this player voted
 
 // Movement
 float MoveYaw[MAXPLAYERS + 1];
@@ -270,9 +267,6 @@ char BotNames[MAX_BOT_TYPES][MAX_NAME_LENGTH];    // Per-type names from config
 
 // Per-bot type override for training mode (each bot uses its own type)
 int TrainingBotType[MAXPLAYERS + 1];
-
-// Disable vote flag
-// (DisableVote removed — vote system only handles disable votes now)
 
 // ============================================================================
 // PERSISTENT DEBUG SYSTEM
@@ -540,8 +534,15 @@ public void OnPluginStart() {
     // Check if TFDB is already loaded (late load support)
     TFDBAvailable = LibraryExists("tfdb");
 
-    // Database
-    Database.Connect(OnDatabaseConnected, "tf2db_ai");
+    // Database: use SourceMod's built-in SQLite store so the brain lives at
+    // addons/sourcemod/data/sqlite/tfdb_pvb.sq3 without a databases.cfg entry.
+    ConnectBrainDatabase();
+}
+
+void ConnectBrainDatabase() {
+    char error[256];
+    Database db = SQLite_UseDatabase("tfdb_pvb", error, sizeof(error));
+    OnDatabaseConnected(db, error, 0);
 }
 
 void LoadTauntFile(const char[] relPath, ArrayList list) {
@@ -773,7 +774,7 @@ public Action Timer_ClearMapChanged(Handle timer) {
 
 public void OnClientDisconnect(int client) {
     Allowed[client] = false;
-    Voted[client] = false;
+    ClassVoted[client] = -1;
     SaveOpponentToDB(client);
     ResetCombatState(client);
     ResetOpponentProfile(client);
@@ -859,6 +860,39 @@ void EnablePvB() {
 
     LockBotQuota();   // ensure no auto-replacement will fight our tf_bot_add
     ServerCommand("mp_autoteambalance 0");
+
+    // Arena mode enforces mp_teams_unbalance_limit when ChangeClientTeam is called.
+    // Set to 0 so we can freely shuffle humans between teams during activation
+    // and steady-state enforcement. Restored in DisablePvB().
+    ServerCommand("mp_teams_unbalance_limit 0");
+
+    // CRITICAL: move all non-spectator humans to RED BEFORE spawning the bot on BLU.
+    //
+    // Arena warmup ("Waiting for N more players") gates on BOTH teams having ≥1
+    // player. If we add the bot to BLU while the invoking human is also on BLU,
+    // RED stays empty → arena never transitions out of warmup → the bot spawns
+    // stuck dead → ManageTeams's forced respawn silently fails because the
+    // round hasn't started. This is the deadlock Guardian avoids by spawning
+    // its boss on BLU *after* humans have already landed on RED in OnRoundStart.
+    //
+    // Since PvB activates mid-round (menu pick or !pvb), we have to pre-seed
+    // RED ourselves. One human on RED + one bot on BLU = CheckReadyRestart()
+    // fires → arena_round_start → everyone respawns alive. The prior
+    // ManageTeams-based enforcement runs forever as a backstop.
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i)) continue;
+        if (IsFakeClient(i)) continue;
+        int teamBefore = GetClientTeam(i);
+        // Gate on TEAM, not IsClientObserver. During arena pregame, dead/not-
+        // yet-spawned players on BLU/RED are in freeze-cam observer mode but
+        // they are NOT on the spectator team — IsClientObserver would skip
+        // them incorrectly. We only leave actual spectators (team 1) alone.
+        if (teamBefore <= view_as<int>(TFTeam_Spectator)) continue;
+        if (teamBefore == view_as<int>(TFTeam_Red)) continue;
+        ChangeClientTeam(i, view_as<int>(TFTeam_Red));
+    }
+
     ServerCommand("tf_bot_add 1 Pyro blue easy \"%s\"", BotName);
     ServerCommand("tf_bot_difficulty 0");
     ServerCommand("tf_bot_keep_class_after_death 1");
@@ -868,8 +902,9 @@ void EnablePvB() {
     BotEnabled = true;
     BotNameDirty = true;
     UpdateCachedCounts();
-    CPrintToChatAll("%t", "PvB_Entered");
-    
+    CPrintToChatAll("%t", "PvB_Entered", BotName);
+    LogMessage("[PvB] EnablePvB complete — humans forced to RED, bot added to BLU (bot=%s).", BotName);
+
     ApplyBotTypeSettings();
 }
 
@@ -883,10 +918,11 @@ void DisablePvB() {
         return;
     }
     ServerCommand("mp_autoteambalance 1");
+    ServerCommand("mp_teams_unbalance_limit 1");  // restore default — undo EnablePvB override
     ServerCommand("tf_bot_kick all");
     BotEnabled = false;
     CachedRocketRef = INVALID_ENT_REFERENCE;
-    CPrintToChatAll("%t", "PvB_Left");
+    CPrintToChatAll("%t", "PvB_Left", BotName);
 }
 
 // ============================================================================
@@ -1466,7 +1502,7 @@ public Action Cmd_BotVote(int client, int args) {
         return Plugin_Handled;
     }
 
-    if (ClassVoteActive || VoteActive) {
+    if (ClassVoteActive) {
         CPrintToChat(client, "%t", "PvB_Vote_InProgress");
         return Plugin_Handled;
     }
@@ -1482,103 +1518,16 @@ public Action Cmd_BotVote(int client, int args) {
         return Plugin_Handled;
     }
 
-    if (BotEnabled) {
-        // Bot is ACTIVE -> start a vote to DISABLE it
-        CPrintToChatAll("%t", "PvB_Vote_StartDisable", client);
-        StartDisableVote();
-    } else {
-        // Bot is INACTIVE -> start a class vote to ENABLE it
-        CPrintToChatAll("%t", "PvB_Vote_StartClass", client);
-        StartClassVote();
-    }
-    
+    // Unified class vote. Always shows the bot-type menu with a final
+    // "Disable bot" option. This lets players:
+    //   - enable the bot by picking a type (when bot is off)
+    //   - switch to a different type (when bot is on with a different type)
+    //   - disable the bot (pick "Disable bot" from the same menu)
+    // One menu, all use cases.
+    CPrintToChatAll("%t", "PvB_Vote_StartClass", client);
+    StartClassVote();
+
     return Plugin_Handled;
-}
-
-// ============================================================================
-// DISABLE VOTE - Players vote to kick the bot for a normal match
-// ============================================================================
-
-void StartDisableVote() {
-    VoteActive = true;
-    VotesYes = 0;
-    VotesNeeded = RoundToCeil(float(CachedRealCount) * 0.5);
-    if (VotesNeeded < 1) VotesNeeded = 1;
-    
-    for (int i = 1; i <= MaxClients; i++) {
-        Voted[i] = false;
-    }
-    
-    VoteEndTime = GetEngineTime() + 30.0;
-    VoteTimer = CreateTimer(30.0, Timer_EndVote, _, TIMER_FLAG_NO_MAPCHANGE);
-    
-    ShowDisableVoteMenuToAll();
-}
-
-void ShowDisableVoteMenuToAll() {
-    Menu menu = new Menu(MenuHandler_DisableVote);
-    // Server-language title — this menu goes to all voters at once
-    char title[96];
-    FormatEx(title, sizeof(title), "%T", "PvB_Menu_Vote_Disable", LANG_SERVER);
-    menu.SetTitle(title);
-    menu.AddItem("yes", "Yes - Disable Bot");
-    menu.AddItem("no", "No - Keep Bot Active");
-    menu.ExitButton = false;
-    
-    for (int i = 1; i <= MaxClients; i++) {
-        if (IsClientInGame(i) && !IsFakeClient(i)) {
-            menu.Display(i, 30);
-        }
-    }
-}
-
-public int MenuHandler_DisableVote(Menu menu, MenuAction action, int param1, int param2) {
-    if (action == MenuAction_Select) {
-        char info[32];
-        menu.GetItem(param2, info, sizeof(info));
-        
-        if (Voted[param1]) return 0;
-        
-        if (StrEqual(info, "yes")) {
-            VotesYes++;
-            CPrintToChatAll("%t", "PvB_Vote_YesDisable", param1, VotesYes, VotesNeeded);
-
-            if (VotesYes >= VotesNeeded) {
-                EndDisableVote(true);
-            }
-        } else {
-            CPrintToChatAll("%t", "PvB_Vote_No_KeepBot", param1);
-        }
-        
-        Voted[param1] = true;
-    }
-    else if (action == MenuAction_End) {
-        delete menu;
-    }
-    return 0;
-}
-
-void EndDisableVote(bool passedEarly) {
-    if (VoteTimer != null) {
-        delete VoteTimer;
-        VoteTimer = null;
-    }
-    
-    if (passedEarly || VotesYes >= VotesNeeded) {
-        CPrintToChatAll("%t", "PvB_Vote_DisablePassed");
-        DisablePvB();
-        CommandDisabled = true; // Prevent auto-enable
-    } else {
-        CPrintToChatAll("%t", "PvB_Vote_DisableFailed", VotesYes, VotesNeeded);
-    }
-    
-    VoteActive = false;
-}
-
-public Action Timer_EndVote(Handle timer) {
-    VoteTimer = null;
-    EndDisableVote(false);
-    return Plugin_Stop;
 }
 
 // ============================================================================
@@ -1709,27 +1658,35 @@ public int MenuHandler_ClassPick(Menu menu, MenuAction action, int param1, int p
 
 void StartClassVote() {
     if (ClassVoteActive) return;
-    
-    ClassVoteActive = true;
-    for (int t = 0; t < MAX_BOT_TYPES; t++) {
+
+    // Zero tallies + per-client ballot BEFORE flipping the active flag — if any
+    // call below throws (e.g. stale translation cache in ShowClassVoteMenu),
+    // the flag stays false so the next !votepvb can retry cleanly.
+    for (int t = 0; t <= NumBotTypes; t++) {  // +1 covers the "disable" slot
         ClassVotes[t] = 0;
     }
-
     for (int i = 1; i <= MaxClients; i++) {
         ClassVoted[i] = -1;
     }
-    
+
     CPrintToChatAll("%t", "PvB_ClassVote_Start");
-    
+
     for (int i = 1; i <= MaxClients; i++) {
         if (IsClientInGame(i) && !IsFakeClient(i)) {
             ShowClassVoteMenu(i);
         }
     }
-    
+
+    // Only now commit to the active state. Even if the menu loop above partial-
+    // fails, the timer below guarantees ResolveClassVote runs and clears the flag.
+    ClassVoteActive = true;
     delete ClassVoteTimer;
     ClassVoteTimer = CreateTimer(20.0, Timer_EndClassVote, _, TIMER_FLAG_NO_MAPCHANGE);
 }
+
+// Special vote value used by the "Disable bot" menu item. Out-of-range of any
+// real bot type index (valid types are 0..NumBotTypes-1).
+#define PVB_VOTE_DISABLE  -1
 
 void ShowClassVoteMenu(int client) {
     Menu menu = new Menu(MenuHandler_ClassVote);
@@ -1741,26 +1698,108 @@ void ShowClassVoteMenu(int client) {
         IntToString(t, info, sizeof(info));
         menu.AddItem(info, BotDisplayName[t]);
     }
-    menu.ExitButton = false;
+    // "Disable bot" menu entry — only when the bot is currently active. No
+    // point offering "disable" when nothing is running. Uses project translation
+    // convention (shared `tfdb.phrases.txt`, PvB_* prefix). TranslationPhraseExists
+    // guards a stale translation cache (SM's global phrase cache doesn't auto-
+    // refresh on plugin reload; requires `sm_reload_translations` or map change).
+    if (BotEnabled) {
+        char disableLabel[48];
+        if (TranslationPhraseExists("PvB_Menu_Vote_Disable_Option")) {
+            FormatEx(disableLabel, sizeof(disableLabel), "%T", "PvB_Menu_Vote_Disable_Option", client);
+        } else {
+            strcopy(disableLabel, sizeof(disableLabel), "Disable bot");
+        }
+        char disableInfo[8];
+        IntToString(PVB_VOTE_DISABLE, disableInfo, sizeof(disableInfo));
+        menu.AddItem(disableInfo, disableLabel);
+    }
+
+    // Exit button lets a player abstain from the vote. Cancel-as-abstain is
+    // counted toward the early-resolve check so a solo player hitting Exit
+    // doesn't leave the 20s timer running on nothing.
+    menu.ExitButton = true;
     menu.Display(client, 20);
 }
 
 public int MenuHandler_ClassVote(Menu menu, MenuAction action, int param1, int param2) {
     if (action == MenuAction_Select) {
         if (ClassVoted[param1] != -1) return 0;
-        
+
         char info[8];
         menu.GetItem(param2, info, sizeof(info));
         int type = StringToInt(info);
-        
-        if (type < 0 || type >= NumBotTypes) type = 0;
 
-        ClassVoted[param1] = type;
-        ClassVotes[type]++;
-        
+        // Clamp: valid type (0..NumBotTypes-1), or PVB_VOTE_DISABLE (-1).
+        // Disable votes are tallied in ClassVotes[NumBotTypes] — the slot
+        // just past the last real type. MAX_BOT_TYPES leaves room for it.
+        int voteSlot;
+        if (type == PVB_VOTE_DISABLE) {
+            voteSlot = NumBotTypes;  // dedicated "disable" tally slot
+        } else {
+            if (type < 0 || type >= NumBotTypes) type = 0;
+            voteSlot = type;
+        }
+
+        ClassVoted[param1] = voteSlot;
+        ClassVotes[voteSlot]++;
+
         char typeName[32];
-        GetBotTypeNameSafe(type, typeName, sizeof(typeName));
+        if (type == PVB_VOTE_DISABLE) {
+            if (TranslationPhraseExists("PvB_Menu_Vote_Disable_Option")) {
+                FormatEx(typeName, sizeof(typeName), "%T", "PvB_Menu_Vote_Disable_Option", LANG_SERVER);
+            } else {
+                strcopy(typeName, sizeof(typeName), "Disable bot");
+            }
+        } else {
+            GetBotTypeNameSafe(type, typeName, sizeof(typeName));
+        }
         CPrintToChatAll("%t", "PvB_ClassVote_Voted", param1, typeName);
+
+        // Early-resolve: if every human in game has voted, skip the remaining
+        // timer — no point waiting 20s when the result is already decided.
+        // Count live non-fake clients directly (don't rely on CachedRealCount
+        // which updates on a separate tick).
+        int humans = 0, voted = 0;
+        for (int i = 1; i <= MaxClients; i++) {
+            if (!IsClientInGame(i) || IsFakeClient(i)) continue;
+            if (IsClientReplay(i) || IsClientSourceTV(i)) continue;
+            humans++;
+            if (ClassVoted[i] != -1) voted++;
+        }
+        if (voted >= humans && humans > 0) {
+            delete ClassVoteTimer;
+            ClassVoteTimer = null;
+            ResolveClassVote();
+        }
+    }
+    else if (action == MenuAction_Cancel) {
+        // Client hit Exit on the vote menu. Count them as abstained (-2) so
+        // early-resolve doesn't wait 20s for a client who has opted out.
+        // -2 is distinct from -1 (never voted) so they can't re-open + vote.
+        if (param1 >= 1 && param1 <= MaxClients && ClassVoted[param1] == -1) {
+            ClassVoted[param1] = -2;
+            // Guard the translation lookup — same reason as PvB_Menu_Vote_Disable_Option,
+            // stale global phrase cache could throw. See sourcemod-practices/translations.md.
+            if (TranslationPhraseExists("PvB_ClassVote_Abstained")) {
+                CPrintToChatAll("%t", "PvB_ClassVote_Abstained", param1);
+            }
+
+            // Same early-resolve check as MenuAction_Select — if every human
+            // has either voted or abstained, wrap the vote now.
+            int humans = 0, done = 0;
+            for (int i = 1; i <= MaxClients; i++) {
+                if (!IsClientInGame(i) || IsFakeClient(i)) continue;
+                if (IsClientReplay(i) || IsClientSourceTV(i)) continue;
+                humans++;
+                if (ClassVoted[i] != -1) done++;
+            }
+            if (done >= humans && humans > 0) {
+                delete ClassVoteTimer;
+                ClassVoteTimer = null;
+                ResolveClassVote();
+            }
+        }
     }
     else if (action == MenuAction_End) {
         delete menu;
@@ -1776,36 +1815,67 @@ public Action Timer_EndClassVote(Handle timer) {
 
 void ResolveClassVote() {
     ClassVoteActive = false;
-    
+
+    // Ballot slots 0..NumBotTypes-1 = each bot type; slot NumBotTypes = "Disable bot".
+    int totalSlots = NumBotTypes + 1;
+
     int maxVotes = 0;
-    for (int i = 0; i < NumBotTypes; i++) {
+    for (int i = 0; i < totalSlots; i++) {
         if (ClassVotes[i] > maxVotes) {
             maxVotes = ClassVotes[i];
         }
     }
-    
+
     if (maxVotes == 0) {
+        // No one voted — keep current state. If bot wasn't on, don't enable.
         CPrintToChatAll("%t", "PvB_ClassVote_NoVotes");
-        LoadBotTypeSettings(CfgBotType);
-    } else {
-        int tied[MAX_BOT_TYPES];
-        int tiedCount = 0;
-        for (int i = 0; i < NumBotTypes; i++) {
-            if (ClassVotes[i] == maxVotes) {
-                tied[tiedCount++] = i;
-            }
-        }
-        
-        int winner = tied[GetRandomInt(0, tiedCount - 1)];
-        LoadBotTypeSettings(winner);
-        
-        char typeName[32];
-        GetBotTypeNameSafe(winner, typeName, sizeof(typeName));
-        CPrintToChatAll("%t", "PvB_ClassVote_Result", typeName, maxVotes);
+        if (!BotEnabled) LoadBotTypeSettings(CfgBotType);
+        // Don't call EnablePvB() in no-vote case — silent cancel.
+        return;
     }
-    
+
+    // Find tied winners, pick one at random.
+    int tied[MAX_BOT_TYPES + 1];
+    int tiedCount = 0;
+    for (int i = 0; i < totalSlots; i++) {
+        if (ClassVotes[i] == maxVotes) {
+            tied[tiedCount++] = i;
+        }
+    }
+    int winnerSlot = tied[GetRandomInt(0, tiedCount - 1)];
+
+    // Slot NumBotTypes = "Disable bot" winner.
+    if (winnerSlot == NumBotTypes) {
+        char disableLabel[48];
+        if (TranslationPhraseExists("PvB_Menu_Vote_Disable_Option")) {
+            FormatEx(disableLabel, sizeof(disableLabel), "%T", "PvB_Menu_Vote_Disable_Option", LANG_SERVER);
+        } else {
+            strcopy(disableLabel, sizeof(disableLabel), "Disable bot");
+        }
+        CPrintToChatAll("%t", "PvB_ClassVote_Result", disableLabel, maxVotes);
+        if (BotEnabled) DisablePvB();
+        return;
+    }
+
+    // Bot-type winner — switch (or enable) to that type.
+    LoadBotTypeSettings(winnerSlot);
+
+    char typeName[32];
+    GetBotTypeNameSafe(winnerSlot, typeName, sizeof(typeName));
+    CPrintToChatAll("%t", "PvB_ClassVote_Result", typeName, maxVotes);
+
     if (!BotEnabled) {
         EnablePvB();
+    } else {
+        // Hot-swap: bot is already running with a (possibly different) type.
+        // Kick the current bot and re-spawn under the new type so name/settings
+        // match the vote winner. LockBotQuota keeps it from being auto-replaced.
+        // BotName was updated by LoadBotTypeSettings above, so the new tf_bot_add
+        // below uses the winning type's name.
+        ServerCommand("tf_bot_kick all");
+        ServerCommand("tf_bot_add 1 Pyro blue easy \"%s\"", BotName);
+        BotNameDirty = true;
+        ApplyBotTypeSettings();
     }
 }
 
@@ -1849,7 +1919,7 @@ public int MenuHandler_BotType(Menu menu, MenuAction action, int param1, int par
             ShowBotStatsMenu(param1);
         }
         else if (StrEqual(info, "voteenable")) {
-            if (!BotEnabled && !VoteActive && !ClassVoteActive) {
+            if (!BotEnabled && !ClassVoteActive) {
                 FakeClientCommandEx(param1, "sm_botvote");
             } else if (BotEnabled) {
                 CPrintToChat(param1, "%t", "PvB_Bot_AlreadyActive");
@@ -1858,7 +1928,7 @@ public int MenuHandler_BotType(Menu menu, MenuAction action, int param1, int par
             }
         }
         else if (StrEqual(info, "votedisable")) {
-            if (BotEnabled && !VoteActive) {
+            if (BotEnabled && !ClassVoteActive) {
                 FakeClientCommandEx(param1, "sm_botvote");
             } else if (!BotEnabled) {
                 CPrintToChat(param1, "%t", "PvB_Bot_AlreadyDisabled");
@@ -1893,8 +1963,6 @@ public void OnGameFrame() {
                 ManageTeams();
             }
         }
-        
-        CheckVoteTimeout();
     }
 
     if (MapChanged && BotEnabled && !TrainingMode) {
@@ -1931,12 +1999,6 @@ public void OnGameFrame() {
     }
 }
 
-void CheckVoteTimeout() {
-    if (VoteActive && GetEngineTime() >= VoteEndTime) {
-        EndDisableVote(false);
-    }
-}
-
 // Normal mode: keep bot on BLU, all humans on RED
 void ManageTeams() {
     for (int i = 1; i <= MaxClients; i++) {
@@ -1945,20 +2007,46 @@ void ManageTeams() {
         if (IsFakeClient(i) && !IsClientReplay(i) && !IsClientSourceTV(i)) {
             if (GetClientTeam(i) != 3) {
                 ChangeClientTeam(i, 3);
-                TF2_RespawnPlayer(i);
+                // Only force-respawn the bot if the round is already running.
+                // During arena pregame, TF2_RespawnPlayer silently fails and
+                // leaves the bot stuck in death limbo — let the natural
+                // arena_round_start respawn wave handle it instead.
+                if (!IsPlayerAlive(i) && GameRules_GetRoundState() == RoundState_RoundRunning) {
+                    TF2_RespawnPlayer(i);
+                }
             }
             if (BotNameDirty) {
                 SetClientInfo(i, "name", BotName);
             }
         }
-        else if (!IsClientObserver(i) && BotEnabled) {
-            if (GetClientTeam(i) != 2) {
-                ChangeClientTeam(i, 2);
-                TF2_RespawnPlayer(i);
+        else if (BotEnabled) {
+            // Gate on TEAM (not IsClientObserver). During arena pregame, humans
+            // on BLU/RED are in freeze-cam "observer mode" but aren't on the
+            // spec team — we must still force them to RED. IsClientObserver
+            // would skip them incorrectly. Leave actual spec-team players alone.
+            int humanTeam = GetClientTeam(i);
+            if (humanTeam <= view_as<int>(TFTeam_Spectator)) continue;
+            if (humanTeam != 2) {
+                FakeClientCommand(i, "jointeam red");
+                RequestFrame(Frame_PvBVerifyTeam, GetClientUserId(i));
             }
         }
     }
     BotNameDirty = false;
+}
+
+/**
+ * Respawn the human after FakeClientCommand("jointeam red") has been fully
+ * processed by the engine. Called via RequestFrame so the team change is
+ * already applied when this runs — otherwise TF2_RespawnPlayer would fire
+ * on the old BLU team.
+ */
+void Frame_PvBVerifyTeam(any userId) {
+    int client = GetClientOfUserId(userId);
+    if (client <= 0 || !IsClientInGame(client)) return;
+    if (GetClientTeam(client) == view_as<int>(TFTeam_Red) && !IsPlayerAlive(client)) {
+        TF2_RespawnPlayer(client);
+    }
 }
 
 // Training mode: keep bots on their assigned teams, humans to spectator.
@@ -1981,15 +2069,10 @@ void ManageTrainingTeams() {
                 TF2_RespawnPlayer(i);
             }
         }
-        else if (!IsClientReplay(i) && !IsClientSourceTV(i)) {
-            // Real humans during training → force to spectator so they don't
-            // disrupt bot-vs-bot training. The command listener + player_team
-            // hook (see Listener_BlockPvBTeamCollision) pre-empt most joins,
-            // but this is the reactive backstop.
-            if (GetClientTeam(i) > view_as<int>(TFTeam_Spectator)) {
-                ChangeClientTeam(i, view_as<int>(TFTeam_Spectator));
-            }
-        }
+        // Real humans during training: no forced team — humans can freely join
+        // RED or BLU to participate alongside the training bots, or spectate to
+        // watch bot-vs-bot rounds. The listener also allows any team choice in
+        // training mode.
     }
 }
 
@@ -2021,27 +2104,22 @@ public Action Listener_BlockPvBTeamCollision(int client, const char[] command, i
     if (!BotEnabled && !TrainingMode) return Plugin_Continue;
     if (IsFakeClient(client)) return Plugin_Continue;  // bots route through their own logic
 
-    // autoteam: always redirect humans to their desired team
-    if (strcmp(command, "autoteam", false) == 0) {
-        FakeClientCommandEx(client, TrainingMode ? "jointeam spectate" : "jointeam red");
+    // autoteam: redirect to RED in normal PvB. In training, leave autoteam alone
+    // (the engine picks a team; human can participate on either side).
+    if (strcmp(command, "autoteam", false) == 0 && !TrainingMode) {
+        FakeClientCommandEx(client, "jointeam red");
         return Plugin_Handled;
     }
 
-    // jointeam <arg>: block blue/3/auto in normal mode; block everything non-spectator in training
+    // jointeam <arg>: only restrict in normal PvB mode (human-vs-bot 1v1 requires
+    // humans on RED, bot on BLU). Training mode allows humans on ANY team so a
+    // real player can test/participate alongside the bot-vs-bot training.
     if (strcmp(command, "jointeam", false) == 0 && argc >= 1) {
         char arg[16];
         GetCmdArg(1, arg, sizeof(arg));
 
         bool shouldRedirect = false;
-        if (TrainingMode) {
-            // Training: allow only spec/spectate/spectator/1
-            if (strcmp(arg, "spec", false)      != 0 &&
-                strcmp(arg, "spectate", false)  != 0 &&
-                strcmp(arg, "spectator", false) != 0 &&
-                strcmp(arg, "1", false)         != 0) {
-                shouldRedirect = true;
-            }
-        } else {
+        if (!TrainingMode) {
             // Normal PvB: block blue/3/auto (allow red/2/spec/1)
             if (strcmp(arg, "blue", false) == 0 ||
                 strcmp(arg, "3", false)    == 0 ||
@@ -2049,9 +2127,10 @@ public Action Listener_BlockPvBTeamCollision(int client, const char[] command, i
                 shouldRedirect = true;
             }
         }
+        // TrainingMode: no restrictions — humans can join any team.
 
         if (shouldRedirect) {
-            FakeClientCommandEx(client, TrainingMode ? "jointeam spectate" : "jointeam red");
+            FakeClientCommandEx(client, "jointeam red");
             return Plugin_Handled;
         }
     }
@@ -2061,7 +2140,8 @@ public Action Listener_BlockPvBTeamCollision(int client, const char[] command, i
 
 public Action Event_PlayerTeamChange(Event event, const char[] name, bool dontBroadcast)
 {
-    if (!BotEnabled && !TrainingMode) return Plugin_Continue;
+    // Only normal PvB mode enforces team placement. Training mode is permissive.
+    if (!BotEnabled || TrainingMode) return Plugin_Continue;
 
     int client = GetClientOfUserId(event.GetInt("userid"));
     if (client <= 0 || client > MaxClients) return Plugin_Continue;
@@ -2069,12 +2149,10 @@ public Action Event_PlayerTeamChange(Event event, const char[] name, bool dontBr
 
     int newTeam = event.GetInt("team");
 
-    // Normal PvB: human on BLU is a collision → schedule force-to-RED
-    if (!TrainingMode && newTeam == view_as<int>(TFTeam_Blue)) {
-        CreateTimer(0.1, Timer_PvBForceTeam, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
-    }
-    // Training: any human on non-spectator → schedule force-to-SPECTATOR
-    else if (TrainingMode && newTeam > view_as<int>(TFTeam_Spectator)) {
+    // Human on BLU is a collision → schedule force-to-RED backstop.
+    // ManageTeams handles the steady-state, this covers the race where the
+    // engine pre-empts ManageTeams (spawn points, arena queue, etc.).
+    if (newTeam == view_as<int>(TFTeam_Blue)) {
         CreateTimer(0.1, Timer_PvBForceTeam, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
     }
 
@@ -2098,22 +2176,16 @@ public any Native_IsPvBTraining(Handle plugin, int numParams)
 
 public Action Timer_PvBForceTeam(Handle timer, any userId)
 {
-    if (!BotEnabled && !TrainingMode) return Plugin_Stop;
+    // Only normal PvB mode force-moves humans off BLU (bot-only team).
+    // Training mode is permissive — humans can join any team to participate.
+    if (!BotEnabled || TrainingMode) return Plugin_Stop;
 
     int client = GetClientOfUserId(userId);
     if (client <= 0 || !IsClientInGame(client) || IsFakeClient(client)) return Plugin_Stop;
 
-    int team = GetClientTeam(client);
-
-    if (TrainingMode) {
-        if (team > view_as<int>(TFTeam_Spectator)) {
-            ChangeClientTeam(client, view_as<int>(TFTeam_Spectator));
-        }
-    } else {
-        if (team == view_as<int>(TFTeam_Blue)) {
-            ChangeClientTeam(client, view_as<int>(TFTeam_Red));
-            TF2_RespawnPlayer(client);
-        }
+    if (GetClientTeam(client) == view_as<int>(TFTeam_Blue)) {
+        FakeClientCommand(client, "jointeam red");
+        RequestFrame(Frame_PvBVerifyTeam, userId);
     }
 
     return Plugin_Stop;
@@ -5158,7 +5230,7 @@ void StartDebugLogging() {
     // Open file handle for high-frequency writes (File.WriteLine doesn't spam console)
     DebugFile = OpenFile(DebugLogPath, "a");
     if (DebugFile == null) {
-        PrintToServer("[PvB] ERROR: Could not open debug log: %s", DebugLogPath);
+        LogError("[PvB] Could not open debug log: %s", DebugLogPath);
         return;
     }
 

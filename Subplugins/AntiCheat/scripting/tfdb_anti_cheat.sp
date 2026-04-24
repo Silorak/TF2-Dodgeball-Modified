@@ -1432,6 +1432,17 @@ void EvaluatePlayer(int client)
 
 void TakeAction(int client, int score)
 {
+    // Re-check immunity at ACTION time, not just at DETECTION time. The admin flag
+    // cvar (tfdb_ac_immunity_flag) or the client's admin flags may have changed
+    // between the initial detection and the threshold crossing. Without this
+    // check, an admin who gained their flag mid-session could still be auto-kicked
+    // or auto-banned on stale score accumulated before the flag was granted.
+    if (HasImmunity(client))
+    {
+        ResetClientState(client);
+        return;
+    }
+
     char name[MAX_NAME_LENGTH];
     char steamId[32];
     GetClientName(client, name, sizeof(name));

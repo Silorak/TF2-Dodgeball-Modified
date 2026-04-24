@@ -1463,7 +1463,7 @@ public int PresetsMenuHandler(Menu menu, MenuAction menuActions, int iParam1, in
 			{
 				char presetName[128];
 				TFDB_GetPresetName(preset, presetName, sizeof(presetName));
-				CPrintToChatAll("[TFDB] %N applied preset: %s", iParam1, presetName);
+				CPrintToChatAll("%t", "Menu_Admin_AppliedPreset", iParam1, presetName);
 			}
 			else
 			{

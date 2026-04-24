@@ -100,10 +100,9 @@ enum RocketSound
 enum RocketState
 {
 	RocketState_None     = 0,       /**< Default state */
-	RocketState_Dragging = 1 << 0,  /**< Player is dragging the rocket */
-	RocketState_Bouncing = 1 << 1,  /**< Rocket is bouncing off surfaces */
-	RocketState_Stolen   = 1 << 2,  /**< Rocket was stolen from another player */
-	RocketState_Delayed  = 1 << 3   /**< Rocket is in delay prevention mode */
+	RocketState_Bouncing = 1 << 0,  /**< Rocket is bouncing off surfaces */
+	RocketState_Stolen   = 1 << 1,  /**< Rocket was stolen from another player */
+	RocketState_Delayed  = 1 << 2   /**< Rocket is in delay prevention mode */
 };
 
 /**
@@ -897,7 +896,7 @@ native bool TFDB_ApplyPreset(int iPreset);
 public SharedPlugin __pl_TFDB =
 {
 	name = "tfdb",
-	file = "TF2Dodgeball.smx",
+	file = "dodgeball.smx",
 	
 	#if defined REQUIRE_PLUGIN
 		required=1,

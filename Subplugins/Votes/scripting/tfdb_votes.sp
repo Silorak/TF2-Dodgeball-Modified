@@ -33,6 +33,25 @@ float LastVoteClassTime;
 float LastVoteCountTime;
 float LastVotePresetTime;
 
+// Per-client spam throttle — prevents a single player from spamming any vote
+// command the instant a server-wide cooldown elapses. Enforced across ALL vote
+// commands so griefers can't chain-call vrb / vrc / vrp.
+#define CLIENT_VOTE_COOLDOWN 10.0
+float LastClientVoteTime[MAXPLAYERS + 1];
+
+// Returns true if the client is throttled (caller must reply + early-return).
+bool IsClientVoteThrottled(int client)
+{
+	if (!IsClientInGame(client) || IsFakeClient(client)) return true;
+	return (GetGameTime() - LastClientVoteTime[client]) < CLIENT_VOTE_COOLDOWN;
+}
+
+// Clear the per-client throttle on connect so a reused slot can't inherit cooldown.
+public void OnClientPutInServer(int client)
+{
+	LastClientVoteTime[client] = 0.0;
+}
+
 bool BounceEnabled;
 int MainRocketClass = -1;
 int RocketsCount = -1;
@@ -143,29 +162,37 @@ public Action CmdVoteBounce(int client, int args)
 	if (client == 0)
 	{
 		ReplyToCommand(client, "Command is in-game only.");
-		
+
 		return Plugin_Handled;
 	}
-	
+
+	if (IsClientVoteThrottled(client))
+	{
+		CReplyToCommand(client, "%t", "Dodgeball_BounceVote_Cooldown",
+		                RoundToCeil(CLIENT_VOTE_COOLDOWN - (GetGameTime() - LastClientVoteTime[client])));
+		return Plugin_Handled;
+	}
+
 	if (!TFDB_IsDodgeballEnabled())
 	{
 		CReplyToCommand(client, "%t", "Command_Disabled");
-		
+
 		return Plugin_Handled;
 	}
-	
+
 	if (IsVoteInProgress())
 	{
 		CReplyToCommand(client, "%t", "Dodgeball_FFAVote_Conflict");
-		
+
 		return Plugin_Handled;
 	}
-	
+
 	if (VoteBounceAllowed)
 	{
 		VoteBounceAllowed  = false;
 		LastVoteBounceTime = GetGameTime();
-		
+		LastClientVoteTime[client] = GetGameTime();
+
 		StartBounceVote();
 		CreateTimer(CvarVoteBounceTimeout.FloatValue, VoteBounceTimeoutCallback, _, TIMER_FLAG_NO_MAPCHANGE);
 	}
@@ -298,29 +325,37 @@ public Action CmdVoteClass(int client, int args)
 	if (client == 0)
 	{
 		ReplyToCommand(client, "Command is in-game only.");
-		
+
 		return Plugin_Handled;
 	}
-	
+
+	if (IsClientVoteThrottled(client))
+	{
+		CReplyToCommand(client, "%t", "Dodgeball_ClassVote_Cooldown",
+		                RoundToCeil(CLIENT_VOTE_COOLDOWN - (GetGameTime() - LastClientVoteTime[client])));
+		return Plugin_Handled;
+	}
+
 	if (!TFDB_IsDodgeballEnabled())
 	{
 		CReplyToCommand(client, "%t", "Command_Disabled");
-		
+
 		return Plugin_Handled;
 	}
-	
+
 	if (IsVoteInProgress())
 	{
 		CReplyToCommand(client, "%t", "Dodgeball_FFAVote_Conflict");
-		
+
 		return Plugin_Handled;
 	}
-	
+
 	if (VoteClassAllowed)
 	{
 		VoteClassAllowed  = false;
 		LastVoteClassTime = GetGameTime();
-		
+		LastClientVoteTime[client] = GetGameTime();
+
 		StartClassVote();
 		CreateTimer(CvarVoteClassTimeout.FloatValue, VoteClassTimeoutCallback, _, TIMER_FLAG_NO_MAPCHANGE);
 	}
@@ -418,29 +453,37 @@ public Action CmdVoteCount(int client, int args)
 	if (client == 0)
 	{
 		ReplyToCommand(client, "Command is in-game only.");
-		
+
 		return Plugin_Handled;
 	}
-	
+
+	if (IsClientVoteThrottled(client))
+	{
+		CReplyToCommand(client, "%t", "Dodgeball_CountVote_Cooldown",
+		                RoundToCeil(CLIENT_VOTE_COOLDOWN - (GetGameTime() - LastClientVoteTime[client])));
+		return Plugin_Handled;
+	}
+
 	if (!TFDB_IsDodgeballEnabled())
 	{
 		CReplyToCommand(client, "%t", "Command_Disabled");
-		
+
 		return Plugin_Handled;
 	}
-	
+
 	if (IsVoteInProgress())
 	{
 		CReplyToCommand(client, "%t", "Dodgeball_FFAVote_Conflict");
-		
+
 		return Plugin_Handled;
 	}
-	
+
 	if (VoteCountAllowed)
 	{
 		VoteCountAllowed  = false;
 		LastVoteCountTime = GetGameTime();
-		
+		LastClientVoteTime[client] = GetGameTime();
+
 		StartCountVote();
 		CreateTimer(CvarVoteCountTimeout.FloatValue, VoteCountTimeoutCallback, _, TIMER_FLAG_NO_MAPCHANGE);
 	}
@@ -535,35 +578,43 @@ public Action CmdVotePreset(int client, int args)
 	if (client == 0)
 	{
 		ReplyToCommand(client, "Command is in-game only.");
-		
+
 		return Plugin_Handled;
 	}
-	
+
+	if (IsClientVoteThrottled(client))
+	{
+		CReplyToCommand(client, "%t", "Dodgeball_PresetVote_Cooldown",
+		                RoundToCeil(CLIENT_VOTE_COOLDOWN - (GetGameTime() - LastClientVoteTime[client])));
+		return Plugin_Handled;
+	}
+
 	if (!TFDB_IsDodgeballEnabled())
 	{
 		CReplyToCommand(client, "%t", "Command_Disabled");
-		
+
 		return Plugin_Handled;
 	}
-	
+
 	if (IsVoteInProgress())
 	{
 		CReplyToCommand(client, "%t", "Dodgeball_FFAVote_Conflict");
-		
+
 		return Plugin_Handled;
 	}
-	
+
 	if (TFDB_GetPresetCount() == 0)
 	{
 		CReplyToCommand(client, "%t", "Dodgeball_PresetVote_NoPresets");
-		
+
 		return Plugin_Handled;
 	}
-	
+
 	if (VotePresetAllowed)
 	{
 		VotePresetAllowed  = false;
 		LastVotePresetTime = GetGameTime();
+		LastClientVoteTime[client] = GetGameTime();
 		
 		StartPresetVote();
 		CreateTimer(CvarVotePresetTimeout.FloatValue, VotePresetTimeoutCallback, _, TIMER_FLAG_NO_MAPCHANGE);

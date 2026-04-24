@@ -12,28 +12,81 @@ void DestroyRocketClasses()
 {
 	for (int index = 0; index < RocketClassCount; index++)
 	{
-		DataPack cmdOnSpawn     = RocketClassCmdsOnSpawn[index];
-		DataPack cmdOnKill      = RocketClassCmdsOnKill[index];
-		DataPack cmdOnSpawnKill = RocketClassCmdsOnSpawnKill[index];
-		DataPack cmdOnExplode   = RocketClassCmdsOnExplode[index];
-		DataPack cmdOnDeflect   = RocketClassCmdsOnDeflect[index];
-		DataPack cmdOnNoTarget  = RocketClassCmdsOnNoTarget[index];
-
-		if (cmdOnSpawn     != null) delete cmdOnSpawn;
-		if (cmdOnKill      != null) delete cmdOnKill;
-		if (cmdOnSpawnKill != null) delete cmdOnSpawnKill;
-		if (cmdOnExplode   != null) delete cmdOnExplode;
-		if (cmdOnDeflect   != null) delete cmdOnDeflect;
-		if (cmdOnNoTarget  != null) delete cmdOnNoTarget;
-
-		RocketClassCmdsOnSpawn[index]     = null;
-		RocketClassCmdsOnKill[index]      = null;
-		RocketClassCmdsOnSpawnKill[index] = null;
-		RocketClassCmdsOnExplode[index]   = null;
-		RocketClassCmdsOnDeflect[index]   = null;
-		RocketClassCmdsOnNoTarget[index]  = null;
+		ResetRocketClass(index);
 	}
 	RocketClassCount = 0;
+}
+
+void ResetRocketClass(int index)
+{
+	DataPack cmdOnSpawn     = RocketClassCmdsOnSpawn[index];
+	DataPack cmdOnKill      = RocketClassCmdsOnKill[index];
+	DataPack cmdOnSpawnKill = RocketClassCmdsOnSpawnKill[index];
+	DataPack cmdOnExplode   = RocketClassCmdsOnExplode[index];
+	DataPack cmdOnDeflect   = RocketClassCmdsOnDeflect[index];
+	DataPack cmdOnNoTarget  = RocketClassCmdsOnNoTarget[index];
+
+	if (cmdOnSpawn     != null) delete cmdOnSpawn;
+	if (cmdOnKill      != null) delete cmdOnKill;
+	if (cmdOnSpawnKill != null) delete cmdOnSpawnKill;
+	if (cmdOnExplode   != null) delete cmdOnExplode;
+	if (cmdOnDeflect   != null) delete cmdOnDeflect;
+	if (cmdOnNoTarget  != null) delete cmdOnNoTarget;
+
+	RocketClassName[index][0]       = '\0';
+	RocketClassLongName[index][0]   = '\0';
+	RocketClassModel[index][0]      = '\0';
+	RocketClassSpawnSound[index][0] = '\0';
+	RocketClassBeepSound[index][0]  = '\0';
+	RocketClassAlertSound[index][0] = '\0';
+
+	RocketClassBehaviour[index]         = Behaviour_Unknown;
+	RocketClassFlags[index]             = RocketFlag_None;
+	RocketClassBeepInterval[index]      = 0.0;
+	RocketClassCritChance[index]        = 0.0;
+	RocketClassDamage[index]            = 0.0;
+	RocketClassDamageIncrement[index]   = 0.0;
+	RocketClassSpeed[index]             = 0.0;
+	RocketClassSpeedIncrement[index]    = 0.0;
+	RocketClassSpeedLimit[index]        = 0.0;
+	RocketClassTurnRate[index]          = 0.0;
+	RocketClassTurnRateIncrement[index] = 0.0;
+	RocketClassTurnRateLimit[index]     = 0.0;
+	RocketClassElevationRate[index]     = 0.0;
+	RocketClassElevationLimit[index]    = 0.0;
+	RocketClassRocketsModifier[index]   = 0.0;
+	RocketClassPlayerModifier[index]    = 0.0;
+	RocketClassControlDelay[index]      = 0.0;
+	RocketClassTargetWeight[index]      = 0.0;
+	RocketClassMaxBounces[index]        = 0;
+	RocketClassBounceCeiling[index]     = 0.0;
+	RocketClassCritGlowStack[index]     = 1;
+	RocketClassOrbitTightness[index]    = 0.0;
+	RocketClassMaxSpeed[index]          = 0.0;
+	RocketClassMaxDeflections[index]    = 0;
+	RocketClassSteeringControl[index]   = 0;
+	RocketClassBounceControl[index]     = 0;
+	RocketClassThinkInterval[index]     = 0.0;
+
+	RocketClassCmdsOnSpawn[index]     = null;
+	RocketClassCmdsOnKill[index]      = null;
+	RocketClassCmdsOnSpawnKill[index] = null;
+	RocketClassCmdsOnExplode[index]   = null;
+	RocketClassCmdsOnDeflect[index]   = null;
+	RocketClassCmdsOnNoTarget[index]  = null;
+}
+
+int FindRocketClassByName(const char[] name)
+{
+	char key[16];
+	strcopy(key, sizeof(key), name);
+
+	for (int index = 0; index < RocketClassCount; index++)
+	{
+		if (StrEqual(RocketClassName[index], key)) return index;
+	}
+
+	return -1;
 }
 
 /** Clears all spawner class definitions and spawn point data. */
@@ -41,7 +94,7 @@ void DestroySpawners()
 {
 	for (int index = 0; index < SpawnersCount; index++)
 	{
-		delete SpawnersChancesTable[index];
+		ResetSpawner(index);
 	}
 
 	SpawnersCount  = 0;
@@ -50,6 +103,15 @@ void DestroySpawners()
 	DefaultRedSpawner = -1;
 	DefaultBluSpawner = -1;
 	SpawnersTrie.Clear();
+}
+
+void ResetSpawner(int index)
+{
+	if (SpawnersChancesTable[index] != null) delete SpawnersChancesTable[index];
+	SpawnersChancesTable[index] = null;
+	SpawnersName[index][0] = '\0';
+	SpawnersMaxRockets[index] = 0;
+	SpawnersInterval[index] = 0.0;
 }
 
 /**
@@ -98,14 +160,20 @@ void PopulateSpawnPoints()
 		}
 	}
 
+	// Spawn-point failures are NON-FATAL: admins can load non-TFDB maps with
+	// tf_dodgeball_enabled=1 without taking down the entire plugin. Rockets
+	// just won't spawn (downstream code already guards on zero counts).
+	// LogMessage (not LogError) — plugin may run on non-dodgeball maps where
+	// missing TFDB spawn entities is an expected condition, not a configuration
+	// error. LogError would trigger false alarms in monitoring dashboards.
 	if (SpawnPointsRedCount == 0 && SpawnPointsBluCount == 0)
 	{
-		SetFailState("No 'info_target' entities found on this map.");
+		LogMessage("[TFDB] No 'info_target' entities found on this map — rocket spawning disabled for this map.");
 		return;
 	}
 
-	if (SpawnPointsRedCount == 0) SetFailState("No RED spawn points found on this map.");
-	if (SpawnPointsBluCount == 0) SetFailState("No BLU spawn points found on this map.");
+	if (SpawnPointsRedCount == 0) LogMessage("[TFDB] No RED spawn points found on this map — rockets won't spawn for RED.");
+	if (SpawnPointsBluCount == 0) LogMessage("[TFDB] No BLU spawn points found on this map — rockets won't spawn for BLU.");
 }
 
 /**
@@ -114,7 +182,7 @@ void PopulateSpawnPoints()
  * @param name   The spawner name to search for.
  * @return       The spawner class index, or -1 if not found.
  */
-int FindSpawnerByName(char name[32])
+int FindSpawnerByName(const char[] name)
 {
 	int index = -1;
 	SpawnersTrie.GetValue(name, index);
@@ -325,10 +393,23 @@ void ParseConfigurations(char[] configFile = "general.cfg")
 	BuildPath(Path_SM, path, sizeof(path), fileName);
 	LogMessage("Executing configuration file %s", path);
 
-	if (!FileExists(path, true)) return;
+	if (!FileExists(path, true))
+	{
+		// Per-map cfgs are optional. general.cfg missing will be caught downstream
+		// by "no rocket classes defined" — but we log a hint so admins aren't lost.
+		LogMessage("[TFDB] Config file not found, skipping: %s", path);
+		return;
+	}
 
 	KeyValues config = new KeyValues("TF2_Dodgeball");
-	if (!config.ImportFromFile(path)) SetFailState("[TFDB] Error while parsing configuration file: %s", path);
+	if (!config.ImportFromFile(path))
+	{
+		// Malformed cfg: log + skip instead of nuking the entire plugin. A broken
+		// tfdb_mapname.cfg should NOT take down the plugin for the rest of the session.
+		LogError("[TFDB] Error while parsing configuration file: %s (continuing with existing classes)", path);
+		delete config;
+		return;
+	}
 
 	config.GotoFirstSubKey();
 	do
@@ -390,10 +471,25 @@ void ParseClasses(KeyValues config)
 	config.GotoFirstSubKey();
 	do
 	{
-		int index = RocketClassCount;
-		RocketFlags flags;
+		config.GetSectionName(name, sizeof(name));
 
-		config.GetSectionName(name, sizeof(name));        strcopy(RocketClassName[index], 16, name);
+		int index = FindRocketClassByName(name);
+		bool newClass = (index == -1);
+		if (newClass)
+		{
+			if (RocketClassCount >= MAX_ROCKET_CLASSES)
+			{
+				LogError("Reached maximum rocket classes (%d). Remaining classes will be ignored.", MAX_ROCKET_CLASSES);
+				break;
+			}
+
+			index = RocketClassCount;
+		}
+
+		ResetRocketClass(index);
+		RocketFlags flags = RocketFlag_None;
+
+		strcopy(RocketClassName[index], 16, name);
 		config.GetString("name", buffer, sizeof(buffer)); strcopy(RocketClassLongName[index], 32, buffer);
 		
 		if (config.GetString("model", buffer, sizeof(buffer)))
@@ -530,13 +626,7 @@ void ParseClasses(KeyValues config)
 		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnNoTargetCmd; RocketClassCmdsOnNoTarget[index] = cmds; }
 
 		RocketClassFlags[index] = flags;
-		RocketClassCount++;
-
-		if (RocketClassCount >= MAX_ROCKET_CLASSES)
-		{
-			LogError("Reached maximum rocket classes (%d). Remaining classes will be ignored.", MAX_ROCKET_CLASSES);
-			break;
-		}
+		if (newClass) RocketClassCount++;
 	}
 	while (config.GotoNextKey());
 	config.GoBack();
@@ -549,15 +639,23 @@ void ParseSpawners(KeyValues config)
 	config.GotoFirstSubKey();
 	do
 	{
-		if (SpawnersCount >= MAX_SPAWNER_CLASSES)
+		config.GetSectionName(buffer, sizeof(buffer));
+
+		int index = FindSpawnerByName(buffer);
+		bool newSpawner = (index == -1);
+		if (newSpawner)
 		{
-			LogError("Reached maximum spawner classes (%d). Remaining spawners will be ignored.", MAX_SPAWNER_CLASSES);
-			break;
+			if (SpawnersCount >= MAX_SPAWNER_CLASSES)
+			{
+				LogError("Reached maximum spawner classes (%d). Remaining spawners will be ignored.", MAX_SPAWNER_CLASSES);
+				break;
+			}
+
+			index = SpawnersCount;
 		}
 
-		int index = SpawnersCount;
-
-		config.GetSectionName(buffer, sizeof(buffer)); strcopy(SpawnersName[index], 32, buffer);
+		ResetSpawner(index);
+		strcopy(SpawnersName[index], 32, buffer);
 		SpawnersMaxRockets[index] = config.GetNum("max rockets", 1);
 		SpawnersInterval[index]   = config.GetFloat("interval", 1.0);
 
@@ -569,7 +667,7 @@ void ParseSpawners(KeyValues config)
 		}
 
 		SpawnersTrie.SetValue(SpawnersName[index], index);
-		SpawnersCount++;
+		if (newSpawner) SpawnersCount++;
 	}
 	while (config.GotoNextKey());
 

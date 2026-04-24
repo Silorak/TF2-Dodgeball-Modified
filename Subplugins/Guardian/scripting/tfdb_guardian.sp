@@ -194,6 +194,16 @@ void GuardianDebugLog(const char[] format, any ...)
 
 public void OnPluginStart()
 {
+	// Guardian depends on the TF2Attributes extension for ability attributes.
+	// Log a warning if missing/broken so admins know, but don't SetFailState —
+	// boss HP bar + team management still work without TF2Attrib_* calls. This
+	// matches AntiSnipe's permissive pattern for CollisionHook (graceful degrade).
+	int tf2AttribStatus = GetExtensionFileStatus("tf2attributes.ext");
+	if (tf2AttribStatus < 1)
+	{
+		LogError("[Guardian] TF2Attributes extension status %d (1 = loaded OK). Ability attributes may not work. Install: https://github.com/FlaminSarge/tf2attributes", tf2AttribStatus);
+	}
+
 	// Resolve log paths to addons/sourcemod/logs/ via BuildPath.
 	// LogToFileEx takes raw paths — without BuildPath it resolves
 	// relative to the game directory (tf/) which may not have a logs/ folder.
@@ -1947,7 +1957,11 @@ public Action Timer_Update(Handle timer)
 
 void UpdateBossHealthBar()
 {
-	if (monsterResource == INVALID_ENT_REFERENCE || !IsValidEntity(monsterResource)) return;
+	// monsterResource is stored as an EntRef (via EntIndexToEntRef). Must resolve
+	// it back to a raw entity index before calling IsValidEntity/SetEntProp — those
+	// natives expect edict indices, not EntRefs.
+	int resourceEntity = EntRefToEntIndex(monsterResource);
+	if (resourceEntity == INVALID_ENT_REFERENCE || !IsValidEntity(resourceEntity)) return;
 
 	if (!guardianActive || guardianMaxHP <= 0)
 	{
@@ -1969,7 +1983,7 @@ void UpdateBossHealthBar()
 	if (byte < 0)   byte = 0;
 	if (byte > 255)  byte = 255;
 
-	SetEntProp(monsterResource, Prop_Send, "m_iBossHealthPercentageByte", byte);
+	SetEntProp(resourceEntity, Prop_Send, "m_iBossHealthPercentageByte", byte);
 
 	int bossState = 0;
 	if (debugBossState >= 0 && debugBossState <= 4)
@@ -1984,15 +1998,16 @@ void UpdateBossHealthBar()
 
 	// Known practical states from community usage:
 	// 0 = default, 1 = healing/green, 3 = victory/blue, 4 = loss/gray.
-	SetEntProp(monsterResource, Prop_Send, "m_iBossState", bossState);
+	SetEntProp(resourceEntity, Prop_Send, "m_iBossState", bossState);
 }
 
 void HideBossHealthBar()
 {
-	if (monsterResource != INVALID_ENT_REFERENCE && IsValidEntity(monsterResource))
+	int resourceEntity = EntRefToEntIndex(monsterResource);
+	if (resourceEntity != INVALID_ENT_REFERENCE && IsValidEntity(resourceEntity))
 	{
-		SetEntProp(monsterResource, Prop_Send, "m_iBossHealthPercentageByte", 0);
-		SetEntProp(monsterResource, Prop_Send, "m_iBossState", 0);
+		SetEntProp(resourceEntity, Prop_Send, "m_iBossHealthPercentageByte", 0);
+		SetEntProp(resourceEntity, Prop_Send, "m_iBossState", 0);
 	}
 }
 

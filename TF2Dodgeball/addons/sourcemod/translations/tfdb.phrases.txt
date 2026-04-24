@@ -216,7 +216,13 @@
 		"#format"	"{1:s},{2:s}"
 		"en"		"[{olive}TFDB{default}] Changed the class of a rocket from {darkorange}{1}{default} to {steelblue}{2}{default}."
 	}
-	
+
+	"Menu_Admin_AppliedPreset"
+	{
+		"#format"	"{1:N},{2:s}"
+		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} applied preset: {community}{2}{default}"
+	}
+
 	"Menu_Reset"
 	{
 		"en"		"[{olive}TFDB{default}] Type -1 to reset it."
@@ -853,12 +859,14 @@
 
 	"PvB_Entered"
 	{
-		"en"		"[{olive}TFDB{default}] The Mann Co. Bot has entered the arena."
+		"#format"	"{1:s}"
+		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} has entered the arena."
 	}
 
 	"PvB_Left"
 	{
-		"en"		"[{olive}TFDB{default}] The Mann Co. Bot has left the arena."
+		"#format"	"{1:s}"
+		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} has left the arena."
 	}
 
 	"PvB_Training_AlreadyActive"
@@ -1114,9 +1122,15 @@
 		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} voted for {community}{2}{default}"
 	}
 
+	"PvB_ClassVote_Abstained"
+	{
+		"#format"	"{1:N}"
+		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} cancelled their vote."
+	}
+
 	"PvB_ClassVote_NoVotes"
 	{
-		"en"		"[{olive}TFDB{default}] No votes cast. Using default bot type."
+		"en"		"[{olive}TFDB{default}] No votes cast. Vote cancelled — bot state unchanged."
 	}
 
 	"PvB_ClassVote_Result"
@@ -1341,6 +1355,11 @@
 	"PvB_Menu_Vote_Type"
 	{
 		"en"		"Vote: Which bot type?"
+	}
+
+	"PvB_Menu_Vote_Disable_Option"
+	{
+		"en"		"Disable bot"
 	}
 
 	"PvB_Menu_Info_Active"

@@ -339,21 +339,15 @@ int FindRocketByEntity(int entity)
  * @param targetTeam       Team to select new target from.
  * @param deflectionCount  Current event deflection count.
  * @param modifier         Speed/damage modifier for current deflection count.
- * @param clearDragging    True to clear RocketState_Dragging (homing/shared).
- *                         False for legacy (never enters drag state).
  * @return                 False if Forward_OnRocketDeflectPre blocked the deflection.
  */
 bool ProcessDeflection(int index, int entity, int rocketClass, RocketFlags flags,
-                       int team, int targetTeam, int deflectionCount, float modifier,
-                       bool clearDragging)
+                       int team, int targetTeam, int deflectionCount, float modifier)
 {
 	int client = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
 	bool validClient = (client >= 1 && client <= MaxClients && IsClientInGame(client));
 
-	if (clearDragging)
-		Internal_SetRocketState(index, (RocketInstanceState[index] & ~(RocketState_Dragging | RocketState_Stolen)));
-	else
-		Internal_SetRocketState(index, (RocketInstanceState[index] & ~RocketState_Stolen));
+	Internal_SetRocketState(index, (RocketInstanceState[index] & ~RocketState_Stolen));
 
 	if (validClient)
 	{
@@ -496,7 +490,7 @@ void HomingRocketThink(int index)
 
 		if (currentTick >= readyTick)
 		{
-			if (!ProcessDeflection(index, entity, rocketClass, flags, team, targetTeam, deflectionCount, modifier, false))
+			if (!ProcessDeflection(index, entity, rocketClass, flags, team, targetTeam, deflectionCount, modifier))
 			{
 				return;
 			}
@@ -682,7 +676,7 @@ void RocketLegacyThink(int index)
 	}
 	else if (deflectionCount > RocketDeflections[index])
 	{
-		if (!ProcessDeflection(index, entity, rocketClass, flags, team, targetTeam, deflectionCount, modifier, false))
+		if (!ProcessDeflection(index, entity, rocketClass, flags, team, targetTeam, deflectionCount, modifier))
 		{
 			return;
 		}

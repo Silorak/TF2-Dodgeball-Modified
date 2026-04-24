@@ -106,7 +106,7 @@ Most classes leave `control delay` at 0. Use `steering control` for drag feel an
 | `speed limit` | float | Hard cap. 0 = unlimited (but engine caps at 3500 without `max velocity` override in general settings). |
 | `turn rate` | float | Radians-ish per homing tick. 0.2 is vanilla-feel; >0.30 is sharp. |
 | `turn rate increment` | float | Added per deflection. Rally intensifies. |
-| `turn rate limit` | float | Max turn rate allowed (0 = no cap; engine caps at 1.0). |
+| `turn rate limit` | float | Max turn rate allowed (0 = no cap). |
 
 ### Drag / bounce mechanics
 
@@ -146,7 +146,7 @@ Most classes leave `control delay` at 0. Use `steering control` for drag feel an
 |---|---|---|
 | `play spawn sound` / `play beep sound` / `play alert sound` | 0/1 | Toggle each sound type. |
 | `spawn sound` / `beep sound` / `alert sound` | string paths | Custom sound overrides. Leave empty for default (sentry rocket sounds). |
-| `beep interval` | float seconds | How often the beep fires. 0 = engine default (~0.5s). |
+| `beep interval` | float seconds | How often the beep fires. Key absent from cfg → default 0.5s. Key present with value `0` → literal 0s (beep fires every tick while homing; usually unintended). |
 
 ### Visual
 
@@ -231,10 +231,10 @@ Color tags for `tf_dodgeball_print`:
 Player name color substitutions:
 - `##@owner##` / `##@target##` / `##@dead##` — render with team color
 
-**`on kill` vs `on spawn kill`:**
+**`on kill` vs `on spawn kill` — mutually exclusive:**
 - `on kill` fires only when the victim was killed by a **deflected** rocket (`@deflections > 0`).
 - `on spawn kill` fires only when the victim was killed by an **undeflected** rocket (`@deflections == 0`). Used for "X died to a spawn rocket" messages.
-- Both are optional and independent. Leave either blank to suppress that case entirely.
+- Exactly ONE of the two fires per kill — never both, never neither (if the matching event key is defined). Each is optional; leave the key blank or omit it to suppress that case.
 
 ---
 
