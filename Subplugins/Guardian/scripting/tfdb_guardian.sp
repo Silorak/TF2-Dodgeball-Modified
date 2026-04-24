@@ -509,6 +509,27 @@ public void OnClientPostAdminCheck(int client)
 //  Config Parsing
 // ============================================================================
 
+/**
+ * Human-readable label for an ability's bound button. Used in the guardian HUD
+ * so players can see WHICH key triggers each ability instead of just the type
+ * name. Default TF2 keybinds assumed; admins running custom binds should say so.
+ *
+ * Mirrors the parse table in ParseAbilityConfig:
+ *   IN_RELOAD   -> "R"         (reload key)
+ *   IN_ATTACK3  -> "MOUSE3"    (mouse wheel click / middle mouse)
+ *   IN_USE      -> "E"         (use key)
+ *   1000000     -> "G"         (taunt key, sentinel value)
+ *   0           -> "(none)"    (no button bound / parse fallback)
+ */
+void GetButtonLabel(int buttonBit, char[] buffer, int maxLen)
+{
+	if (buttonBit == IN_RELOAD)       strcopy(buffer, maxLen, "R");
+	else if (buttonBit == IN_ATTACK3) strcopy(buffer, maxLen, "MOUSE3");
+	else if (buttonBit == IN_USE)     strcopy(buffer, maxLen, "E");
+	else if (buttonBit == 1000000)    strcopy(buffer, maxLen, "G");
+	else                              strcopy(buffer, maxLen, "(none)");
+}
+
 void ParseAbilityConfig(KeyValues kv, GuardianAbility ability)
 {
 	kv.GetString("type", ability.Type, sizeof(ability.Type), "none");
@@ -1903,44 +1924,51 @@ public Action Timer_Update(Handle timer)
 	// --- Guardian HUD (guardian only) ---
 	int idx = activeClassIndex;
 
-	char status1[64];
-	char status2[64];
-	
+	char status1[80];
+	char status2[80];
+
 	char name1[32], name2[32];
 	strcopy(name1, sizeof(name1), guardianClasses[idx].PrimaryAbility.Type);
 	strcopy(name2, sizeof(name2), guardianClasses[idx].SecondaryAbility.Type);
-	
+
 	for (int i = 0; name1[i] != '\0'; i++) name1[i] = CharToUpper(name1[i]);
 	for (int i = 0; name2[i] != '\0'; i++) name2[i] = CharToUpper(name2[i]);
+
+	// Include the bound button label ("R", "MOUSE3", "E", "G") so the player
+	// can see WHICH key fires each ability. Was previously only showing the
+	// ability name — players had no idea what to press.
+	char key1[16], key2[16];
+	GetButtonLabel(guardianClasses[idx].PrimaryAbility.Button,   key1, sizeof(key1));
+	GetButtonLabel(guardianClasses[idx].SecondaryAbility.Button, key2, sizeof(key2));
 
 	if (primaryActive)
 	{
 		float remaining = primaryExpireTime - now;
-		FormatEx(status1, sizeof(status1), "%s [ACTIVE %.1fs]", name1, remaining);
+		FormatEx(status1, sizeof(status1), "[%s] %s [ACTIVE %.1fs]", key1, name1, remaining);
 	}
 	else if (now < primaryNextUseTime)
 	{
 		float cooldown = primaryNextUseTime - now;
-		FormatEx(status1, sizeof(status1), "%s [CD %.1fs]", name1, cooldown);
+		FormatEx(status1, sizeof(status1), "[%s] %s [CD %.1fs]", key1, name1, cooldown);
 	}
 	else
 	{
-		FormatEx(status1, sizeof(status1), "%s [READY]", name1);
+		FormatEx(status1, sizeof(status1), "[%s] %s [READY]", key1, name1);
 	}
 
 	if (secondaryActive)
 	{
 		float remaining = secondaryExpireTime - now;
-		FormatEx(status2, sizeof(status2), "%s [ACTIVE %.1fs]", name2, remaining);
+		FormatEx(status2, sizeof(status2), "[%s] %s [ACTIVE %.1fs]", key2, name2, remaining);
 	}
 	else if (now < secondaryNextUseTime)
 	{
 		float cooldown = secondaryNextUseTime - now;
-		FormatEx(status2, sizeof(status2), "%s [CD %.1fs]", name2, cooldown);
+		FormatEx(status2, sizeof(status2), "[%s] %s [CD %.1fs]", key2, name2, cooldown);
 	}
 	else
 	{
-		FormatEx(status2, sizeof(status2), "%s [READY]", name2);
+		FormatEx(status2, sizeof(status2), "[%s] %s [READY]", key2, name2);
 	}
 
 	SetHudTextParams(hudX, hudY, HUD_UPDATE_INTERVAL + 0.05, hudColor[0], hudColor[1], hudColor[2], 255, 0, 0.0, 0.0, 0.0);
