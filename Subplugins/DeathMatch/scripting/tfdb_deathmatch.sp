@@ -9,8 +9,11 @@
 #include <multicolors>
 
 #include <tfdb>
+// DM is mutex with Guardian + PvB only. DM and FFA coexist intentionally —
+// different layers (team swaps vs neutral rockets) that don't fight each other.
 #include <tfdb_guardian>
 #include <tfdb_pvb>
+#include <tfdb_clientcheck>
 
 #define PLUGIN_NAME        "[TFDB] DeathMatch"
 #define PLUGIN_AUTHOR      "Mikah (NER/SOLO v1.5.3) + Silorak (TFDB integration)"
@@ -182,6 +185,12 @@ bool CanActivateDeathMatch()
         return false;
     }
 
+    // NOTE: FFA and DM coexist intentionally. FFA makes rockets neutral; DM
+    // swaps players between RED/BLU on death to keep small-server rounds going.
+    // These layers don't fight each other — DM's team-swap still works while
+    // FFA is on, and FFA's neutral-rocket logic still works during NER swaps.
+    // Do NOT add an FFA gate here.
+
     return true;
 }
 
@@ -281,7 +290,7 @@ public void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
             else                 FormatEx(nameBuffer, sizeof(nameBuffer), ", %N", client);
 
             StrCat(listBuffer, sizeof(listBuffer), nameBuffer);
-            SoloQueue.Push(client);
+            SoloQueue.Push(GetClientUserId(client));  // userid not raw index — see TryRespawnQueuedSoloer
             ForcePlayerSuicide(client);
         }
         else
@@ -356,7 +365,12 @@ bool TryRespawnQueuedSoloer(int targetTeam)
     int soloer = 0;
     while (!SoloQueue.Empty)
     {
-        int candidate = SoloQueue.Pop();
+        // SoloQueue stores GetClientUserId, not raw client index — prevents
+        // slot-reuse bug where a client disconnects + a new client takes their
+        // slot before the queue is drained, getting silently respawned as if
+        // they had self-soloed. Resolve userid back to current client at pop.
+        int userid = SoloQueue.Pop();
+        int candidate = GetClientOfUserId(userid);
         if (candidate <= 0 || candidate > MaxClients) continue;
         if (!IsClientInGame(candidate))               continue;
         if (!SoloEnabled[candidate])                  continue;
@@ -478,7 +492,7 @@ void ReshuffleAndRespawnAll(int deadClient)
             if (SoloQueue.Empty) FormatEx(nameBuffer, sizeof(nameBuffer), "%N", client);
             else                 FormatEx(nameBuffer, sizeof(nameBuffer), ", %N", client);
             StrCat(listBuffer, sizeof(listBuffer), nameBuffer);
-            SoloQueue.Push(client);
+            SoloQueue.Push(GetClientUserId(client));  // userid not raw index — see TryRespawnQueuedSoloer
 
             CPrintToChat(client, "%t",
                 CvarSoloPriority.BoolValue
@@ -501,7 +515,7 @@ void ReshuffleAndRespawnAll(int deadClient)
             if (SoloQueue.Empty) FormatEx(nameBuffer, sizeof(nameBuffer), "%N", winner);
             else                 FormatEx(nameBuffer, sizeof(nameBuffer), ", %N", winner);
             StrCat(listBuffer, sizeof(listBuffer), nameBuffer);
-            SoloQueue.Push(winner);
+            SoloQueue.Push(GetClientUserId(winner));  // userid not raw index — see TryRespawnQueuedSoloer
 
             CPrintToChat(winner, "%t",
                 CvarSoloPriority.BoolValue
@@ -541,7 +555,7 @@ void Frame_RespawnDeadClient(any userid)
 
     for (int c = 1; c <= MaxClients; c++)
     {
-        if (IsClientInGame(c) && !IsFakeClient(c) && !SoloEnabled[c])
+        if (TFDB_IsRealHuman(c) && !SoloEnabled[c])
             EmitSoundToClient(c, SOUND_RESPAWN, _, _, _, _, CvarHornVolume.FloatValue);
     }
 }
@@ -573,6 +587,21 @@ public Action Cmd_Solo(int client, int args)
         ReplyToCommand(client, "[TFDB] sm_solo is an in-game command.");
         return Plugin_Handled;
     }
+    if (!TFDB_IsRealHuman(client))
+    {
+        return Plugin_Handled;
+    }
+    // Solo only makes sense for active players. Spectators can't be "soloed"
+    // (they're not even on a team) and the flag persisting across team changes
+    // led to silent unpredictable behavior on rejoin.
+    if (GetClientTeam(client) <= view_as<int>(TFTeam_Spectator))
+    {
+        if (TranslationPhraseExists("DeathMatch_MustBeOnTeam"))
+            CReplyToCommand(client, "%t", "DeathMatch_MustBeOnTeam");
+        else
+            CReplyToCommand(client, "[TFDB] You must be on RED or BLU to enable solo.");
+        return Plugin_Handled;
+    }
 
     if (!CvarSoloEnabled.BoolValue)
     {
@@ -598,7 +627,7 @@ public Action Cmd_Solo(int client, int args)
     // Toggle on — if alive, add to queue and suicide
     if (IsAliveInGame(client) && RoundStarted)
     {
-        SoloQueue.Push(client);
+        SoloQueue.Push(GetClientUserId(client));  // userid not raw index — see TryRespawnQueuedSoloer
         ForcePlayerSuicide(client);
     }
 
@@ -627,6 +656,26 @@ public Action Cmd_ToggleDeathMatch(int client, int args)
 
 public Action Cmd_VoteDeathMatch(int client, int args)
 {
+    // Guard quartet — was missing all four. console (client=0) hitting this
+    // would crash on the FormatEx %T path with an invalid client.
+    if (client == 0)
+    {
+        ReplyToCommand(client, "Command is in-game only.");
+        return Plugin_Handled;
+    }
+    if (!TFDB_IsRealHuman(client))
+    {
+        return Plugin_Handled;
+    }
+    if (GetClientTeam(client) <= view_as<int>(TFTeam_Spectator))
+    {
+        if (TranslationPhraseExists("DeathMatch_MustBeOnTeam"))
+            CReplyToCommand(client, "%t", "DeathMatch_MustBeOnTeam");
+        else
+            CReplyToCommand(client, "[TFDB] You must be on RED or BLU to call a DeathMatch vote.");
+        return Plugin_Handled;
+    }
+
     if (!CvarNEREnabled.BoolValue)
     {
         CReplyToCommand(client, "%t", "DeathMatch_NER_Not_Allowed");
@@ -670,7 +719,7 @@ public Action Cmd_VoteDeathMatch(int client, int args)
     int[] voters = new int[MaxClients];
     for (int c = 1; c <= MaxClients; c++)
     {
-        if (!IsClientInGame(c) || IsFakeClient(c)) continue;
+        if (!TFDB_IsRealHumanPlaying(c)) continue;  // specs don't vote on active gameplay
         voters[voterCount++] = c;
     }
 

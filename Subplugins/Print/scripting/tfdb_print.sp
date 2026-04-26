@@ -3,6 +3,7 @@
 
 #include <sourcemod>
 #include <multicolors>
+#include <tfdb_clientcheck>
 
 #define PLUGIN_NAME        "[TFDB] Print & replace client indexes"
 #define PLUGIN_AUTHOR      "x07x08 & Silorak"
@@ -221,7 +222,7 @@ void PrintPhrase(const char[] phrase, const char args[32][255], const any aArgs[
 	{
 		for (int i = 1; i <= MaxClients; i++)
 		{
-			if (!IsClientInGame(i) || IsFakeClient(i)) continue;
+			if (!TFDB_IsRealHuman(i)) continue;
 			
 			char buffer[512];
 			SetGlobalTransTarget(i);

@@ -3,6 +3,7 @@
 
 #include <sourcemod>
 #include <sdkhooks>
+#include <tfdb_clientcheck>
 
 #undef REQUIRE_EXTENSIONS
 #include <collisionhook>

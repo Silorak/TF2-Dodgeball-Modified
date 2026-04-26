@@ -7,6 +7,12 @@
 #include <multicolors>
 
 #include <tfdb>
+#include <tfdb_clientcheck>
+// FFA only needs to refuse Guardian + PvB (DM and FFA coexist intentionally).
+#undef REQUIRE_PLUGIN
+#tryinclude <tfdb_guardian>
+#tryinclude <tfdb_pvb>
+#define REQUIRE_PLUGIN
 
 #define PLUGIN_NAME        "[TFDB] Free-for-All"
 #define PLUGIN_AUTHOR      "x07x08, Silorak"
@@ -56,7 +62,14 @@ public void OnPluginStart()
 	
 	RegAdminCmd("sm_ffa", CmdToggleFFA, ADMFLAG_CONFIG, "Forcefully toggle FFA");
 	RegConsoleCmd("sm_voteffa", CmdVoteFFA, "Start a vote to toggle FFA");
-	
+
+	// Cross-plugin mutex surface: register the library + an `IsFFAActive`
+	// native so PvB / Guardian / DeathMatch can refuse to coexist with FFA.
+	// Pattern matches Guardian / PvB / DM. Without this, PvB silently spawned
+	// a bot during FFA which made the bot neutral and broke 1v1 semantics.
+	RegPluginLibrary("tfdb_ffa");
+	CreateNative("TFDB_IsFFAActive", Native_IsFFAActive);
+
 	if (!TFDB_IsDodgeballEnabled()) return;
 	
 	TFDB_OnRocketsConfigExecuted("general.cfg");
@@ -259,17 +272,53 @@ public void OnRoundStart(Event event, char[] eventName, bool dontBroadcast)
 	}
 }
 
+/**
+ * Returns true if Guardian or PvB is currently active. Used to gate FFA enable.
+ *
+ * NOTE: DeathMatch (NER/Solo) is intentionally NOT in this list — DM and FFA
+ * coexist fine. DM swaps players between RED/BLU; FFA makes rockets neutral.
+ * Different layers, no conflict. Only Guardian (boss-on-BLU rule) and PvB
+ * (1v1 team-vs-team) actually break under FFA.
+ *
+ * Each check uses the standard three-gate (LibraryExists + FeatureStatus +
+ * native call) to avoid "Plugin owning this native is currently paused"
+ * exceptions when a partner plugin crashed/paused after load.
+ */
+bool IsModeActive()
+{
+	if (LibraryExists("tfdb_guardian") &&
+	    GetFeatureStatus(FeatureType_Native, "TFDB_IsGuardianActive") == FeatureStatus_Available &&
+	    TFDB_IsGuardianActive())
+		return true;
+
+	if (LibraryExists("tfdb_pvb") &&
+	    GetFeatureStatus(FeatureType_Native, "TFDB_IsPvBActive") == FeatureStatus_Available &&
+	    TFDB_IsPvBActive())
+		return true;
+
+	return false;
+}
+
 public Action CmdToggleFFA(int client, int args)
 {
 	if (!TFDB_IsDodgeballEnabled())
 	{
 		CReplyToCommand(client, "%t", "Command_Disabled");
-		
+
 		return Plugin_Handled;
 	}
-	
+
+	// Preemptive mutex — refuse to enable FFA while Guardian/PvB/DM is active.
+	// (If FFA is already on, allow the toggle-OFF path to proceed regardless —
+	// admins should always be able to turn FFA off.)
+	if (!FFAEnabled && IsModeActive())
+	{
+		CReplyToCommand(client, "{olive}[TFDB]{default} Cannot enable FFA while Guardian / PvB / DeathMatch is active.");
+		return Plugin_Handled;
+	}
+
 	ToggleFFA();
-	
+
 	return Plugin_Handled;
 }
 
@@ -279,10 +328,34 @@ public Action CmdVoteFFA(int client, int args)
 	{
 		// CReplyToCommand prints the message twice...
 		ReplyToCommand(client, "Command is in-game only.");
-		
+
 		return Plugin_Handled;
 	}
-	
+
+	// Reject bots and disconnect-mid-flight callers.
+	if (!TFDB_IsRealHuman(client))
+	{
+		return Plugin_Handled;
+	}
+
+	// Spectators can't start gameplay-altering votes.
+	if (GetClientTeam(client) <= view_as<int>(TFTeam_Spectator))
+	{
+		if (TranslationPhraseExists("Dodgeball_Vote_MustBeOnTeam"))
+			CReplyToCommand(client, "%t", "Dodgeball_Vote_MustBeOnTeam");
+		else
+			CReplyToCommand(client, "[TFDB] You must be on RED or BLU to call a vote.");
+		return Plugin_Handled;
+	}
+
+	// Preemptive mutex — same logic as CmdToggleFFA. Refuse VOTE-TO-ENABLE when
+	// a partner mode is running (vote-to-disable is allowed regardless).
+	if (!FFAEnabled && IsModeActive())
+	{
+		CReplyToCommand(client, "{olive}[TFDB]{default} Cannot vote for FFA while Guardian / PvB / DeathMatch is active.");
+		return Plugin_Handled;
+	}
+
 	if (!TFDB_IsDodgeballEnabled())
 	{
 		CReplyToCommand(client, "%t", "Command_Disabled");
@@ -349,7 +422,7 @@ void StartFFAVote()
 	
 	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(client) || IsFakeClient(client) || GetClientTeam(client) <= 1)
+		if (!TFDB_IsRealHumanPlaying(client))
 		{
 			continue;
 		}
@@ -629,4 +702,18 @@ void UpdateClientWearablesTeam(int client, int team)
 			SetEntProp(entity, Prop_Send, "m_iTeamNum", team);
 		}
 	}
+}
+
+// ============================================================================
+// Cross-plugin mutex
+// ============================================================================
+
+/**
+ * TFDB_IsFFAActive() — true while FFA toggle is on. Used by PvB / Guardian /
+ * DeathMatch to refuse to coexist with FFA (FFA flips rocket teams to neutral
+ * which breaks the bot-vs-humans team semantics those modes assume).
+ */
+public any Native_IsFFAActive(Handle plugin, int numParams)
+{
+	return FFAEnabled;
 }

@@ -2,9 +2,11 @@
 #pragma newdecls required
 
 #include <sourcemod>
+#include <tf2_stocks>          // TFTeam_Red/Blue/Spectator enum
 #include <multicolors>
 
 #include <tfdb>
+#include <tfdb_clientcheck>
 
 #define PLUGIN_NAME        "[TFDB] Votes"
 #define PLUGIN_AUTHOR      "x07x08, Silorak"
@@ -42,8 +44,22 @@ float LastClientVoteTime[MAXPLAYERS + 1];
 // Returns true if the client is throttled (caller must reply + early-return).
 bool IsClientVoteThrottled(int client)
 {
-	if (!IsClientInGame(client) || IsFakeClient(client)) return true;
+	if (!TFDB_IsRealHuman(client)) return true;
 	return (GetGameTime() - LastClientVoteTime[client]) < CLIENT_VOTE_COOLDOWN;
+}
+
+// Returns true if client is on a play team (RED or BLU). Use to gate vote
+// commands that mutate live gameplay — spectators/unassigned can't call them.
+// Replies with the standard message and expects caller to early-return.
+bool IsCallerOnPlayingTeam(int client)
+{
+	int team = GetClientTeam(client);
+	if (team <= view_as<int>(TFTeam_Spectator))
+	{
+		CReplyToCommand(client, "%t", "Dodgeball_Vote_MustBeOnTeam");
+		return false;
+	}
+	return true;
 }
 
 // Clear the per-client throttle on connect so a reused slot can't inherit cooldown.
@@ -173,6 +189,8 @@ public Action CmdVoteBounce(int client, int args)
 		return Plugin_Handled;
 	}
 
+	if (!IsCallerOnPlayingTeam(client)) return Plugin_Handled;
+
 	if (!TFDB_IsDodgeballEnabled())
 	{
 		CReplyToCommand(client, "%t", "Command_Disabled");
@@ -223,7 +241,7 @@ void StartBounceVote()
 	
 	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(client) || IsFakeClient(client) || GetClientTeam(client) <= 1)
+		if (!TFDB_IsRealHumanPlaying(client))
 		{
 			continue;
 		}
@@ -336,6 +354,8 @@ public Action CmdVoteClass(int client, int args)
 		return Plugin_Handled;
 	}
 
+	if (!IsCallerOnPlayingTeam(client)) return Plugin_Handled;
+
 	if (!TFDB_IsDodgeballEnabled())
 	{
 		CReplyToCommand(client, "%t", "Command_Disabled");
@@ -395,7 +415,7 @@ void StartClassVote()
 	
 	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(client) || IsFakeClient(client) || GetClientTeam(client) <= 1)
+		if (!TFDB_IsRealHumanPlaying(client))
 		{
 			continue;
 		}
@@ -464,6 +484,8 @@ public Action CmdVoteCount(int client, int args)
 		return Plugin_Handled;
 	}
 
+	if (!IsCallerOnPlayingTeam(client)) return Plugin_Handled;
+
 	if (!TFDB_IsDodgeballEnabled())
 	{
 		CReplyToCommand(client, "%t", "Command_Disabled");
@@ -519,7 +541,7 @@ void StartCountVote()
 	
 	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(client) || IsFakeClient(client) || GetClientTeam(client) <= 1)
+		if (!TFDB_IsRealHumanPlaying(client))
 		{
 			continue;
 		}
@@ -589,6 +611,8 @@ public Action CmdVotePreset(int client, int args)
 		return Plugin_Handled;
 	}
 
+	if (!IsCallerOnPlayingTeam(client)) return Plugin_Handled;
+
 	if (!TFDB_IsDodgeballEnabled())
 	{
 		CReplyToCommand(client, "%t", "Command_Disabled");
@@ -649,7 +673,7 @@ void StartPresetVote()
 	
 	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(client) || IsFakeClient(client) || GetClientTeam(client) <= 1)
+		if (!TFDB_IsRealHumanPlaying(client))
 		{
 			continue;
 		}
@@ -732,7 +756,26 @@ public Action TFDB_OnRocketCreatedPre(int index, int &classIndex, RocketFlags &i
 public void TFDB_OnRocketCreated(int index, int entity)
 {
 	if (!BounceEnabled) return;
-	
+
+	TFDB_SetRocketBounces(index, TFDB_GetRocketClassMaxBounces(TFDB_GetRocketClass(index)));
+}
+
+/**
+ * Re-apply max-bounces every time a rocket is deflected (airblasted).
+ *
+ * Why: rocket classes with `"reset bounces" "1"` (RocketFlag_ResetBounces) zero
+ * the rocket's bounce counter on every deflect (`dodgeball_events.inc:248-251`).
+ * Without this hook, a no-bounce-mode vote ONLY affects the spawn rocket — the
+ * moment a player airblasts it, the deflect-reset undoes the vote and the
+ * rocket bounces freely. Re-locking on every deflect makes the vote stick.
+ *
+ * Forward fires AFTER core's deflect processing, so RocketBounces[i] is
+ * already 0 by the time this runs — we restore it to MaxBounces[class].
+ */
+public void TFDB_OnRocketDeflect(int index, int entity, int owner)
+{
+	if (!BounceEnabled) return;
+
 	TFDB_SetRocketBounces(index, TFDB_GetRocketClassMaxBounces(TFDB_GetRocketClass(index)));
 }
 

@@ -13,6 +13,7 @@
 #include <multicolors>
 
 #include <tfdb>
+#include <tfdb_clientcheck>
 
 // *********************************************************************************
 // CONSTANTS
@@ -48,6 +49,20 @@ ConVar CvarDelayPreventionSpeedup;
 ConVar CvarNoTargetRedirectDamage;
 ConVar CvarStealMessage;
 ConVar CvarDelayMessage;
+
+// Cached cvar values — populated on plugin start and refreshed via change-hooks.
+// Hot paths (HomingRocketThink / RocketLegacyThink / SharedRocketThink / CheckRoundDelays)
+// read these instead of going through ConVar.BoolValue / .FloatValue every tick.
+bool  g_CacheStealPreventionDamage;
+bool  g_CacheNoTargetRedirectDamage;
+bool  g_CacheDelayPrevention;
+float g_CacheDelayPreventionTime;
+
+// Per-team alive counts. [0]=unused, [1]=spectator (unused), [2]=RED, [3]=BLU.
+// Maintained incrementally via player_spawn / player_death / player_team /
+// OnClientDisconnect, with a full RecountAlive() at round_start and EnableDodgeBall.
+// Replaces O(MaxClients) scans in BothTeamsPlaying / CountAlivePlayers.
+int g_AliveCount[4];
 
 // -----<<< Built-in Features (cfg-controlled) >>>-----
 bool UsePushPrevention;
@@ -100,6 +115,10 @@ char WebPlayerUrl[256];
 // Rockets
 bool        RocketIsValid[MAX_ROCKETS];
 int         RocketEntity[MAX_ROCKETS];
+// O(1) reverse lookup: entity index -> rocket slot. Avoids the linear FindRocketByEntity
+// scan in hot event paths. MAX_EDICTS = 2048 in Source; one extra cell for [0] sentinel.
+// Initialized in EnableDodgeBall and refreshed via CreateRocket / DestroyRocket.
+int         g_EntityIndexToRocketSlot[2049];
 int         RocketTarget[MAX_ROCKETS];
 int         RocketClass[MAX_ROCKETS];
 RocketFlags RocketInstanceFlags[MAX_ROCKETS];
@@ -157,6 +176,9 @@ DataPack       RocketClassCmdsOnNoTarget[MAX_ROCKET_CLASSES];
 int            RocketClassMaxBounces[MAX_ROCKET_CLASSES];
 float          RocketClassBounceCeiling[MAX_ROCKET_CLASSES];  // Max bounce arc height in HU. 0 = no clamp. See physics/bounce-ceiling.
 int            RocketClassCritGlowStack[MAX_ROCKET_CLASSES];  // How many crit glow particles stack on rocket (1-MAX_CRIT_STACK). 1 = default.
+char           RocketClassCritGlowParticleRed[MAX_ROCKET_CLASSES][32];     // Per-class crit glow particle name for RED rocket. Empty = default "critical_rocket_red".
+char           RocketClassCritGlowParticleBlue[MAX_ROCKET_CLASSES][32];    // Per-class crit glow particle name for BLU rocket. Empty = default "critical_rocket_blue".
+char           RocketClassCritGlowParticleNeutral[MAX_ROCKET_CLASSES][32]; // Per-class crit glow particle name for neutral rocket. Empty = default "eyeboss_projectile".
 float          RocketClassOrbitTightness[MAX_ROCKET_CLASSES];
 float          RocketClassMaxSpeed[MAX_ROCKET_CLASSES];
 int            RocketClassMaxDeflections[MAX_ROCKET_CLASSES];
@@ -266,7 +288,27 @@ public void OnPluginStart()
 
 	AddTempEntHook("TFExplosion", OnTFExplosion);
 
+	// Prime hot-path cvar cache and hook future changes.
+	RefreshCachedCvars();
+	CvarStealPreventionDamage.AddChangeHook(OnCachedCvarChanged);
+	CvarNoTargetRedirectDamage.AddChangeHook(OnCachedCvarChanged);
+	CvarDelayPrevention.AddChangeHook(OnCachedCvarChanged);
+	CvarDelayPreventionTime.AddChangeHook(OnCachedCvarChanged);
+
 	RegisterCommands();
+}
+
+void RefreshCachedCvars()
+{
+	g_CacheStealPreventionDamage  = CvarStealPreventionDamage.BoolValue;
+	g_CacheNoTargetRedirectDamage = CvarNoTargetRedirectDamage.BoolValue;
+	g_CacheDelayPrevention        = CvarDelayPrevention.BoolValue;
+	g_CacheDelayPreventionTime    = CvarDelayPreventionTime.FloatValue;
+}
+
+public void OnCachedCvarChanged(ConVar cvar, const char[] oldVal, const char[] newVal)
+{
+	RefreshCachedCvars();
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
@@ -408,8 +450,10 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 	CreateNative("TFDB_SetRocketClassMaxDeflections", Native_SetRocketClassMaxDeflections);
 	CreateNative("TFDB_GetRocketClassBounceCeiling",  Native_GetRocketClassBounceCeiling);
 	CreateNative("TFDB_SetRocketClassBounceCeiling",  Native_SetRocketClassBounceCeiling);
-	CreateNative("TFDB_GetRocketClassCritGlowStack",  Native_GetRocketClassCritGlowStack);
-	CreateNative("TFDB_SetRocketClassCritGlowStack",  Native_SetRocketClassCritGlowStack);
+	CreateNative("TFDB_GetRocketClassCritGlowStack",     Native_GetRocketClassCritGlowStack);
+	CreateNative("TFDB_SetRocketClassCritGlowStack",     Native_SetRocketClassCritGlowStack);
+	CreateNative("TFDB_GetRocketClassCritGlowParticle",  Native_GetRocketClassCritGlowParticle);
+	CreateNative("TFDB_SetRocketClassCritGlowParticle",  Native_SetRocketClassCritGlowParticle);
 	CreateNative("TFDB_GetRocketClassSteeringControl", Native_GetRocketClassSteeringControl);
 	CreateNative("TFDB_SetRocketClassSteeringControl", Native_SetRocketClassSteeringControl);
 	CreateNative("TFDB_GetRocketClassBounceControl",   Native_GetRocketClassBounceControl);

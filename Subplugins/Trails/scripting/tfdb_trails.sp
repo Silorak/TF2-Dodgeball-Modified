@@ -9,6 +9,7 @@
 
 #include <tfdb>
 #include <tfdbtrails>
+#include <tfdb_clientcheck>
 
 #define PLUGIN_NAME        "[TFDB] Rocket trails"
 #define PLUGIN_AUTHOR      "x07x08, Silorak"
@@ -471,13 +472,13 @@ public Action SpriteSetTransmit(int entity, int client)
 
 public Action CmdHideTrails(int client, int args)
 {
-	if (client == 0)
+	if (client == 0 || !IsClientInGame(client) || IsFakeClient(client))
 	{
 		ReplyToCommand(client, "Command is in-game only.");
-		
+
 		return Plugin_Handled;
 	}
-	
+
 	if (!TFDB_IsDodgeballEnabled())
 	{
 		CReplyToCommand(client, "%t", "Command_Disabled");
@@ -501,13 +502,13 @@ public Action CmdHideTrails(int client, int args)
 
 public Action CmdHideSprites(int client, int args)
 {
-	if (client == 0)
+	if (client == 0 || !IsClientInGame(client) || IsFakeClient(client))
 	{
 		ReplyToCommand(client, "Command is in-game only.");
-		
+
 		return Plugin_Handled;
 	}
-	
+
 	if (!TFDB_IsDodgeballEnabled())
 	{
 		CReplyToCommand(client, "%t", "Command_Disabled");

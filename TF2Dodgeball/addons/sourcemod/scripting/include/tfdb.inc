@@ -784,6 +784,35 @@ native int TFDB_GetRocketClassCritGlowStack(int iClass);
  *  for a denser/brighter glow effect. Clamped to [1, MAX_CRIT_STACK]. */
 native void TFDB_SetRocketClassCritGlowStack(int iClass, int iStack);
 
+/**
+ * Gets the per-class crit glow particle name for a team.
+ *
+ * @param iClass    Rocket class index.
+ * @param iTeam     2 = TFTeam_Red, 3 = TFTeam_Blue, anything else = neutral.
+ * @param strBuffer Output buffer.
+ * @param iMaxLen   Buffer size.
+ *
+ * Returns the configured override (cfg key "crit glow particle red/blue/neutral",
+ * or set via TFDB_SetRocketClassCritGlowParticle). Returns an empty string when
+ * no override is set; in that case the spawner falls back to the engine defaults
+ * "critical_rocket_red", "critical_rocket_blue", "eyeboss_projectile".
+ */
+native void TFDB_GetRocketClassCritGlowParticle(int iClass, int iTeam, char[] strBuffer, int iMaxLen);
+
+/**
+ * Sets the per-class crit glow particle name for a team.
+ *
+ * @param iClass     Rocket class index.
+ * @param iTeam      2 = TFTeam_Red, 3 = TFTeam_Blue, anything else = neutral.
+ * @param strBuffer  New particle name. Pass an empty string to clear the override
+ *                   and revert to the engine default for that team.
+ *
+ * Particle name MUST exist in the ParticleEffectNames string table or it renders
+ * nothing. Takes effect on the NEXT rocket spawn — existing rockets keep their
+ * spawn-time particle.
+ */
+native void TFDB_SetRocketClassCritGlowParticle(int iClass, int iTeam, const char[] strBuffer);
+
 /** Gets per-class steering control in REAL server ticks (already scaled for this server's tickrate). */
 native int TFDB_GetRocketClassSteeringControl(int iClass);
 
@@ -1046,6 +1075,8 @@ public void __pl_TFDB_SetNTVOptional()
 	MarkNativeAsOptional("TFDB_SetRocketClassBounceCeiling");
 	MarkNativeAsOptional("TFDB_GetRocketClassCritGlowStack");
 	MarkNativeAsOptional("TFDB_SetRocketClassCritGlowStack");
+	MarkNativeAsOptional("TFDB_GetRocketClassCritGlowParticle");
+	MarkNativeAsOptional("TFDB_SetRocketClassCritGlowParticle");
 	MarkNativeAsOptional("TFDB_GetRocketClassSteeringControl");
 	MarkNativeAsOptional("TFDB_SetRocketClassSteeringControl");
 	MarkNativeAsOptional("TFDB_GetRocketClassBounceControl");

@@ -20,6 +20,10 @@ public void OnRoundStart(Event event, char[] eventName, bool dontBroadcast)
 		StealInfo[client].stoleRocket = false;
 		StealInfo[client].rocketsStolen = 0;
 	}
+
+	// Authoritative reset of cached alive counters. Catches any drift that
+	// might have accumulated through the round.
+	RecountAlive();
 }
 
 /** Called when setup phase ends. Initializes spawn points and starts the game timer. */
@@ -78,6 +82,12 @@ public void OnPlayerSpawn(Event event, char[] eventName, bool dontBroadcast)
 	int client = GetClientOfUserId(event.GetInt("userid"));
 	if (!IsValidClient(client)) return;
 
+	// Refresh cached alive counters. Recount instead of incrementing because
+	// the TF2_RespawnPlayer call below re-fires player_spawn, and a naive
+	// increment would double-count on every class-force respawn. Recount is
+	// O(MaxClients) but only runs on this rare event, not in a hot path.
+	RecountAlive();
+
 	TFClassType playerClass = TF2_GetPlayerClass(client);
 	if ((playerClass == TFClass_Pyro || playerClass == TFClass_Unknown)) return;
 
@@ -108,6 +118,16 @@ public void OnPlayerDeath(Event event, char[] eventName, bool dontBroadcast)
 
 	LastDeadClient = victim;
 	LastDeadTeam = GetClientTeam(victim);
+
+	// Decrement the dying player's team-bucket directly. We hook player_death
+	// as EventHookMode_Pre, so IsPlayerAlive(victim) may still report true
+	// here — a RecountAlive() at this moment can miss the death. The clamp
+	// to 0 guards against the rare case where the victim has already been
+	// counted out by another path (e.g. player_team firing first).
+	if (LastDeadTeam == 2 || LastDeadTeam == 3)
+	{
+		if (g_AliveCount[LastDeadTeam] > 0) g_AliveCount[LastDeadTeam]--;
+	}
 	PlayerCount = CountAlivePlayers();
 	
 	int inflictor = event.GetInt("inflictor_entindex");
@@ -138,6 +158,19 @@ public void OnPlayerDeath(Event event, char[] eventName, bool dontBroadcast)
 		if (TestFlags(RocketInstanceFlags[index], RocketFlag_OnSpawnKillCmd))
 			ExecuteCommands(RocketClassCmdsOnSpawnKill[rocketClass], rocketClass, inflictor, attacker, target, LastDeadClient, speed, deflections, mphSpeed);
 	}
+}
+
+/**
+ * Called on player_team. Refreshes cached alive counters because team
+ * changes invalidate the per-team alive bookkeeping. We recount rather than
+ * try to apply oldteam/newteam deltas — the event also fires on disconnect
+ * (with disconnect=true) and on initial join (oldteam=0/Unassigned), and
+ * IsPlayerAlive() semantics during the event vary; a full recount is
+ * unconditionally correct.
+ */
+public void OnPlayerTeam(Event event, char[] eventName, bool dontBroadcast)
+{
+	RecountAlive();
 }
 
 /** Called when player receives inventory. Removes non-flamethrower weapons and applies built-in features. */
@@ -363,6 +396,12 @@ public void OnClientDisconnect(int client)
 	{
 		LastStealer = 0;
 	}
+
+	// Refresh cached alive counters. The disconnecting client may still be
+	// reported as in-game/alive at this moment by some calls, so a recount
+	// here may double up with player_team(disconnect=true) which fires just
+	// before — that's fine, RecountAlive is idempotent.
+	RecountAlive();
 }
 
 public void OnClientConnected(int client)
@@ -587,7 +626,7 @@ public Action OnTFExplosion(const char[] teName, const int[] clients, int numCli
  */
 public Action CmdTogglePushPrevention(int client, int args)
 {
-	if (client == 0)
+	if (client == 0 || !TFDB_IsRealHuman(client))
 	{
 		ReplyToCommand(client, "Command is in-game only.");
 		return Plugin_Handled;

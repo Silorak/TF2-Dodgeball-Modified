@@ -7,6 +7,7 @@
 #include <tf2>
 #include <tf2_stocks>
 #include <multicolors>
+#include <tfdb_clientcheck>
 
 // TFDB support - use TFDB natives to get rocket ownership
 // Falls back to non-TFDB mode if TFDB not loaded
@@ -14,6 +15,7 @@
 #tryinclude <tfdb>
 #tryinclude <tfdb_guardian>
 #tryinclude <tfdb_deathmatch>
+#tryinclude <tfdb_ffa>
 #define REQUIRE_PLUGIN
 
 #define PLUGIN_VERSION "2.2.0"
@@ -93,7 +95,7 @@ enum LookState {
 bool CfgEnabled = true;          // Master enable
 int CfgBotType = 0;              // Active class index in normal mode
 int CfgMinPlayers = 1;           // Auto-enable when players <= this
-int CfgMaxPlayers = 2;           // Auto-disable when players >= this
+int CfgMaxPlayers = 2;           // Auto-disable when players > this (e.g. max_players 2 = bot allowed up to 2 humans, kicked at 3+)
 bool CfgSpeech = true;           // Master taunt toggle
 
 // --- Per-class config arrays (loaded from pvb.cfg "classes") ---
@@ -163,6 +165,8 @@ int VoteMaxPlayers = 12;      // Max players allowed to vote (loaded from config
 int ClassVotes[MAX_BOT_TYPES + 1];
 int ClassVoted[MAXPLAYERS + 1]; // Which slot this player voted for (-1 = not voted; NumBotTypes = disable)
 bool ClassVoteActive = false; // Is a class vote in progress
+bool PendingMaxPlayerDisable = false; // OnGameFrame queued a "too many players" disable; drained at round end so bot finishes the current rally
+int  PendingHotSwapType = -1;          // Vote winner queued for next-round hot-swap; -1 = no swap pending
 bool SoloMenuShown = false;   // Was the solo player menu shown
 Handle ClassVoteTimer = null;
 
@@ -241,6 +245,12 @@ bool Evading[MAXPLAYERS + 1];          // Currently in evasion action
 EvadeAction CurrentEvadeAction[MAXPLAYERS + 1]; // EVADE_JUMP or EVADE_CROUCH
 float EvadeEnd[MAXPLAYERS + 1];        // When evasion action ends
 float NextEvadeCheck[MAXPLAYERS + 1];  // Throttle evasion checks
+
+// Rate-limit per-tick CountIncomingThreats scan (full rocket loop is expensive
+// at 66 Hz x N bots). 0.1s cadence is plenty — multi-threat state doesn't
+// change faster than that in practice.
+float NextThreatScan[MAXPLAYERS + 1];
+int   CachedThreatCount[MAXPLAYERS + 1];
 
 // Post-deflect look behavior
 LookState CurrentLookState[MAXPLAYERS + 1];   // LOOK_ROCKET, LOOK_PLAYER, LOOK_IDLE
@@ -463,6 +473,16 @@ public void OnLibraryRemoved(const char[] name) {
 public void OnPluginStart() {
     LoadTranslations("tfdb.phrases.txt");
 
+    // Per-plugin log folder. Heatmap dumps + debug traces go here so they
+    // don't pollute the shared addons/sourcemod/logs/ root. Mirrors the
+    // pattern AntiCheat uses (logs/tfdb_ac/) and Guardian (logs/tfdb_guardian/).
+    char pvbLogDir[PLATFORM_MAX_PATH];
+    BuildPath(Path_SM, pvbLogDir, sizeof(pvbLogDir), "logs/tfdb_pvb");
+    if (!DirExists(pvbLogDir))
+    {
+        CreateDirectory(pvbLogDir, 511);  // 0777
+    }
+
     BrainMemory = new StringMap();
     HeatmapCells = new StringMap();
     BrainWriteQueue = new StringMap();
@@ -522,6 +542,14 @@ public void OnPluginStart() {
     RegAdminCmd("sm_reloadbotcfg", Cmd_ReloadConfig, ADMFLAG_KICK, "[ADMIN] Reload pvb.cfg");
     RegAdminCmd("sm_resetbrain", Cmd_ResetBrain, ADMFLAG_ROOT, "[ROOT] Reset bot brain (all learning data).");
     RegAdminCmd("sm_botdebug", Cmd_BotDebug, ADMFLAG_ROOT, "[ROOT] Toggle persistent bot debug logging to CSV.");
+
+    // Brain inspection commands — let admins see what the bot has actually
+    // learned. All ROOT because they expose raw policy weights and SteamID
+    // profiles. See subplugins/PvB-brain-inspection.md.
+    RegAdminCmd("sm_brainstats",     Cmd_BrainStats,     ADMFLAG_ROOT, "[ROOT] High-level brain summary: counts per policy table, heatmap cells, opponent rows.");
+    RegAdminCmd("sm_brainshow",      Cmd_BrainShow,      ADMFLAG_ROOT, "[ROOT] Show weights for a specific brain key. Usage: sm_brainshow <key>");
+    RegAdminCmd("sm_brainopponent",  Cmd_BrainOpponent,  ADMFLAG_ROOT, "[ROOT] Show stored opponent profile for a player. Usage: sm_brainopponent <#userid|name>");
+    RegAdminCmd("sm_brainheatmap",   Cmd_BrainHeatmap,   ADMFLAG_ROOT, "[ROOT] Dump current-map danger heatmap to log file. Usage: sm_brainheatmap [bot_type]");
     RegAdminCmd("sm_stopdebug", Cmd_StopDebug, ADMFLAG_ROOT, "[ROOT] Stop bot debug logging.");
     
     // === PLAYER Commands ===
@@ -760,6 +788,22 @@ public void OnMapEnd() {
     FlushHeatmap();
     FlushBrainWrites();
     SaveReactionDeltas();
+
+    // Reset vote state cleanly across map change. Without this, ClassVoteActive
+    // could survive into the next map, causing the next !votepvb to bounce off
+    // PvB_Vote_InProgress until something else clears it.
+    delete ClassVoteTimer;
+    ClassVoteTimer = null;
+    ClassVoteActive = false;
+    PendingHotSwapType = -1;
+    PendingMaxPlayerDisable = false;
+    for (int i = 1; i <= MaxClients; i++) {
+        ClassVoted[i] = -1;
+    }
+    for (int t = 0; t <= MAX_BOT_TYPES; t++) {
+        ClassVotes[t] = 0;
+    }
+
     // Training mode persists across map changes - bots will respawn in OnMapStart
 }
 
@@ -788,8 +832,7 @@ public void OnClientDisconnect(int client) {
         for (int i = 1; i <= MaxClients; i++)
         {
             if (i == client) continue;  // Skip the leaving player
-            if (!IsClientInGame(i)) continue;
-            if (IsFakeClient(i) || IsClientReplay(i) || IsClientSourceTV(i)) continue;
+            if (!TFDB_IsRealHuman(i)) continue;
             humansLeft++;
         }
 
@@ -810,15 +853,26 @@ public void OnClientPostAdminCheck(int client) {
 }
 
 void UpdateCachedCounts() {
+    // CachedRealCount = real humans on a PLAY team (RED/BLU). Spectators don't count.
+    // Every consumer of CachedRealCount asks "how many humans can play?" — a
+    // spec player is not a participant. Excluding them here is what makes
+    // PvB auto-disable when the last human goes to spec (bug 2026-04-26).
     int real = 0, fake = 0;
     for (int i = 1; i <= MaxClients; i++) {
         if (!IsClientInGame(i)) continue;
         if (IsClientReplay(i) || IsClientSourceTV(i)) continue;
-        if (IsFakeClient(i)) fake++;
-        else real++;
+        if (IsFakeClient(i)) { fake++; continue; }
+        int team = GetClientTeam(i);
+        if (team == view_as<int>(TFTeam_Red) || team == view_as<int>(TFTeam_Blue)) real++;
     }
     CachedRealCount = real;
     CachedFakeCount = fake;
+}
+
+// RequestFrame target — defers UpdateCachedCounts to one frame after a
+// player_team event so GetClientTeam returns the post-transition value.
+public void Frame_RefreshCachedCounts(any data) {
+    UpdateCachedCounts();
 }
 
 // ============================================================================
@@ -855,6 +909,18 @@ void EnablePvB() {
         TFDB_IsDeathMatchActive()) {
         CPrintToChatAll("{olive}[TFDB]{default} Cannot enable PvB while DeathMatch (NER/Solo) is active.");
         LogMessage("[PvB] EnablePvB refused: TFDB_IsDeathMatchActive() returned true");
+        return;
+    }
+
+    // FFA mutex — FFA flips rocket teams to neutral. With PvB's bot-on-BLU layout,
+    // the bot ends up neutral and friendly-fires its own teammates (paradoxical
+    // since "team" means nothing in FFA, but the bot AI doesn't model that). Plus
+    // PvB assumes 1v1 bot-vs-human team semantics throughout. Guard at activation.
+    if (LibraryExists("tfdb_ffa") &&
+        GetFeatureStatus(FeatureType_Native, "TFDB_IsFFAActive") == FeatureStatus_Available &&
+        TFDB_IsFFAActive()) {
+        CPrintToChatAll("{olive}[TFDB]{default} Cannot enable PvB while FFA is active.");
+        LogMessage("[PvB] EnablePvB refused: TFDB_IsFFAActive() returned true");
         return;
     }
 
@@ -921,6 +987,8 @@ void DisablePvB() {
     ServerCommand("mp_teams_unbalance_limit 1");  // restore default — undo EnablePvB override
     ServerCommand("tf_bot_kick all");
     BotEnabled = false;
+    PendingMaxPlayerDisable = false;  // bot is gone, drain any stale queue
+    PendingHotSwapType = -1;          // any queued vote-swap is moot now
     CachedRocketRef = INVALID_ENT_REFERENCE;
     CPrintToChatAll("%t", "PvB_Left", BotName);
 }
@@ -1036,9 +1104,8 @@ public Action Timer_AssignTrainingTypes(Handle timer) {
     if (!TrainingMode) return Plugin_Stop;
     
     for (int i = 1; i <= MaxClients; i++) {
-        if (!IsClientInGame(i) || !IsFakeClient(i)) continue;
-        if (IsClientReplay(i) || IsClientSourceTV(i)) continue;
-        
+        if (!TFDB_IsLiveBot(i)) continue;
+
         char name[MAX_NAME_LENGTH];
         GetClientName(i, name, sizeof(name));
         
@@ -1103,11 +1170,12 @@ void StopTraining() {
 // ============================================================================
 
 public Action Cmd_BotAdmin(int client, int args) {
-    if (client == 0) {
+    // Menu commands require an active client to display to. RCON path is fatal.
+    if (client == 0 || !IsClientInGame(client) || IsFakeClient(client)) {
         CReplyToCommand(client, "%t", "PvB_ConsoleOnly_Admin");
         return Plugin_Handled;
     }
-    
+
     ShowAdminMainMenu(client);
     return Plugin_Handled;
 }
@@ -1353,6 +1421,14 @@ public Action Cmd_SetBotType(int client, int args) {
 
 public Action Cmd_ReloadConfig(int client, int args) {
     LoadPvBConfig();
+    // Re-apply settings to the live bot so cfg edits take effect without
+    // requiring a hot-swap or map change. Previous behavior left runtime state
+    // (BotName, weapon attributes, taunt lines) using stale pre-reload values
+    // until next bot spawn. ApplyBotTypeSettings re-reads CfgBotType and
+    // re-pushes settings.
+    if (BotEnabled) {
+        ApplyBotTypeSettings();
+    }
     CReplyToCommand(client, "%t", "PvB_ConfigReloaded");
     return Plugin_Handled;
 }
@@ -1512,9 +1588,63 @@ public Action Cmd_BotVote(int client, int args) {
         return Plugin_Handled;
     }
 
+    // Spectators can't start a vote that affects active gameplay state. They
+    // CAN view stats via sm_botstats / sm_botmenu — that path doesn't gate on
+    // team. This only blocks vote initiation.
+    if (GetClientTeam(client) <= view_as<int>(TFTeam_Spectator)) {
+        if (TranslationPhraseExists("PvB_Vote_MustBeOnTeam")) {
+            CPrintToChat(client, "%t", "PvB_Vote_MustBeOnTeam");
+        } else {
+            CPrintToChat(client, "[TFDB] You must be on RED or BLU to vote for the bot.");
+        }
+        return Plugin_Handled;
+    }
+
+    // Preemptive mutex check — reject the vote up-front if a partner mode is
+    // active (Guardian / DeathMatch / FFA). Without this the vote runs to
+    // completion, then EnablePvB() silently fails on the same gates inside —
+    // bot never spawns and players are confused. Better to tell them now.
+    if (LibraryExists("tfdb_guardian") &&
+        GetFeatureStatus(FeatureType_Native, "TFDB_IsGuardianActive") == FeatureStatus_Available &&
+        TFDB_IsGuardianActive()) {
+        CPrintToChat(client, "{olive}[TFDB]{default} Cannot vote for bot while a Guardian round is active.");
+        return Plugin_Handled;
+    }
+    if (LibraryExists("tfdb_deathmatch") &&
+        GetFeatureStatus(FeatureType_Native, "TFDB_IsDeathMatchActive") == FeatureStatus_Available &&
+        TFDB_IsDeathMatchActive()) {
+        CPrintToChat(client, "{olive}[TFDB]{default} Cannot vote for bot while DeathMatch is active.");
+        return Plugin_Handled;
+    }
+    if (LibraryExists("tfdb_ffa") &&
+        GetFeatureStatus(FeatureType_Native, "TFDB_IsFFAActive") == FeatureStatus_Available &&
+        TFDB_IsFFAActive()) {
+        CPrintToChat(client, "{olive}[TFDB]{default} Cannot vote for bot while FFA is active.");
+        return Plugin_Handled;
+    }
+
     int currentPlayers = CachedRealCount;
     if (VoteMaxPlayers > 0 && currentPlayers > VoteMaxPlayers) {
         CPrintToChat(client, "%t", "PvB_Vote_TooManyPlayers", currentPlayers, VoteMaxPlayers);
+        return Plugin_Handled;
+    }
+
+    // Preemptive check vs CfgMaxPlayers — if the vote would pass but the bot
+    // would auto-kick the next tick due to humans > max_players, tell the
+    // player upfront with the actual cap instead of running the silent
+    // enable-then-disable cycle. Only enforce when bot is OFF (enabling); a
+    // vote to DISABLE while humans > max is fine. Skip when bot is already on
+    // and the vote could be a hot-swap or disable.
+    if (!BotEnabled && CfgMaxPlayers > 0 && currentPlayers > CfgMaxPlayers) {
+        // Guard the translation lookup — same rationale as other PvB phrases
+        // (stale global phrase cache could throw before the user runs
+        // sm_reload_translations). See sourcemod-practices/translations.md.
+        if (TranslationPhraseExists("PvB_Vote_AbovePvBLimit")) {
+            CPrintToChat(client, "%t", "PvB_Vote_AbovePvBLimit", currentPlayers, CfgMaxPlayers);
+        } else {
+            CPrintToChat(client, "[TFDB] Bot can't run with this many players (%d > %d max). Have an admin force it with !pvb.",
+                currentPlayers, CfgMaxPlayers);
+        }
         return Plugin_Handled;
     }
 
@@ -1671,8 +1801,10 @@ void StartClassVote() {
 
     CPrintToChatAll("%t", "PvB_ClassVote_Start");
 
+    // Show ballot only to players on RED or BLU. Spectators don't get to vote
+    // on active gameplay state — same rationale as the starter gate above.
     for (int i = 1; i <= MaxClients; i++) {
-        if (IsClientInGame(i) && !IsFakeClient(i)) {
+        if (TFDB_IsRealHumanPlaying(i)) {
             ShowClassVoteMenu(i);
         }
     }
@@ -1762,8 +1894,7 @@ public int MenuHandler_ClassVote(Menu menu, MenuAction action, int param1, int p
         // which updates on a separate tick).
         int humans = 0, voted = 0;
         for (int i = 1; i <= MaxClients; i++) {
-            if (!IsClientInGame(i) || IsFakeClient(i)) continue;
-            if (IsClientReplay(i) || IsClientSourceTV(i)) continue;
+            if (!TFDB_IsRealHumanPlaying(i)) continue;  // specs don't vote
             humans++;
             if (ClassVoted[i] != -1) voted++;
         }
@@ -1789,8 +1920,7 @@ public int MenuHandler_ClassVote(Menu menu, MenuAction action, int param1, int p
             // has either voted or abstained, wrap the vote now.
             int humans = 0, done = 0;
             for (int i = 1; i <= MaxClients; i++) {
-                if (!IsClientInGame(i) || IsFakeClient(i)) continue;
-                if (IsClientReplay(i) || IsClientSourceTV(i)) continue;
+                if (!TFDB_IsRealHuman(i)) continue;
                 humans++;
                 if (ClassVoted[i] != -1) done++;
             }
@@ -1858,25 +1988,57 @@ void ResolveClassVote() {
     }
 
     // Bot-type winner — switch (or enable) to that type.
-    LoadBotTypeSettings(winnerSlot);
-
     char typeName[32];
     GetBotTypeNameSafe(winnerSlot, typeName, sizeof(typeName));
-    CPrintToChatAll("%t", "PvB_ClassVote_Result", typeName, maxVotes);
 
     if (!BotEnabled) {
+        // Bot is OFF — vote enables it. Apply type immediately + spawn the bot.
+        LoadBotTypeSettings(winnerSlot);
+        CPrintToChatAll("%t", "PvB_ClassVote_Result", typeName, maxVotes);
         EnablePvB();
+    } else if (winnerSlot == CfgBotType) {
+        // Vote winner is already the active type — nothing to do, no respawn needed.
+        CPrintToChatAll("%t", "PvB_ClassVote_Result", typeName, maxVotes);
     } else {
-        // Hot-swap: bot is already running with a (possibly different) type.
-        // Kick the current bot and re-spawn under the new type so name/settings
-        // match the vote winner. LockBotQuota keeps it from being auto-replaced.
-        // BotName was updated by LoadBotTypeSettings above, so the new tf_bot_add
-        // below uses the winning type's name.
-        ServerCommand("tf_bot_kick all");
-        ServerCommand("tf_bot_add 1 Pyro blue easy \"%s\"", BotName);
-        BotNameDirty = true;
-        ApplyBotTypeSettings();
+        // Hot-swap to a DIFFERENT type while bot is running. Defer to round end
+        // so the current rally isn't interrupted mid-fight (mirrors the
+        // PendingMaxPlayerDisable pattern). If round-state is between rounds
+        // already, swap immediately.
+        PendingHotSwapType = winnerSlot;
+        if (GameRules_GetRoundState() == RoundState_RoundRunning) {
+            if (TranslationPhraseExists("PvB_HotSwap_Deferred")) {
+                CPrintToChatAll("%t", "PvB_HotSwap_Deferred", typeName);
+            } else {
+                CPrintToChatAll("[TFDB] Vote passed: bot will switch to %s at end of this round.", typeName);
+            }
+        } else {
+            // Already between rounds — apply now, no rally to interrupt.
+            ApplyHotSwap();
+        }
     }
+}
+
+/**
+ * Drain a pending bot hot-swap. Called from Event_RoundEnd. Kicks the current
+ * bot, loads the new type's settings, spawns a fresh bot under the new type.
+ * Deliberately NOT called mid-round so the active rally doesn't get a phantom
+ * bot disappearance.
+ */
+void ApplyHotSwap()
+{
+    if (PendingHotSwapType < 0 || PendingHotSwapType >= NumBotTypes) {
+        PendingHotSwapType = -1;
+        return;
+    }
+
+    LoadBotTypeSettings(PendingHotSwapType);
+    PendingHotSwapType = -1;
+
+    // BotName was updated by LoadBotTypeSettings; the fresh tf_bot_add uses it.
+    ServerCommand("tf_bot_kick all");
+    ServerCommand("tf_bot_add 1 Pyro blue easy \"%s\"", BotName);
+    BotNameDirty = true;
+    ApplyBotTypeSettings();
 }
 
 // ============================================================================
@@ -1993,9 +2155,23 @@ public void OnGameFrame() {
         // Without this block, nothing happens here - we just skip auto-enable.
     }
 
-    if (isEvenTick && maxP != 0 && humans > 0 && humans >= maxP && BotEnabled && !CommandForced && !MapChanged && !TrainingMode) {
-        DisablePvB();
-        CommandDisabled = false;
+    // Auto-disable when humans EXCEED max_players. Strict > (not >=) so a
+    // vote-confirmed bot at exactly max_players doesn't get kicked the next
+    // tick. Override with `!pvb` admin toggle (sets CommandForced).
+    //
+    // Deferred to round end (queued via PendingMaxPlayerDisable). Triggering
+    // mid-round was jarring — bot would vanish mid-rally when a 3rd player
+    // joins. The flag is checked + drained in OnRoundWin / OnRoundEnd.
+    if (isEvenTick && maxP != 0 && humans > 0 && humans > maxP && BotEnabled && !CommandForced && !MapChanged && !TrainingMode) {
+        if (!PendingMaxPlayerDisable) {
+            PendingMaxPlayerDisable = true;
+            // Guarded translation lookup — see sourcemod-practices/translations.md.
+            if (TranslationPhraseExists("PvB_TooManyPlayers_DeferredDisable")) {
+                CPrintToChatAll("%t", "PvB_TooManyPlayers_DeferredDisable", humans, maxP);
+            } else {
+                CPrintToChatAll("[TFDB] %d players exceeds PvB max (%d). Bot will leave at end of this round.", humans, maxP);
+            }
+        }
     }
 }
 
@@ -2140,14 +2316,25 @@ public Action Listener_BlockPvBTeamCollision(int client, const char[] command, i
 
 public Action Event_PlayerTeamChange(Event event, const char[] name, bool dontBroadcast)
 {
-    // Only normal PvB mode enforces team placement. Training mode is permissive.
-    if (!BotEnabled || TrainingMode) return Plugin_Continue;
-
     int client = GetClientOfUserId(event.GetInt("userid"));
     if (client <= 0 || client > MaxClients) return Plugin_Continue;
     if (IsFakeClient(client)) return Plugin_Continue;
 
     int newTeam = event.GetInt("team");
+
+    // Refresh playing-human count on EVERY transition — this is what makes
+    // PvB auto-disable when the last human goes to spec. The OnGameFrame
+    // disable check at line ~2114 reads CachedRealCount; without this update
+    // it stays stale until next disconnect / admincheck.
+    //
+    // Hook is EventHookMode_Pre — GetClientTeam still returns the OLD team at
+    // this moment. Defer to next frame so UpdateCachedCounts sees the real
+    // post-transition state. (2026-04-26 fix: bot lingered when last human
+    // went to spec because the count was sampled pre-transition.)
+    RequestFrame(Frame_RefreshCachedCounts);
+
+    // The remaining BLU collision backstop only matters in active PvB mode.
+    if (!BotEnabled || TrainingMode) return Plugin_Continue;
 
     // Human on BLU is a collision → schedule force-to-RED backstop.
     // ManageTeams handles the steady-state, this covers the race where the
@@ -2212,6 +2399,15 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
     DumpRoundTelemetry(winner);
     FlushBrainWrites();  // persist batched brain updates once per round
 
+    // Persist opponent profiles for every connected human. SaveOpponentToDB
+    // alone on OnClientDisconnect was insufficient — server crash or admin
+    // map-change with players still on it = lost profile data. Round end is
+    // the natural commit point for the bot/player tendency table. The save
+    // path early-outs on zero-activity rows so this is cheap for fresh joins.
+    for (int i = 1; i <= MaxClients; i++) {
+        if (TFDB_IsRealHumanPlaying(i)) SaveOpponentToDB(i);
+    }
+
     // League diversity tracking runs only in training mode, where both teams
     // are bots and a "type vs type" win means something. In normal PvB (humans
     // vs one bot class) the data is one-sided and not useful.
@@ -2219,6 +2415,27 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
         TrackTypeOutcomes(winner);
         CheckDiversityAndFlagExploiter();
         RebalanceTrainingTypes();
+    }
+
+    // Drain the deferred "too many players" disable now — current rally has
+    // ended, safe to kick the bot. OnGameFrame queues this when humans > maxP
+    // so the bot finishes the round before disappearing.
+    if (PendingMaxPlayerDisable && !TrainingMode) {
+        PendingMaxPlayerDisable = false;
+        // Re-check the condition — humans may have left during the round.
+        if (CachedRealCount > CfgMaxPlayers && !CommandForced) {
+            DisablePvB();
+            CommandDisabled = false;
+        }
+    }
+
+    // Drain pending hot-swap (vote-driven type change). Doing this AFTER the
+    // disable check above means a hot-swap that was queued just before a
+    // max-player overflow won't try to swap a bot that's about to be kicked.
+    if (PendingHotSwapType >= 0 && BotEnabled && !TrainingMode) {
+        ApplyHotSwap();
+    } else {
+        PendingHotSwapType = -1;  // bot got disabled before the swap could fire
     }
 
     return Plugin_Continue;
@@ -2232,8 +2449,7 @@ void TrackTypeOutcomes(int winner) {
     bool wonThisRound[MAX_BOT_TYPES];
 
     for (int i = 1; i <= MaxClients; i++) {
-        if (!IsClientInGame(i) || !IsFakeClient(i)) continue;
-        if (IsClientReplay(i) || IsClientSourceTV(i)) continue;
+        if (!TFDB_IsLiveBot(i)) continue;
         int bt = GetEffectiveBotType(i);
         if (bt < 0 || bt >= NumBotTypes) continue;
         present[bt] = true;
@@ -2313,8 +2529,7 @@ void RebalanceTrainingTypes() {
     // wasn't on the losing team (so we're taking from the "stronger" side).
     int candidate = -1;
     for (int i = 1; i <= MaxClients; i++) {
-        if (!IsClientInGame(i) || !IsFakeClient(i)) continue;
-        if (IsClientReplay(i) || IsClientSourceTV(i)) continue;
+        if (!TFDB_IsLiveBot(i)) continue;
         if (TrainingBotType[i] != ExploiterTargetType) continue;
         candidate = i;
         break;  // first match is fine; randomness comes from turn-order
@@ -2350,8 +2565,7 @@ void DumpRoundTelemetry(int winner) {
     int totalBotDeflects = 0;
 
     for (int i = 1; i <= MaxClients; i++) {
-        if (!IsClientInGame(i) || !IsFakeClient(i)) continue;
-        if (IsClientReplay(i) || IsClientSourceTV(i)) continue;
+        if (!TFDB_IsLiveBot(i)) continue;
 
         int botType = GetEffectiveBotType(i);
         if (botType < 0 || botType >= NumBotTypes) continue;
@@ -2428,7 +2642,7 @@ public Action Timer_ShowBotMenu(Handle timer) {
 
 void ShowBotTypeMenuToAll() {
     for (int i = 1; i <= MaxClients; i++) {
-        if (IsClientInGame(i) && !IsFakeClient(i)) {
+        if (TFDB_IsRealHuman(i)) {
             ShowBotTypeMenu(i);
             break;
         }
@@ -3018,6 +3232,11 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
     // STATUE-LIKE CLASS: skip ALL movement logic. Stand still. That's it.
     if (ClassIsStatueLike[botType]) {
+        if (CurrentMoveMode[client] != MOVE_IDLE && DebugActive) {
+            char det[96];
+            FormatEx(det, sizeof(det), "ClassIsStatueLike=1 -> MOVE_IDLE (forced)");
+            DebugLogDecision(client, "MoveMode", det);
+        }
         CurrentMoveMode[client] = MOVE_IDLE;
     }
 
@@ -3027,6 +3246,11 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     // The mode-reroll block below is guarded on !CfgIdleAlways, so no
     // expiry-timer trickery is needed.
     if (CfgIdleAlways[botType]) {
+        if (CurrentMoveMode[client] != MOVE_IDLE && DebugActive) {
+            char det[96];
+            FormatEx(det, sizeof(det), "CfgIdleAlways=1 (idle_chance>=100) -> MOVE_IDLE (forced)");
+            DebugLogDecision(client, "MoveMode", det);
+        }
         CurrentMoveMode[client] = MOVE_IDLE;
     }
 
@@ -3047,6 +3271,15 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
             bool wantIdle = CfgCanIdle[botType] && (GetRandomFloat(0.0, 100.0) < 80.0);
             CurrentMoveMode[client] = wantIdle ? MOVE_IDLE : MOVE_WANDER;
             MoveModeEnd[client] = engineTime + GetRandomFloat(1.0, 3.0);
+
+            if (DebugActive) {
+                char det[160];
+                FormatEx(det, sizeof(det),
+                    "HIGH_DEFLECT_OVERRIDE moveSpeed=%.0f Deflects=%d CfgCanIdle=%d roll<80? wantIdle=%d -> %s",
+                    moveSpeed, Deflects, CfgCanIdle[botType] ? 1 : 0, wantIdle ? 1 : 0,
+                    wantIdle ? "MOVE_IDLE" : "MOVE_WANDER");
+                DebugLogDecision(client, "MoveMode", det);
+            }
         } else {
             CurrentMoveMode[client] = DecideMovement(client, moveSpeed, botType);
         }
@@ -3483,10 +3716,34 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     int bestRocket = GetCachedRocketForClient(client);
     float bestDist = 999999.0;
 
-    if (bestRocket != -1) {
-        float rPos[3];
-        GetEntPropVector(bestRocket, Prop_Data, "m_vecOrigin", rPos);
-        bestDist = GetVectorDistance(eyePos, rPos);
+    // --- bestRocket cache (perf): resolve once per usercmd, reuse below ---
+    // bestRocket is not reassigned after this point in OnPlayerRunCmd, so these
+    // values stay valid for the rest of the function. Saves ~9 prop reads,
+    // 4 IsRocketTargetingClient calls, and 3 TFDB_FindRocketByEntity calls.
+    float rocketPosCache[3], rocketVelCache[3];
+    float rocketSpeedCache = 0.0;
+    int   rocketIdxCache       = -1;
+    int   rocketTargetCache    = -1;
+    bool  rocketTargetsMeCache = false;
+    if (bestRocket > 0 && IsValidEntity(bestRocket)) {
+        GetEntPropVector(bestRocket, Prop_Data, "m_vecOrigin",      rocketPosCache);
+        GetEntPropVector(bestRocket, Prop_Data, "m_vecAbsVelocity", rocketVelCache);
+        rocketSpeedCache = GetVectorLength(rocketVelCache);
+        // Mirror IsRocketTargetingClient semantics: target==client or untargeted
+        // counts as "targets me"; if TFDB isn't loaded, treat as ours (true).
+        rocketTargetsMeCache = true;
+        #if defined _tfdb_included
+        if (TFDBAvailable && TFDB_IsDodgeballEnabled()) {
+            rocketIdxCache = TFDB_FindRocketByEntity(bestRocket);
+            if (rocketIdxCache >= 0) {
+                rocketTargetCache = TFDB_GetRocketTarget(rocketIdxCache);
+                rocketTargetsMeCache = (rocketTargetCache == client || rocketTargetCache <= 0);
+            }
+            // If rocketIdxCache == -1, the rocket isn't tracked by TFDB; the
+            // original IsRocketTargetingClient returns true in that path too.
+        }
+        #endif
+        bestDist = GetVectorDistance(eyePos, rocketPosCache);
     }
 
     // =====================================================================
@@ -3563,7 +3820,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     // Human-like awareness: players watch rockets even when not targeted — they
     // track them with peripheral vision (soft aim factor handled later).
     // Only drop to idle for very far, very non-threatening situations.
-    bool rocketTargetsUs = IsRocketTargetingClient(bestRocket, client);
+    bool rocketTargetsUs = rocketTargetsMeCache;
     if (rocketTargetsUs) {
         // Our rocket — always track it
         CurrentLookState[client] = LOOK_ROCKET;
@@ -3597,8 +3854,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     // Skip if we own this rocket
     #if defined _tfdb_included
     if (TFDBAvailable && TFDB_IsDodgeballEnabled()) {
-        int rocketIdx = TFDB_FindRocketByEntity(bestRocket);
-        if (rocketIdx != -1 && TFDB_GetRocketOwner(rocketIdx) == client) {
+        if (rocketIdxCache != -1 && TFDB_GetRocketOwner(rocketIdxCache) == client) {
             return Plugin_Changed;
         }
     }
@@ -3610,10 +3866,10 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     // Blends dodge into existing movement instead of overriding it.
     // Statue bots don't dodge — standing still is their identity.
     // =====================================================================
-    if (!IsRocketTargetingClient(bestRocket, client) && !ClassIsStatueLike[botType]) {
+    if (!rocketTargetsMeCache && !ClassIsStatueLike[botType]) {
         float rPos[3], rVel[3];
-        GetEntPropVector(bestRocket, Prop_Data, "m_vecOrigin", rPos);
-        GetEntPropVector(bestRocket, Prop_Data, "m_vecAbsVelocity", rVel);
+        rPos = rocketPosCache;
+        rVel = rocketVelCache;
 
         // Predict closest approach distance: how close will this rocket pass?
         float toBot[3];
@@ -3669,11 +3925,11 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     // =====================================================================
     if (!IsValidEntity(bestRocket)) return Plugin_Changed;
     float rocketPos[3];
-    GetEntPropVector(bestRocket, Prop_Data, "m_vecOrigin", rocketPos);
-    
+    rocketPos = rocketPosCache;
+
     float rocketVelPredict[3];
-    GetEntPropVector(bestRocket, Prop_Data, "m_vecAbsVelocity", rocketVelPredict);
-    float currentSpeed = GetVectorLength(rocketVelPredict);
+    rocketVelPredict = rocketVelCache;
+    float currentSpeed = rocketSpeedCache;
     
     float aimAngle[3];
     
@@ -3717,9 +3973,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
         float learnedReactMin, learnedReactMax;
         GetLearnedReactionWindow(botType, learnedReactMin, learnedReactMax);
         float reactTime = GetRandomFloat(learnedReactMin, learnedReactMax);
-        float timingVel[3];
-        GetEntPropVector(bestRocket, Prop_Data, "m_vecAbsVelocity", timingVel);
-        rocketSpeed = GetVectorLength(timingVel);
+        rocketSpeed = rocketSpeedCache;
         if (rocketSpeed < 100.0) rocketSpeed = 800.0;
         
         float reactMult = DecideReactMultiplier(client, rocketSpeed, botType);
@@ -3756,9 +4010,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
         Trick[client] = DecideTrick(client, rocketSpeed, botType);
         ComputeStateKey(client, rocketSpeed, botType);
     } else {
-        float curVel[3];
-        GetEntPropVector(bestRocket, Prop_Data, "m_vecAbsVelocity", curVel);
-        rocketSpeed = GetVectorLength(curVel);
+        rocketSpeed = rocketSpeedCache;
         if (rocketSpeed < 100.0) rocketSpeed = 800.0;
     }
 
@@ -3771,9 +4023,8 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     float rocketTurnRate = 0.0;
     #if defined _tfdb_included
     if (TFDBAvailable && TFDB_IsDodgeballEnabled() && bestRocket != -1) {
-        int rocketIdx = TFDB_FindRocketByEntity(bestRocket);
-        if (rocketIdx != -1) {
-            int rocketClass = TFDB_GetRocketClass(rocketIdx);
+        if (rocketIdxCache != -1) {
+            int rocketClass = TFDB_GetRocketClass(rocketIdxCache);
             if (rocketClass >= 0) {
                 rocketTurnRate = TFDB_GetRocketClassTurnRate(rocketClass);
             }
@@ -3837,7 +4088,11 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     // Block orbit entry when multi-threat detected. Orbit's back-phase is
     // safe against ONE rocket (strafe perpendicular) but catastrophic
     // against two (back-phase into second rocket's path).
-    int incomingThreats = CountIncomingThreats(client);
+    if (engineTime >= NextThreatScan[client]) {
+        CachedThreatCount[client] = CountIncomingThreats(client);
+        NextThreatScan[client]    = engineTime + 0.1;
+    }
+    int incomingThreats = CachedThreatCount[client];
     bool multiThreat = (incomingThreats >= 2);
 
     // Normal orbit decision (not for statue bots, not during traversal, not multi-threat, not if orbit capability removed)
@@ -3992,9 +4247,8 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
         int targetOfRocket = -1;
         #if defined _tfdb_included
         if (TFDBAvailable && TFDB_IsDodgeballEnabled()) {
-            int rocketIdx = TFDB_FindRocketByEntity(bestRocket);
-            if (rocketIdx != -1) {
-                targetOfRocket = TFDB_GetRocketTarget(rocketIdx);
+            if (rocketIdxCache != -1) {
+                targetOfRocket = rocketTargetCache;
             }
         }
         #endif
@@ -4012,21 +4266,47 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
         if (!isApproaching) {
             // Rocket heading away — never airblast (teammate's deflect or miss)
             DebugLogEvent(client, vel, angles, "skip_heading_away");
+            if (DebugActive) {
+                char abReason[64];
+                FormatEx(abReason, sizeof(abReason), "skip_heading_away approachDot=%.0f", approachDot);
+                DebugLogDecision(client, "Airblast", abReason);
+            }
         } else if (isTeammateRocket && bestDist > 150.0) {
             // Approaching but targets a teammate — let them handle it
             DebugLogEvent(client, vel, angles, "skip_teammate_rocket");
-        } else if (IsRocketTargetingClient(bestRocket, client)) {
+            if (DebugActive) {
+                char abReason[64];
+                FormatEx(abReason, sizeof(abReason), "skip_teammate_rocket dist=%.0f tgt=#%d", bestDist, targetOfRocket);
+                DebugLogDecision(client, "Airblast", abReason);
+            }
+        } else if (rocketTargetsMeCache) {
             // Rocket targeting US — always airblast
             shouldAirblast = true;
+            if (DebugActive) {
+                char abReason[64];
+                FormatEx(abReason, sizeof(abReason), "AIRBLAST targeting_us=1 dist=%.0f spd=%.0f", bestDist, rocketSpeed);
+                DebugLogDecision(client, "Airblast", abReason);
+            }
         } else if (bestDist < 150.0 && !ClassIsStatueLike[botType]) {
             // Not targeted at us but dangerously close — emergency airblast
             // Statue bots (The Wall) ONLY airblast rockets targeting them.
             // They stand still and let non-targeted rockets pass — no stealing.
             shouldAirblast = true;
             DebugLogEvent(client, vel, angles, "airblast_emergency");
+            if (DebugActive) {
+                char abReason[64];
+                FormatEx(abReason, sizeof(abReason), "AIRBLAST emergency dist=%.0f<150", bestDist);
+                DebugLogDecision(client, "Airblast", abReason);
+            }
         } else {
             // Approaching, not targeting us, not dangerously close — skip
             DebugLogEvent(client, vel, angles, "skip_not_targeted");
+            if (DebugActive) {
+                char abReason[64];
+                FormatEx(abReason, sizeof(abReason), "skip_not_targeted dist=%.0f tgt=#%d statue=%d",
+                    bestDist, targetOfRocket, ClassIsStatueLike[botType] ? 1 : 0);
+                DebugLogDecision(client, "Airblast", abReason);
+            }
         }
 
         if (shouldAirblast) {
@@ -4089,7 +4369,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     // =====================================================================
     if (HasRocket[client] && bestRocket != -1) {
         float missCheckVel[3];
-        GetEntPropVector(bestRocket, Prop_Data, "m_vecAbsVelocity", missCheckVel);
+        missCheckVel = rocketVelCache;
 
         float toRocketDir[3];
         SubtractVectors(rocketPos, eyePos, toRocketDir);
@@ -4448,6 +4728,20 @@ TrickType DecideTrick(int client, float speed, int botType) {
         choice = ChooseWeighted(LastTrickKey[client], DefTrick, NUM_TRICKS);
     }
     LastTrick[client] = choice;
+
+    if (DebugActive) {
+        static const char trickNames[NUM_TRICKS][] = {
+            "NONE", "LEFT_FLICK", "RIGHT_FLICK", "DOWN_SPIKE", "UP_SPIKE", "WAVE", "SPIN"
+        };
+        char det[224];
+        FormatEx(det, sizeof(det),
+            "DecideTrick key=%s sTier=%d dTier=%d oppTendency=%d biased=%d -> %s",
+            LastTrickKey[client], sTier, dTier, opponentTendency,
+            useBiased ? 1 : 0,
+            (choice >= 0 && choice < NUM_TRICKS) ? trickNames[choice] : "?");
+        DebugLogDecision(client, "Trick", det);
+    }
+
     return view_as<TrickType>(choice);
 }
 
@@ -4473,6 +4767,16 @@ bool DecideOrbit(int client, float speed, float turnRate, int botType) {
     BuildOrbitKey(LastOrbitKey[client], sizeof(LastOrbitKey[]), sTier, trTier, botType);
     int choice = ChooseWeighted(LastOrbitKey[client], DefOrbit, 2);
     LastOrbitChoice[client] = choice;
+
+    if (DebugActive) {
+        char det[160];
+        FormatEx(det, sizeof(det),
+            "DecideOrbit key=%s sTier=%d trTier=%d weights=[no=%d,yes=%d] -> %s",
+            LastOrbitKey[client], sTier, trTier, DefOrbit[0], DefOrbit[1],
+            (choice == 1) ? "ORBIT" : "no_orbit");
+        DebugLogDecision(client, "Orbit", det);
+    }
+
     return (choice == 1);
 }
 
@@ -4558,12 +4862,34 @@ MoveMode DecideMovement(int client, float speed, int botType) {
     }
 
     int choice = ChooseWeighted(LastMoveKey[client], modDefaults, 5);
+
     // Final safety: if the weighted roll somehow landed on IDLE for a class
     // without idle capability (e.g. persisted brain row with high idle
     // weight from before the key was removed), coerce to WANDER.
+    bool coerced = false;
     if (choice == view_as<int>(MOVE_IDLE) && !CfgCanIdle[botType] && !ClassIsStatueLike[botType]) {
         choice = view_as<int>(MOVE_WANDER);
+        coerced = true;
     }
+
+    // Decision log: emit the resolved weights + final choice. Helps debug
+    // "why did class X pick mode Y" — you'll see the cfg-driven defaults,
+    // the personality nudges, the teammate-proximity nudges, and what the
+    // brain actually voted for. The brain key encodes (speedTier, enemyTier,
+    // botType, nearTeam) so similar lines for the same key should converge
+    // to similar weights as the brain learns.
+    if (DebugActive) {
+        static const char modeNames[5][] = { "WANDER", "APPROACH", "MIRROR", "CIRCLE", "IDLE" };
+        char det[256];
+        FormatEx(det, sizeof(det),
+            "DecideMovement key=%s sTier=%d eTier=%d nearTeam=%d weights=[W%d,A%d,M%d,C%d,I%d] -> %s%s",
+            LastMoveKey[client], sTier, eTier, nearTeam,
+            modDefaults[0], modDefaults[1], modDefaults[2], modDefaults[3], modDefaults[4],
+            modeNames[choice],
+            coerced ? " (COERCED from IDLE)" : "");
+        DebugLogDecision(client, "MoveMode", det);
+    }
+
     LastMoveChoice[client] = choice;
     return view_as<MoveMode>(choice);
 }
@@ -4647,13 +4973,38 @@ float DecideAimOffset(int client, float speed, int botType) {
 
 // Evasion decision - learn when jumping/crouching is effective
 EvadeAction DecideEvasion(int client, float speed, int botType) {
-    if (!CfgCanEvade[botType]) return EVADE_NONE;  // capability removed in config
-    if (GetRandomFloat(0.0, 100.0) > CfgEvadeChance[botType]) return EVADE_NONE;
-    
+    if (!CfgCanEvade[botType]) {
+        if (DebugActive) {
+            DebugLogDecision(client, "Evade", "CfgCanEvade=0 -> EVADE_NONE (capability missing)");
+        }
+        return EVADE_NONE;  // capability removed in config
+    }
+    float roll = GetRandomFloat(0.0, 100.0);
+    if (roll > CfgEvadeChance[botType]) {
+        if (DebugActive) {
+            char det[96];
+            FormatEx(det, sizeof(det), "evade_chance=%.0f roll=%.0f -> EVADE_NONE (rolled out)",
+                CfgEvadeChance[botType], roll);
+            DebugLogDecision(client, "Evade", det);
+        }
+        return EVADE_NONE;
+    }
+
     int sTier = GetSpeedTier(speed);
     BuildEvadeKey(LastEvadeKey[client], sizeof(LastEvadeKey[]), sTier, botType);
     int choice = ChooseWeighted(LastEvadeKey[client], DefEvade, NUM_EVADE);
     LastEvadeChoice[client] = choice;
+
+    if (DebugActive) {
+        static const char evadeNames[NUM_EVADE][] = { "NONE", "JUMP", "CROUCH" };
+        char det[160];
+        FormatEx(det, sizeof(det),
+            "DecideEvasion key=%s sTier=%d evade_chance=%.0f roll=%.0f -> %s",
+            LastEvadeKey[client], sTier, CfgEvadeChance[botType], roll,
+            (choice >= 0 && choice < NUM_EVADE) ? evadeNames[choice] : "?");
+        DebugLogDecision(client, "Evade", det);
+    }
+
     return view_as<EvadeAction>(choice);
 }
 
@@ -5222,10 +5573,301 @@ public Action Cmd_StopDebug(int client, int args) {
     return Plugin_Handled;
 }
 
+// ============================================================================
+// BRAIN INSPECTION COMMANDS
+// Expose what the bot has learned to admins. All ROOT because raw policy
+// weights and SteamID-keyed opponent profiles are sensitive. Output goes to
+// admin's console (via ReplyToCommand) — no chat spam.
+//
+// See subplugins/PvB-brain-inspection.md for usage examples.
+// ============================================================================
+
+public Action Cmd_BrainStats(int client, int args) {
+    if (BrainMemory == null) {
+        ReplyToCommand(client, "[PvB][BrainStats] BrainMemory not initialized.");
+        return Plugin_Handled;
+    }
+
+    // Bucket BrainMemory keys by builder prefix. Format reference (BuildXXXKey):
+    //   M_ = move (5 options), T_ = trick (7), E_ = evade (3), O_ = orbit (2),
+    //   R_ = react, A_ = aim. Shared-base keys contain "_shared" instead of
+    //   "_t<bot>" (DeriveSharedKey replaces the bot-type token).
+    int moveCount = 0, trickCount = 0, evadeCount = 0, orbitCount = 0;
+    int reactCount = 0, aimCount = 0, sharedCount = 0, otherCount = 0;
+    StringMapSnapshot snap = BrainMemory.Snapshot();
+    int total = snap.Length;
+    char buf[64];
+    for (int i = 0; i < total; i++) {
+        snap.GetKey(i, buf, sizeof(buf));
+
+        // Check for "_shared" first — it's a sub-variant of any policy family.
+        bool isShared = (StrContains(buf, "_shared", false) >= 0);
+        if (isShared) sharedCount++;
+
+        // Family bucket from the leading prefix. M_, T_, etc. are case-sensitive
+        // (uppercase per BuildXXXKey FormatEx templates).
+        if      (StrContains(buf, "M_", true) == 0) moveCount++;
+        else if (StrContains(buf, "T_", true) == 0) trickCount++;
+        else if (StrContains(buf, "E_", true) == 0) evadeCount++;
+        else if (StrContains(buf, "O_", true) == 0) orbitCount++;
+        else if (StrContains(buf, "R_", true) == 0) reactCount++;
+        else if (StrContains(buf, "A_", true) == 0) aimCount++;
+        else                                        otherCount++;
+    }
+    delete snap;
+
+    int heatmapSize = (HeatmapCells != null) ? HeatmapCells.Size : 0;
+
+    ReplyToCommand(client, "[PvB][BrainStats] === Brain Snapshot ===");
+    ReplyToCommand(client, "[PvB][BrainStats] BrainMemory: %d total keys", total);
+    ReplyToCommand(client, "[PvB][BrainStats]   M_ move policy:   %d", moveCount);
+    ReplyToCommand(client, "[PvB][BrainStats]   T_ trick policy:  %d", trickCount);
+    ReplyToCommand(client, "[PvB][BrainStats]   E_ evade policy:  %d", evadeCount);
+    ReplyToCommand(client, "[PvB][BrainStats]   O_ orbit policy:  %d", orbitCount);
+    ReplyToCommand(client, "[PvB][BrainStats]   R_ react policy:  %d", reactCount);
+    ReplyToCommand(client, "[PvB][BrainStats]   A_ aim policy:    %d", aimCount);
+    ReplyToCommand(client, "[PvB][BrainStats]   _shared base:     %d (overlaps families)", sharedCount);
+    ReplyToCommand(client, "[PvB][BrainStats]   other/unknown:    %d", otherCount);
+    ReplyToCommand(client, "[PvB][BrainStats] HeatmapCells: %d", heatmapSize);
+
+    if (BrainDB != null) {
+        // Async COUNT for opponent rows. Reply lands later in the handler.
+        DataPack pack = new DataPack();
+        pack.WriteCell(GetClientUserId(client));
+        BrainDB.Query(SQL_BrainStatsOpponentCount,
+            "SELECT COUNT(*) FROM bot_opponent_v1", pack);
+    } else {
+        ReplyToCommand(client, "[PvB][BrainStats] BrainDB: not connected (in-memory only).");
+    }
+
+    return Plugin_Handled;
+}
+
+public void SQL_BrainStatsOpponentCount(Database db, DBResultSet rs, const char[] error, DataPack pack) {
+    pack.Reset();
+    int userid = pack.ReadCell();
+    delete pack;
+
+    int caller = GetClientOfUserId(userid);
+    if (caller == 0) return;  // admin disconnected; SQL still finished, just don't reply
+
+    if (rs == null || error[0]) {
+        ReplyToCommand(caller, "[PvB][BrainStats] opponent count query failed: %s", error);
+        return;
+    }
+    if (rs.FetchRow()) {
+        ReplyToCommand(caller, "[PvB][BrainStats] opponent profiles: %d", rs.FetchInt(0));
+    }
+}
+
+public Action Cmd_BrainShow(int client, int args) {
+    if (args < 1) {
+        ReplyToCommand(client, "[PvB][BrainShow] Usage: sm_brainshow <key>");
+        ReplyToCommand(client, "[PvB][BrainShow] Examples:");
+        ReplyToCommand(client, "[PvB][BrainShow]   M_t2_s1_e1_tm0   (move: tier_speed_enemy_teammate)");
+        ReplyToCommand(client, "[PvB][BrainShow]   T_t2_s1_d1_o0    (trick: tier_speed_deflects_opponent)");
+        ReplyToCommand(client, "[PvB][BrainShow]   E_t2_s1          (evade: tier_speed)");
+        ReplyToCommand(client, "[PvB][BrainShow]   O_t2_s1_tr1      (orbit: tier_speed_traversal)");
+        ReplyToCommand(client, "[PvB][BrainShow]   R_t2_s1, A_t2_s1_d1 (react/aim)");
+        ReplyToCommand(client, "[PvB][BrainShow] Shared-base variants replace _t<bot> with _shared.");
+        return Plugin_Handled;
+    }
+    if (BrainMemory == null) {
+        ReplyToCommand(client, "[PvB][BrainShow] BrainMemory not initialized.");
+        return Plugin_Handled;
+    }
+
+    char key[64];
+    GetCmdArg(1, key, sizeof(key));
+
+    int weights[MAX_BRAIN_OPTIONS];
+    if (!BrainMemory.GetArray(key, weights, MAX_BRAIN_OPTIONS)) {
+        ReplyToCommand(client, "[PvB][BrainShow] key '%s' not found in brain (untrained or wrong format).", key);
+        return Plugin_Handled;
+    }
+
+    // Pretty-print weights with the right semantic labels based on prefix.
+    static const char moveNames[5][]  = { "WANDER", "APPROACH", "MIRROR", "CIRCLE", "IDLE" };
+    static const char trickNames[7][] = { "NONE", "L_FLICK", "R_FLICK", "DOWN_SPIKE", "UP_SPIKE", "WAVE", "SPIN" };
+    static const char evadeNames[3][] = { "NONE", "JUMP", "CROUCH" };
+    static const char orbitNames[2][] = { "NO", "YES" };
+
+    int numOpts = MAX_BRAIN_OPTIONS;
+    // Match the actual BuildXXXKey format: leading uppercase letter + underscore.
+    bool isMove  = (StrContains(key, "M_", true) == 0);
+    bool isTrick = (StrContains(key, "T_", true) == 0);
+    bool isEvade = (StrContains(key, "E_", true) == 0);
+    bool isOrbit = (StrContains(key, "O_", true) == 0);
+    if      (isMove)  numOpts = 5;
+    else if (isTrick) numOpts = 7;
+    else if (isEvade) numOpts = 3;
+    else if (isOrbit) numOpts = 2;
+    // R_ react and A_ aim families fall through with default MAX_BRAIN_OPTIONS;
+    // labels show as opt0..optN (no semantic names defined).
+
+    int total = 0;
+    for (int i = 0; i < numOpts; i++) total += weights[i];
+
+    ReplyToCommand(client, "[PvB][BrainShow] key='%s' total_weight=%d", key, total);
+    for (int i = 0; i < numOpts; i++) {
+        char name[16];
+        if      (isMove  && i < 5) strcopy(name, sizeof(name), moveNames[i]);
+        else if (isTrick && i < 7) strcopy(name, sizeof(name), trickNames[i]);
+        else if (isEvade && i < 3) strcopy(name, sizeof(name), evadeNames[i]);
+        else if (isOrbit && i < 2) strcopy(name, sizeof(name), orbitNames[i]);
+        else                       FormatEx(name, sizeof(name), "opt%d", i);
+        float pct = (total > 0) ? (float(weights[i]) / float(total) * 100.0) : 0.0;
+        ReplyToCommand(client, "[PvB][BrainShow]   [%d] %-12s weight=%4d (%.1f%%)", i, name, weights[i], pct);
+    }
+    return Plugin_Handled;
+}
+
+public Action Cmd_BrainOpponent(int client, int args) {
+    if (args < 1) {
+        ReplyToCommand(client, "[PvB][BrainOpponent] Usage: sm_brainopponent <#userid|name>");
+        return Plugin_Handled;
+    }
+    if (BrainDB == null) {
+        ReplyToCommand(client, "[PvB][BrainOpponent] BrainDB not connected.");
+        return Plugin_Handled;
+    }
+
+    char arg[64];
+    GetCmdArg(1, arg, sizeof(arg));
+    int target = FindTarget(client, arg, true, false);
+    if (target == -1) return Plugin_Handled;
+
+    // Get account ID (the brain stores 32-bit Steam2 account IDs).
+    int accountId = GetSteamAccountID(target);
+    if (accountId == 0) {
+        ReplyToCommand(client, "[PvB][BrainOpponent] %N has no SteamID (probably bot or unauth'd).", target);
+        return Plugin_Handled;
+    }
+
+    char query[256];
+    FormatEx(query, sizeof(query),
+        "SELECT strafe_left, strafe_right, stood_still, jumped, crouched, " ...
+        "cqc_approach, cqc_retreat, total_deflects, total_kills, total_deaths, avg_deflect_speed " ...
+        "FROM bot_opponent_v1 WHERE steam_id=%d", accountId);
+
+    DataPack pack = new DataPack();
+    pack.WriteCell(GetClientUserId(client));
+    pack.WriteCell(GetClientUserId(target));
+    BrainDB.Query(SQL_BrainOpponentResult, query, pack);
+
+    return Plugin_Handled;
+}
+
+public void SQL_BrainOpponentResult(Database db, DBResultSet rs, const char[] error, DataPack pack) {
+    pack.Reset();
+    int callerUid = pack.ReadCell();
+    int targetUid = pack.ReadCell();
+    delete pack;
+
+    int caller = GetClientOfUserId(callerUid);
+    int target = GetClientOfUserId(targetUid);
+    if (caller == 0) return;
+
+    if (rs == null || error[0]) {
+        ReplyToCommand(caller, "[PvB][BrainOpponent] query failed: %s", error);
+        return;
+    }
+    if (!rs.FetchRow()) {
+        ReplyToCommand(caller, "[PvB][BrainOpponent] no profile stored for that player.");
+        return;
+    }
+
+    int strafeL = rs.FetchInt(0), strafeR = rs.FetchInt(1), stood = rs.FetchInt(2);
+    int jumped  = rs.FetchInt(3), crouched = rs.FetchInt(4);
+    int cqcA    = rs.FetchInt(5), cqcR    = rs.FetchInt(6);
+    int defl    = rs.FetchInt(7), kills   = rs.FetchInt(8), deaths = rs.FetchInt(9);
+    float avgSpd = rs.FetchFloat(10);
+
+    // Tendency = argmax of the 5 movement dimensions
+    int tendencies[5];
+    tendencies[0] = strafeL; tendencies[1] = strafeR; tendencies[2] = stood;
+    tendencies[3] = jumped;  tendencies[4] = crouched;
+    int topIdx = 0;
+    for (int i = 1; i < 5; i++) if (tendencies[i] > tendencies[topIdx]) topIdx = i;
+    static const char tendNames[5][] = { "STRAFE_LEFT", "STRAFE_RIGHT", "STATUE", "JUMPER", "CROUCHER" };
+
+    char nameStr[MAX_NAME_LENGTH];
+    if (target > 0) GetClientName(target, nameStr, sizeof(nameStr));
+    else            strcopy(nameStr, sizeof(nameStr), "<disconnected>");
+
+    ReplyToCommand(caller, "[PvB][BrainOpponent] === %s ===", nameStr);
+    ReplyToCommand(caller, "[PvB][BrainOpponent] Tendency: %s (top=%d)", tendNames[topIdx], tendencies[topIdx]);
+    ReplyToCommand(caller, "[PvB][BrainOpponent] Movement: L=%d R=%d still=%d jump=%d crouch=%d", strafeL, strafeR, stood, jumped, crouched);
+    ReplyToCommand(caller, "[PvB][BrainOpponent] CQC bias: approach=%d retreat=%d (delta=%+d)", cqcA, cqcR, cqcA - cqcR);
+    ReplyToCommand(caller, "[PvB][BrainOpponent] Lifetime: %d deflects, %d kills, %d deaths (KDR=%.2f)",
+        defl, kills, deaths, deaths > 0 ? float(kills) / float(deaths) : float(kills));
+    ReplyToCommand(caller, "[PvB][BrainOpponent] Avg deflect speed: %.0f HU/s", avgSpd);
+}
+
+public Action Cmd_BrainHeatmap(int client, int args) {
+    if (HeatmapCells == null || HeatmapCells.Size == 0) {
+        ReplyToCommand(client, "[PvB][BrainHeatmap] heatmap is empty for this map.");
+        return Plugin_Handled;
+    }
+
+    int filterType = -1;  // -1 = all classes
+    if (args >= 1) {
+        char arg[16];
+        GetCmdArg(1, arg, sizeof(arg));
+        filterType = StringToInt(arg);
+        if (filterType < 0 || filterType >= NumBotTypes) {
+            ReplyToCommand(client, "[PvB][BrainHeatmap] invalid bot_type %d (have %d types).", filterType, NumBotTypes);
+            return Plugin_Handled;
+        }
+    }
+
+    // Open log file timestamped. Write all matching cells with sortable score
+    // (deaths-deflects). Console gets a brief summary.
+    char timestamp[32], path[PLATFORM_MAX_PATH];
+    FormatTime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S");
+    BuildPath(Path_SM, path, sizeof(path), "logs/tfdb_pvb/heatmap_%s_%s.log", CurrentMap, timestamp);
+
+    File f = OpenFile(path, "w");
+    if (f == null) {
+        ReplyToCommand(client, "[PvB][BrainHeatmap] could not open log file: %s", path);
+        return Plugin_Handled;
+    }
+    f.WriteLine("=== HEATMAP DUMP map=%s filter=%d at %s ===", CurrentMap, filterType, timestamp);
+    f.WriteLine("# format: bot_type gx gy deflects deaths score(deaths-deflects)");
+
+    int written = 0;
+    StringMapSnapshot snap = HeatmapCells.Snapshot();
+    char key[64];
+    int data[2];
+    for (int i = 0; i < snap.Length; i++) {
+        snap.GetKey(i, key, sizeof(key));
+        // Key format: "<map>_<botType>_<gx>_<gy>" — split.
+        // Skip cells whose map prefix doesn't match current map (defensive).
+        if (StrContains(key, CurrentMap, false) != 0) continue;
+        if (!HeatmapCells.GetArray(key, data, 2)) continue;
+
+        int score = data[1] - data[0];  // deaths minus deflects
+        // Per-class filter
+        if (filterType >= 0) {
+            char prefix[64];
+            FormatEx(prefix, sizeof(prefix), "%s_%d_", CurrentMap, filterType);
+            if (StrContains(key, prefix, false) != 0) continue;
+        }
+        f.WriteLine("%s deflects=%d deaths=%d score=%d", key, data[0], data[1], score);
+        written++;
+    }
+    delete snap;
+    f.WriteLine("=== END (%d cells written) ===", written);
+    delete f;
+
+    ReplyToCommand(client, "[PvB][BrainHeatmap] wrote %d cells to %s", written, path);
+    return Plugin_Handled;
+}
+
 void StartDebugLogging() {
     char timestamp[32];
     FormatTime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S");
-    BuildPath(Path_SM, DebugLogPath, sizeof(DebugLogPath), "logs/pvb_debug_%s.log", timestamp);
+    BuildPath(Path_SM, DebugLogPath, sizeof(DebugLogPath), "logs/tfdb_pvb/debug_%s.log", timestamp);
 
     // Open file handle for high-frequency writes (File.WriteLine doesn't spam console)
     DebugFile = OpenFile(DebugLogPath, "a");
@@ -5422,6 +6064,39 @@ void DebugLogBotState(int client, float vel[3], float angles[3], const char[] ev
 void DebugLogEvent(int client, float vel[3], float angles[3], const char[] event) {
     if (!DebugActive || DebugFile == null) return;
     DebugLogBotState(client, vel, angles, event);
+}
+
+// ============================================================================
+// DECISION-TRACE LOGGING
+// Captures the RATIONALE behind a bot's choice (cfg values consulted, rolls
+// made, branches taken) — not just the final state. Use at every pivotal
+// branch in the AI so post-hoc analysis can answer "why did statue walk
+// instead of idle?", "why did 3 bots all idle the same tick?", etc.
+//
+// Lines are tagged DECISION/<where> for grep-by-decision-point. Always logged
+// regardless of sample rate — these are rare events, not per-tick noise.
+//
+// Format: [tick N] DECISION/<where> #idx name type=T <free-form details>
+// Example: [tick 12345] DECISION/MoveMode #2 TBotV64 type=1 cfg.idle_chance=100 roll=42 wantIdle=1 -> MOVE_IDLE
+// ============================================================================
+
+void DebugLogDecision(int client, const char[] where, const char[] details)
+{
+    if (!DebugActive || DebugFile == null) return;
+    if (client < 1 || client > MaxClients || !IsClientInGame(client)) return;
+
+    int botType = GetEffectiveBotType(client);
+    char botName[32];
+    GetClientName(client, botName, sizeof(botName));
+
+    DebugFile.WriteLine(
+        "[tick %d] DECISION/%s #%d %s type=%d %s",
+        GetGameTickCount(), where, client, botName, botType, details);
+
+    DebugLinesWritten++;
+    if (DebugLinesWritten >= DEBUG_MAX_LINES) {
+        RotateDebugFile();
+    }
 }
 
 // ============================================================================
@@ -5928,14 +6603,15 @@ public bool TraceFilter_NoPlayers(int entity, int contentsMask, any data) {
 // ============================================================================
 
 bool IsClientBot(int client) {
-    return (client > 0 && client <= MaxClients && IsClientInGame(client) &&
-            IsFakeClient(client) && !IsClientReplay(client) && !IsClientSourceTV(client));
+    return (client > 0 && client <= MaxClients && TFDB_IsLiveBot(client));
 }
 
 int GetRealClientCount() {
+    // Counts real humans on a PLAY team (RED/BLU). Spectators excluded — same
+    // semantics as CachedRealCount (see UpdateCachedCounts).
     int count = 0;
     for (int i = 1; i <= MaxClients; i++) {
-        if (IsClientInGame(i) && !IsFakeClient(i) && !IsClientReplay(i) && !IsClientSourceTV(i)) {
+        if (TFDB_IsRealHumanPlaying(i)) {
             count++;
         }
     }

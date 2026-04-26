@@ -9,9 +9,13 @@
 #include <multicolors>
 
 #include <tfdb>
+#include <tfdb_clientcheck>
 #include <tfdb_guardian>
 #include <tfdb_pvb>
 #include <tfdb_deathmatch>
+#undef REQUIRE_PLUGIN
+#tryinclude <tfdb_ffa>
+#define REQUIRE_PLUGIN
 #include <tf2attributes>
 
 #define PLUGIN_NAME        "[TFDB] Guardian"
@@ -27,8 +31,9 @@
 #define SOUND_READY     "buttons/button17.wav"
 #define SOUND_ACTIVATE  "misc/halloween/spell_overheal.wav"
 
-#define GUARDIAN_LOG_FILE    "logs/guardian_debug.log"
-#define GUARDIAN_SEL_FILE    "logs/guardian_select.log"
+#define GUARDIAN_LOG_DIR     "logs/tfdb_guardian"
+#define GUARDIAN_LOG_FILE    "logs/tfdb_guardian/debug.log"
+#define GUARDIAN_SEL_FILE    "logs/tfdb_guardian/select.log"
 
 // Resolved at plugin start via BuildPath — writes to addons/sourcemod/logs/
 char GUARDIAN_LOG[PLATFORM_MAX_PATH];
@@ -84,6 +89,7 @@ int           activeClassIndex;
 int           guardianMaxHP;
 int           guardianCurrentHP;
 bool          botMessageShown;
+bool          ffaMessageShown;  // dedup the "Guardian blocked: FFA active" chat — was firing every CanActivateGuardian call (multiple per round)
 
 // Admin force for next round (stored as userid to prevent slot reuse)
 int           forcedClientUserId  = 0;
@@ -128,6 +134,30 @@ int           previousButtons[MAXPLAYERS + 1];
 
 // FFA detection
 ConVar        cvarFriendlyFire;
+
+// --- HUD string cache (perf) ---
+// Timer_Update runs at 10Hz; the static display strings (class display name,
+// uppercased ability names, button labels) never change while a guardian round
+// is active because activeClassIndex is fixed for the duration. Cache them on
+// activation, read per tick, invalidate on cleanup. Only the dynamic
+// status/cooldown text is rebuilt each tick.
+char g_CachedDisplayName[64];
+char g_CachedName1[32];
+char g_CachedName2[32];
+char g_CachedKey1[16];
+char g_CachedKey2[16];
+bool g_CachedHudReady = false;
+
+// --- Bot presence count (perf) ---
+// HasActiveBots() iterated MaxClients every Timer_Update tick. Maintain a
+// running count via the bot lifecycle events instead. Counts fake clients on
+// teams > 1 (RED/BLU). Spectator-bot transitions are tracked via player_team.
+int  g_ActiveBotCount = 0;
+
+// --- FFA active cache (perf) ---
+// IsFFAActive() did LibraryExists + GetFeatureStatus + native call every tick.
+// Refresh on plugin load events + round_start; read the cached bool each tick.
+bool g_FFAActiveCached = false;
 
 // Cached model indices for beam ring (precached once per map, reused in TriggerSlowPulse)
 int           beamModelIndex  = -1;
@@ -204,9 +234,17 @@ public void OnPluginStart()
 		LogError("[Guardian] TF2Attributes extension status %d (1 = loaded OK). Ability attributes may not work. Install: https://github.com/FlaminSarge/tf2attributes", tf2AttribStatus);
 	}
 
-	// Resolve log paths to addons/sourcemod/logs/ via BuildPath.
+	// Resolve log paths to addons/sourcemod/logs/tfdb_guardian/ via BuildPath.
 	// LogToFileEx takes raw paths — without BuildPath it resolves
 	// relative to the game directory (tf/) which may not have a logs/ folder.
+	// Create the per-plugin log folder first; LogToFile won't create it.
+	char guardianLogDir[PLATFORM_MAX_PATH];
+	BuildPath(Path_SM, guardianLogDir, sizeof(guardianLogDir), GUARDIAN_LOG_DIR);
+	if (!DirExists(guardianLogDir))
+	{
+		CreateDirectory(guardianLogDir, 511);  // 0777
+	}
+
 	BuildPath(Path_SM, GUARDIAN_LOG, sizeof(GUARDIAN_LOG), GUARDIAN_LOG_FILE);
 	BuildPath(Path_SM, GUARDIAN_SEL, sizeof(GUARDIAN_SEL), GUARDIAN_SEL_FILE);
 
@@ -257,6 +295,27 @@ public void OnAllPluginsLoaded()
 	{
 		SetFailState("[Guardian] tfdb core plugin not loaded — Guardian cannot function.");
 	}
+
+	// Initial population of the FFA cache. From now on it's maintained by
+	// OnLibraryAdded / OnLibraryRemoved / round_start.
+	RefreshFFAActiveCache();
+
+	// Initial population of the bot counter for late-load. Without this, if
+	// Guardian loads mid-round with bots already on RED/BLU, g_ActiveBotCount
+	// stays at 0 until OnRoundStart fires — meaning HasActiveBots() returns
+	// false and Guardian can wrongly activate over a PvB round.
+	// (Audit finding 2026-04-26.)
+	RecountActiveBots();
+}
+
+public void OnLibraryAdded(const char[] name)
+{
+	// FFA plugin (un)loaded mid-game flips whether IsFFAActive() can return
+	// true. Refresh the cache so Timer_Update sees the change without polling.
+	if (StrEqual(name, "tfdb_ffa"))
+	{
+		RefreshFFAActiveCache();
+	}
 }
 
 public void OnLibraryRemoved(const char[] name)
@@ -270,6 +329,11 @@ public void OnLibraryRemoved(const char[] name)
 		LogMessage("[Guardian] tfdb core unloaded — disabling Guardian.");
 		enabled      = false;
 		guardianActive = false;
+	}
+
+	if (StrEqual(name, "tfdb_ffa"))
+	{
+		RefreshFFAActiveCache();
 	}
 }
 
@@ -368,6 +432,12 @@ public void OnPluginEnd()
 
 public void OnMapStart()
 {
+	// Reset perf-cache state. No bots survive a map change; the count must
+	// start at zero. FFA cache will be refreshed on round start.
+	g_ActiveBotCount  = 0;
+	g_FFAActiveCached = false;
+	g_CachedHudReady  = false;
+
 	debugBossState = -1;
 
 	PrecacheSound(SOUND_SELECTED, true);
@@ -478,6 +548,14 @@ public void OnClientDisconnect(int client)
 	previousButtons[client] = 0;
 	guardianOptOut[client]  = false;
 
+	// Maintain g_ActiveBotCount: if a bot on a play team disconnects, decrement.
+	// IsClientInGame is still true at OnClientDisconnect (the slot hasn't freed
+	// yet), so IsFakeClient + GetClientTeam are valid here.
+	if (IsClientInGame(client) && IsFakeClient(client) && GetClientTeam(client) > 1)
+	{
+		if (g_ActiveBotCount > 0) g_ActiveBotCount--;
+	}
+
 	if (guardianActive && client == guardianClient)
 	{
 		CPrintToChatAll("%t", "Guardian_Disconnected", client);
@@ -492,6 +570,15 @@ public void OnClientDisconnect(int client)
 
 public void OnClientPostAdminCheck(int client)
 {
+	// Maintain g_ActiveBotCount: bot just authenticated. If they're on a play
+	// team (>1) — uncommon at PostAdminCheck since bots usually start as
+	// unassigned, but possible — count them. The player_team handler covers
+	// the normal case where the bot is later assigned to RED/BLU.
+	if (IsFakeClient(client) && IsClientInGame(client) && GetClientTeam(client) > 1)
+	{
+		g_ActiveBotCount++;
+	}
+
 	// Bot joined mid-guardian - cancel guardian round (skip in debugMode where bots are intentional test fodder)
 	if (IsFakeClient(client) && guardianActive && !debugMode)
 	{
@@ -657,10 +744,91 @@ bool HasActiveBots()
 	return false;
 }
 
+/**
+ * Recount active bots from scratch. Called on map start / round start as a
+ * defensive resync — the per-event maintenance in OnClientPostAdminCheck /
+ * OnClientDisconnect / OnPlayerTeamChange should keep g_ActiveBotCount
+ * accurate, but a full rescan costs nothing on map boundaries and prevents
+ * permanent drift if any event was missed.
+ */
+void RecountActiveBots()
+{
+	int count = 0;
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsClientInGame(i) && IsFakeClient(i) && GetClientTeam(i) > 1)
+			count++;
+	}
+	g_ActiveBotCount = count;
+}
+
+/**
+ * Refresh g_FFAActiveCached. Called on plugin load events + round_start, NOT
+ * on every Timer_Update tick. Mirrors IsFFAActive()'s logic exactly.
+ */
+void RefreshFFAActiveCache()
+{
+	if (LibraryExists("tfdb_ffa") &&
+	    GetFeatureStatus(FeatureType_Native, "TFDB_IsFFAActive") == FeatureStatus_Available &&
+	    TFDB_IsFFAActive())
+	{
+		g_FFAActiveCached = true;
+		return;
+	}
+
+	// Legacy fallback: friendlyfire cvar implies FFA when tfdb_ffa is loaded
+	// but doesn't expose the native (older FFA builds).
+	if (LibraryExists("tfdb_ffa") && cvarFriendlyFire != null && cvarFriendlyFire.BoolValue)
+	{
+		g_FFAActiveCached = true;
+		return;
+	}
+
+	g_FFAActiveCached = false;
+}
+
+/**
+ * Build the static portion of the guardian HUD strings once per activation.
+ * Read by Timer_Update each tick. Invalidated by CleanupGuardian.
+ */
+void RebuildGuardianHudCache()
+{
+	int idx = activeClassIndex;
+	if (idx < 0 || idx >= guardianClassCount)
+	{
+		g_CachedHudReady = false;
+		return;
+	}
+
+	strcopy(g_CachedDisplayName, sizeof(g_CachedDisplayName), guardianClasses[idx].DisplayName);
+	strcopy(g_CachedName1,       sizeof(g_CachedName1),       guardianClasses[idx].PrimaryAbility.Type);
+	strcopy(g_CachedName2,       sizeof(g_CachedName2),       guardianClasses[idx].SecondaryAbility.Type);
+
+	for (int i = 0; g_CachedName1[i] != '\0'; i++) g_CachedName1[i] = CharToUpper(g_CachedName1[i]);
+	for (int i = 0; g_CachedName2[i] != '\0'; i++) g_CachedName2[i] = CharToUpper(g_CachedName2[i]);
+
+	GetButtonLabel(guardianClasses[idx].PrimaryAbility.Button,   g_CachedKey1, sizeof(g_CachedKey1));
+	GetButtonLabel(guardianClasses[idx].SecondaryAbility.Button, g_CachedKey2, sizeof(g_CachedKey2));
+
+	g_CachedHudReady = true;
+}
+
 bool IsFFAActive()
 {
-	// FFA mode enables friendly fire. The FFA cvar is cached once on first
-	// call to avoid FindConVar hash lookups every 100ms in the HUD timer.
+	// Prefer the proper three-gate native (LibraryExists + FeatureStatus +
+	// native call) — same pattern Guardian uses for PvB and DeathMatch. This
+	// reads FFA's actual `FFAEnabled` flag, not the indirect mp_friendlyfire
+	// signal which is fragile (admins can flip mp_friendlyfire manually,
+	// and FFA's "disable on bot join" path also flips it).
+	if (LibraryExists("tfdb_ffa") &&
+	    GetFeatureStatus(FeatureType_Native, "TFDB_IsFFAActive") == FeatureStatus_Available &&
+	    TFDB_IsFFAActive())
+	{
+		return true;
+	}
+
+	// Legacy heuristic fallback for FFA builds older than 2.2.0 that don't
+	// expose TFDB_IsFFAActive yet. Cached cvar to avoid FindConVar churn.
 	static ConVar ffaCvar = null;
 	static bool   ffaCached = false;
 
@@ -733,9 +901,18 @@ bool CanActivateGuardian()
 	if (IsFFAActive())
 	{
 		GuardianLog("CanActivateGuardian - false: FFA active");
-		CPrintToChatAll("%t", "Guardian_BlockedFFA");
+		// Dedup: only chat once per FFA-active "session". Resets below when
+		// FFA flips off so the message can fire again next time it activates.
+		if (!ffaMessageShown)
+		{
+			CPrintToChatAll("%t", "Guardian_BlockedFFA");
+			ffaMessageShown = true;
+		}
 		return false;
 	}
+
+	// FFA is off — clear the dedup so the next FFA flip re-announces.
+	ffaMessageShown = false;
 
 	// Need at least 2 eligible players: 1 for guardian + 1 for RED
 	int eligible = 0;
@@ -790,6 +967,15 @@ public Action Command_ForceGuardian(int client, int args)
 	int target = FindTarget(client, targetStr, true, false);
 
 	if (target == -1) return Plugin_Handled;
+
+	// FindTarget matches by name even for spectators. Reject so admins don't
+	// accidentally force a spec into Guardian role on the next round, which
+	// silently kicks them to BLU and bypasses the eligibility count.
+	if (TFDB_IsSpectator(target))
+	{
+		CReplyToCommand(client, "[TFDB] %N is on spectator and can't be forced as Guardian. They must join RED or BLU first.", target);
+		return Plugin_Handled;
+	}
 
 	forcedClientUserId = GetClientUserId(target);
 	forcedClass  = -1;
@@ -876,7 +1062,7 @@ public Action Command_RemoveGuardian(int client, int args)
 
 public Action Command_GuardianOptOut(int client, int args)
 {
-	if (client == 0)
+	if (client == 0 || !TFDB_IsRealHuman(client))
 	{
 		ReplyToCommand(client, "[TFDB] This command is player-only.");
 		return Plugin_Handled;
@@ -976,6 +1162,12 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 	// Aggressive hard reset every round start
 	ResetAllState(true);
 
+	// Refresh perf caches at round boundary. Cheap defensive resync —
+	// keeps g_ActiveBotCount and g_FFAActiveCached honest in case any event
+	// went missed between rounds (plugin reload, late-load, etc).
+	RecountActiveBots();
+	RefreshFFAActiveCache();
+
 	if (!CanActivateGuardian())
 	{
 		GuardianLog("OnRoundStart - CanActivateGuardian()=false, aborting");
@@ -1012,6 +1204,13 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 	if (!activate)
 	{
 		GuardianLog("OnRoundStart - activate=false, no guardian this round");
+		// Critical: when the previous round had a guardian who died and got
+		// moved to RED, and this round's dice roll missed, both teams may now
+		// be lopsided (e.g. all humans on RED, BLU empty). TF2 arena requires
+		// >=1 player per team to start the round, but engine autobalance only
+		// fires on player_team/player_disconnect events, not round transitions.
+		// Rebalance manually so the round can actually start.
+		EnsureTeamBalance();
 		return;
 	}
 
@@ -1143,13 +1342,24 @@ void Frame_ApplyGuardianHealth(int userId)
 
 public Action OnPlayerTeamChange(Event event, const char[] name, bool dontBroadcast)
 {
-	if (!guardianActive) return Plugin_Continue;
-
 	int client  = GetClientOfUserId(event.GetInt("userid"));
 	if (client <= 0 || client > MaxClients) return Plugin_Continue;
 
 	int newTeam = event.GetInt("team");
 	int oldTeam = event.GetInt("oldteam");
+
+	// Maintain g_ActiveBotCount across spectator <-> RED/BLU transitions for bots.
+	// Runs unconditionally (not gated on guardianActive) so the count stays
+	// correct between rounds too.
+	if (IsClientInGame(client) && IsFakeClient(client))
+	{
+		bool wasOnPlayTeam = (oldTeam > 1);
+		bool nowOnPlayTeam = (newTeam > 1);
+		if (!wasOnPlayTeam && nowOnPlayTeam)      g_ActiveBotCount++;
+		else if (wasOnPlayTeam && !nowOnPlayTeam) { if (g_ActiveBotCount > 0) g_ActiveBotCount--; }
+	}
+
+	if (!guardianActive) return Plugin_Continue;
 
 	GuardianLog("OnPlayerTeamChange - %N (client=%d) oldTeam=%d newTeam=%d guardianClient=%d",
 		client, client, oldTeam, newTeam, guardianClient);
@@ -1180,7 +1390,7 @@ public Action Timer_ForceRed(Handle timer, any userId)
 
 	int client = GetClientOfUserId(userId);
 
-	if (client > 0 && IsClientInGame(client) && client != guardianClient && !IsFakeClient(client))
+	if (client > 0 && TFDB_IsRealHuman(client) && client != guardianClient)
 	{
 		int team = GetClientTeam(client);
 		if (team == view_as<int>(TFTeam_Blue))
@@ -1294,6 +1504,12 @@ void ActivateGuardian(int client, int classIndex)
 		}
 	}
 
+	// Build the static HUD string cache once, here, before the 10Hz timer starts
+	// hammering Timer_Update. activeClassIndex is fixed for the duration of this
+	// guardian round, so the strings derived from it never change — caching saves
+	// the per-tick CharToUpper loops and GetButtonLabel calls.
+	RebuildGuardianHudCache();
+
 	StartUpdateTimer();
 	UpdateBossHealthBar();
 }
@@ -1325,6 +1541,10 @@ void CleanupGuardian(bool respawn)
 	guardianCurrentHP  = 0;
 	guardianMaxHP      = 0;
 	guardianActivating = false;
+
+	// Invalidate the cached HUD strings. Next ActivateGuardian will rebuild;
+	// the safety net in Timer_Update will also rebuild on demand if needed.
+	g_CachedHudReady = false;
 
 	// Restore normal rules
 	if (cvUnbalanceLimit != null) cvUnbalanceLimit.SetInt(1);
@@ -1387,6 +1607,53 @@ void Frame_MoveToRed(int userId)
 	else
 	{
 		GuardianLog("Frame_MoveToRed - client from userId no longer valid");
+	}
+}
+
+/**
+ * Manually rebalance teams when one team is empty and the other has 2+ humans.
+ *
+ * Engine's mp_autoteambalance fires on player_team/player_disconnect events,
+ * NOT on round transitions. After a guardian round where the guardian died and
+ * was moved to RED, both humans can end up on RED with BLU empty — arena
+ * warmup then refuses to start the round ("Waiting for 1 more player").
+ *
+ * Move one player from the over-stuffed team to the empty one. Picks a random
+ * non-bot, non-spectator client to avoid always punishing the same person.
+ * Called from OnRoundStart when no guardian is being activated this round.
+ */
+void EnsureTeamBalance()
+{
+	int redCount = 0, bluCount = 0;
+	int redCandidates[MAXPLAYERS + 1], bluCandidates[MAXPLAYERS + 1];
+
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsClientInGame(i)) continue;
+		if (IsFakeClient(i)) continue;
+		int team = GetClientTeam(i);
+		if (team == view_as<int>(TFTeam_Red))
+		{
+			redCandidates[redCount++] = i;
+		}
+		else if (team == view_as<int>(TFTeam_Blue))
+		{
+			bluCandidates[bluCount++] = i;
+		}
+	}
+
+	// Only act when one team is empty and the other has 2+ — otherwise leave alone.
+	if (redCount >= 2 && bluCount == 0)
+	{
+		int target = redCandidates[GetRandomInt(0, redCount - 1)];
+		GuardianLog("EnsureTeamBalance - moving %N from RED to BLU (red=%d blu=0)", target, redCount);
+		ChangeClientTeam(target, view_as<int>(TFTeam_Blue));
+	}
+	else if (bluCount >= 2 && redCount == 0)
+	{
+		int target = bluCandidates[GetRandomInt(0, bluCount - 1)];
+		GuardianLog("EnsureTeamBalance - moving %N from BLU to RED (blu=%d red=0)", target, bluCount);
+		ChangeClientTeam(target, view_as<int>(TFTeam_Red));
 	}
 }
 
@@ -1893,8 +2160,10 @@ public Action Timer_Update(Handle timer)
 	if (primaryActive && now >= primaryExpireTime) DeactivatePrimary();
 	if (secondaryActive && now >= secondaryExpireTime) DeactivateSecondary();
 
-	// Bot join check - disable Guardian if a bot appeared mid-round (skip in debugMode)
-	if (HasActiveBots() && !debugMode)
+	// Bot join check - disable Guardian if a bot appeared mid-round (skip in debugMode).
+	// g_ActiveBotCount is event-driven (OnClientPostAdminCheck / OnClientDisconnect /
+	// OnPlayerTeamChange) so we avoid the per-tick MaxClients loop.
+	if (g_ActiveBotCount > 0 && !debugMode)
 	{
 		GuardianLog("Timer_Update - bot detected mid-round, cleaning up guardian and moving bots to spectator");
 		CPrintToChatAll("%t", "Guardian_BotJoined");
@@ -1912,8 +2181,10 @@ public Action Timer_Update(Handle timer)
 		return Plugin_Stop;
 	}
 
-	// FFA check - disable Guardian if FFA was enabled mid-round
-	if (IsFFAActive())
+	// FFA check - disable Guardian if FFA was enabled mid-round.
+	// g_FFAActiveCached is refreshed by OnLibraryAdded / OnLibraryRemoved /
+	// round_start, so per-tick we read a plain bool.
+	if (g_FFAActiveCached)
 	{
 		CPrintToChatAll("%t", "Guardian_BlockedFFA");
 		CleanupGuardian(true);
@@ -1922,59 +2193,48 @@ public Action Timer_Update(Handle timer)
 	}
 
 	// --- Guardian HUD (guardian only) ---
-	int idx = activeClassIndex;
+	// Static strings (display name, uppercased ability names, button labels) are
+	// cached at activation. Safety net: if we somehow lost the cache mid-round,
+	// rebuild before reading.
+	if (!g_CachedHudReady) RebuildGuardianHudCache();
 
 	char status1[80];
 	char status2[80];
 
-	char name1[32], name2[32];
-	strcopy(name1, sizeof(name1), guardianClasses[idx].PrimaryAbility.Type);
-	strcopy(name2, sizeof(name2), guardianClasses[idx].SecondaryAbility.Type);
-
-	for (int i = 0; name1[i] != '\0'; i++) name1[i] = CharToUpper(name1[i]);
-	for (int i = 0; name2[i] != '\0'; i++) name2[i] = CharToUpper(name2[i]);
-
-	// Include the bound button label ("R", "MOUSE3", "E", "G") so the player
-	// can see WHICH key fires each ability. Was previously only showing the
-	// ability name — players had no idea what to press.
-	char key1[16], key2[16];
-	GetButtonLabel(guardianClasses[idx].PrimaryAbility.Button,   key1, sizeof(key1));
-	GetButtonLabel(guardianClasses[idx].SecondaryAbility.Button, key2, sizeof(key2));
-
 	if (primaryActive)
 	{
 		float remaining = primaryExpireTime - now;
-		FormatEx(status1, sizeof(status1), "[%s] %s [ACTIVE %.1fs]", key1, name1, remaining);
+		FormatEx(status1, sizeof(status1), "[%s] %s [ACTIVE %.1fs]", g_CachedKey1, g_CachedName1, remaining);
 	}
 	else if (now < primaryNextUseTime)
 	{
 		float cooldown = primaryNextUseTime - now;
-		FormatEx(status1, sizeof(status1), "[%s] %s [CD %.1fs]", key1, name1, cooldown);
+		FormatEx(status1, sizeof(status1), "[%s] %s [CD %.1fs]", g_CachedKey1, g_CachedName1, cooldown);
 	}
 	else
 	{
-		FormatEx(status1, sizeof(status1), "[%s] %s [READY]", key1, name1);
+		FormatEx(status1, sizeof(status1), "[%s] %s [READY]", g_CachedKey1, g_CachedName1);
 	}
 
 	if (secondaryActive)
 	{
 		float remaining = secondaryExpireTime - now;
-		FormatEx(status2, sizeof(status2), "[%s] %s [ACTIVE %.1fs]", key2, name2, remaining);
+		FormatEx(status2, sizeof(status2), "[%s] %s [ACTIVE %.1fs]", g_CachedKey2, g_CachedName2, remaining);
 	}
 	else if (now < secondaryNextUseTime)
 	{
 		float cooldown = secondaryNextUseTime - now;
-		FormatEx(status2, sizeof(status2), "[%s] %s [CD %.1fs]", key2, name2, cooldown);
+		FormatEx(status2, sizeof(status2), "[%s] %s [CD %.1fs]", g_CachedKey2, g_CachedName2, cooldown);
 	}
 	else
 	{
-		FormatEx(status2, sizeof(status2), "[%s] %s [READY]", key2, name2);
+		FormatEx(status2, sizeof(status2), "[%s] %s [READY]", g_CachedKey2, g_CachedName2);
 	}
 
 	SetHudTextParams(hudX, hudY, HUD_UPDATE_INTERVAL + 0.05, hudColor[0], hudColor[1], hudColor[2], 255, 0, 0.0, 0.0, 0.0);
 	ShowSyncHudText(guardianClient, hudSync,
 		"[ %s ]\n%s\n%s",
-		guardianClasses[idx].DisplayName,
+		g_CachedDisplayName,
 		status1,
 		status2);
 

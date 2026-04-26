@@ -123,6 +123,8 @@ tf/
     ├── data/sqlite/
     │   └── tfdb_pvb.sq3                    ← PvB persistent brain (auto-created)
     ├── logs/tfdb_ac/                       ← AntiCheat detection logs (auto-created)
+    ├── logs/tfdb_guardian/                 ← Guardian round + selection logs (auto-created)
+    ├── logs/tfdb_pvb/                      ← PvB heatmap dumps + decision-trace logs (auto-created)
     ├── gamedata/
     │   └── tf2.attributes.txt              ← required for Guardian (TF2Attributes)
     ├── translations/
@@ -307,7 +309,11 @@ Auto-locks `tf_bot_quota_mode normal` on plugin load + every map start so the se
 | `sm_trainbots` | ROOT | Spawn training bots (bot-vs-bot self-play; humans free to join any team) |
 | `sm_stoptraining` | ROOT | Stop training mode and kick training bots |
 | `sm_resetbrain` | ROOT | Wipe learned bot brain data (safe during active rounds) |
-| `sm_botdebug <player>` / `sm_stopdebug` | ROOT | Per-player debug CSV logging |
+| `sm_botdebug [rate]` / `sm_stopdebug` | ROOT | Toggle decision-trace logging (per-tick brain decisions). `rate` = sample every N ticks (default 10 ≈ 6.6 Hz). Persists across map changes — rotates to a new file per map. Logs to `logs/tfdb_pvb/debug_<timestamp>.log`. |
+| `sm_brainstats` | ROOT | Snapshot the live brain — total keys, count per policy family (M_/T_/E_/O_/R_/A_), heatmap cells, opponent profiles |
+| `sm_brainshow <key>` | ROOT | Print weighted choices for one brain state key (e.g. `M_t2_s1_e1_tm0`). Auto-labels slots by family |
+| `sm_brainopponent <#userid\|name>` | ROOT | Dump the stored tendency profile for one player (strafe/jump/crouch counts, CQC bias, KDR, avg deflect speed) |
+| `sm_brainheatmap [bot_type]` | ROOT | Dump current-map danger map to `logs/tfdb_pvb/heatmap_<map>_<timestamp>.log` (sortable by score = deaths-deflects) |
 
 <details>
 <summary><b>Capability-by-presence reference</b></summary>
@@ -355,6 +361,8 @@ Server-side cheat detection. Targets common public-tier cheats — **not** paid-
 | `tfdb_ac_log_level` | `1` | `0` silent, `1` detections, `2` verbose, `3` debug |
 
 **Deploy advice:** run `tfdb_ac_action 0` (log only) for a week → review `addons/sourcemod/logs/tfdb_ac/` → raise to `1` (kick) once pros aren't flagged → `2` (ban) only after FP rate is confirmed low.
+
+> **Note on tuning:** the score weights for `SnapAim`, `PerfectStreak`, and `ConsistentTiming` are deliberately set low because those signatures have non-zero false-positive risk on high-skill players. `AntiAim`, `ReactTimeFloor`, and `OneTickM2` carry the bulk of the action threshold. If you want to re-enable the FP-prone detectors at full weight, edit `CalculateScore()` in `tfdb_anti_cheat.sp` — but watch the log distribution for a week first.
 
 **Commands**
 
@@ -633,7 +641,7 @@ Click a category to expand relevant issues.
 <details>
 <summary><b>Guardian</b> — not triggering, abilities broken</summary>
 
-**Guardian not triggering** — Guardian is automatically blocked when bots are on the server (on RED or BLU teams). Kick all bots first. It's also blocked during FFA rounds, PvB rounds, and when fewer than 2 eligible players are present. Check `logs/guardian_select.log` for detailed selection diagnostics.
+**Guardian not triggering** — Guardian is automatically blocked when bots are on the server (on RED or BLU teams). Kick all bots first. It's also blocked during FFA rounds, PvB rounds, and when fewer than 2 eligible players are present. Check `logs/tfdb_guardian/select.log` for detailed selection diagnostics.
 
 **Guardian abilities not working** — Abilities only unlock after `arena_round_start` fires (when players can move). Check that your `guardian.cfg` has valid ability types and buttons.
 

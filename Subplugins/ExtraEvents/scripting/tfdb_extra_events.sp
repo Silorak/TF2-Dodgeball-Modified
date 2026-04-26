@@ -5,6 +5,7 @@
 #include <sdkhooks>
 
 #include <tfdb>
+#include <tfdb_clientcheck>
 
 #define PLUGIN_NAME        "[TFDB] Extra events"
 #define PLUGIN_AUTHOR      "x07x08, Silorak"
@@ -15,6 +16,14 @@
 int RocketClassCount;
 
 DataPack RocketClassCmdsOnDestroyed[MAX_ROCKET_CLASSES];
+
+// Per-rocket flag: true if an OnTouch DataPack has already been queued for this
+// rocket on the current frame. SDKHook_Touch fires per-overlap, often many times
+// per tick per rocket; the destroy-detection branch in TouchRequestFrame only
+// reads "did the entity get freed by next frame?", so one queued check per
+// rocket per frame is sufficient. Cleared at the head of TouchRequestFrame and
+// on map/config reset.
+bool g_TouchPending[MAX_ROCKETS];
 
 public Plugin myinfo =
 {
@@ -71,6 +80,10 @@ public void OnMapEnd()
 	}
 
 	RocketClassCount = 0;
+
+	// Reset dedupe flags — any RequestFrame still in flight will be discarded
+	// on map change, so flags stuck at true would block touches on the next map.
+	for (int i = 0; i < sizeof(g_TouchPending); i++) g_TouchPending[i] = false;
 }
 
 void ParseConfigurations(const char[] configFile)
@@ -197,9 +210,14 @@ public Action OnTouch(int entity, int other)
 	if (rocketClass < 0 || rocketClass >= RocketClassCount) return Plugin_Continue;
 
 	if (RocketClassCmdsOnDestroyed[rocketClass] == null) return Plugin_Continue;
-	
+
+	// Dedupe: only one queued check per rocket per frame.
+	if (g_TouchPending[index]) return Plugin_Continue;
+	g_TouchPending[index] = true;
+
 	DataPack touchInfo = new DataPack();
-	
+
+	touchInfo.WriteCell(index);
 	touchInfo.WriteCell(rocketClass);
 	touchInfo.WriteCell(EntIndexToEntRef(entity));
 	touchInfo.WriteCell(EntIndexToEntRef(GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity")));
@@ -218,7 +236,13 @@ public Action OnTouch(int entity, int other)
 public void TouchRequestFrame(DataPack touchInfo)
 {
 	touchInfo.Reset();
-	
+
+	int index           = touchInfo.ReadCell();
+	// Clear the per-rocket dedupe flag first thing, regardless of which branch
+	// below we take — if we early-return without clearing, future touches on
+	// this rocket index would never re-arm.
+	if (index >= 0 && index < MAX_ROCKETS) g_TouchPending[index] = false;
+
 	int rocketClass     = touchInfo.ReadCell();
 	int rocket          = EntRefToEntIndex(touchInfo.ReadCell());
 	int owner           = EntRefToEntIndex(touchInfo.ReadCell());

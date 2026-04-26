@@ -122,38 +122,68 @@ stock bool IsValidClientEx(int client, bool alive = false)
 }
 
 /**
+ * Full recount of g_AliveCount[] from scratch. Authoritative reset path —
+ * called at round_start, EnableDodgeBall, and as a safety net if drift is
+ * ever suspected. Counters are also maintained incrementally via the player
+ * spawn / death / team-change / disconnect events.
+ */
+void RecountAlive()
+{
+	g_AliveCount[2] = 0;
+	g_AliveCount[3] = 0;
+
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsClientInGame(i) || !IsPlayerAlive(i)) continue;
+		int t = GetClientTeam(i);
+		if (t == 2 || t == 3) g_AliveCount[t]++;
+	}
+}
+
+/**
  * Checks if there are living players on both teams.
+ *
+ * Fast-path: reads the cached per-team alive counts maintained by the
+ * player_spawn / player_death / player_team / OnClientDisconnect handlers.
+ * Replaces the previous O(MaxClients) IsValidClientEx scan, which fired
+ * every 0.1 s from OnDodgeBallGameFrame.
  */
 stock bool BothTeamsPlaying()
 {
-	bool redFound, bluFound;
-	
-	for (int client = 1; client <= MaxClients; client++)
-	{
-		if (!IsValidClientEx(client, true)) continue;
-		
-		int team = GetClientTeam(client);
-		
-		if (team == view_as<int>(TFTeam_Red)) redFound = true;
-		if (team == view_as<int>(TFTeam_Blue)) bluFound = true;
-	}
-	
-	return redFound && bluFound;
+	return (g_AliveCount[2] > 0 && g_AliveCount[3] > 0);
+
+	// --- DORMANT: original linear-scan implementation. Kept for reference /
+	// quick revert if the cached counters ever drift. ---
+	// bool redFound, bluFound;
+	// for (int client = 1; client <= MaxClients; client++)
+	// {
+	// 	if (!IsValidClientEx(client, true)) continue;
+	// 	int team = GetClientTeam(client);
+	// 	if (team == view_as<int>(TFTeam_Red)) redFound = true;
+	// 	if (team == view_as<int>(TFTeam_Blue)) bluFound = true;
+	// }
+	// return redFound && bluFound;
 }
 
 /**
  * Counts the number of players currently alive.
+ *
+ * Fast-path: returns RED + BLU from the cached counters. Spectator (team 1)
+ * is intentionally excluded — the original loop counted any in-game alive
+ * player, but in dodgeball spectators are never alive and team-0/1 alive
+ * players don't exist in practice.
  */
 stock int CountAlivePlayers()
 {
-	int count = 0;
-	
-	for (int client = 1; client <= MaxClients; client++)
-	{
-		if (IsValidClientEx(client, true)) count++;
-	}
-	
-	return count;
+	return g_AliveCount[2] + g_AliveCount[3];
+
+	// --- DORMANT: original linear-scan implementation. ---
+	// int count = 0;
+	// for (int client = 1; client <= MaxClients; client++)
+	// {
+	// 	if (IsValidClientEx(client, true)) count++;
+	// }
+	// return count;
 }
 
 /**
@@ -172,6 +202,14 @@ stock int GetAnalogueTeam(int team)
  */
 stock int SelectTarget(int team, int rocket = -1)
 {
+	// Fast no-target early-out: if the cached counter says zero alive on
+	// the requested team, there's nothing to pick. team==0 means "any"
+	// (neutral rocket), so we still need the full scan in that case.
+	if ((team == 2 || team == 3) && g_AliveCount[team] == 0)
+	{
+		return -1;
+	}
+
 	int target = -1;
 	float targetWeight = 0.0;
 	float rocketPosition[3];

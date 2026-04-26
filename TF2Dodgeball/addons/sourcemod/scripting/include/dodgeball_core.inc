@@ -28,6 +28,14 @@ void EnableDodgeBall()
 {
 	if (Enabled) return;
 
+	// Initialize the O(1) entity -> rocket-slot reverse-lookup cache.
+	// SourcePawn does not zero-init globals between map changes the way you'd
+	// expect, and 0 is a valid slot index — so explicitly fill with -1.
+	for (int i = 0; i < sizeof(g_EntityIndexToRocketSlot); i++)
+	{
+		g_EntityIndexToRocketSlot[i] = ROCKET_SLOT_NONE;
+	}
+
 	char mapName[64]; GetCurrentMap(mapName, sizeof(mapName));
 	GetMapDisplayName(mapName, mapName, sizeof(mapName));
 	char mapFile[PLATFORM_MAX_PATH]; FormatEx(mapFile, sizeof(mapFile), "%s.cfg", mapName);
@@ -50,6 +58,7 @@ void EnableDodgeBall()
 		HookEventEx("teamplay_round_win", OnRoundEnd, EventHookMode_PostNoCopy);
 		HookEventEx("player_spawn", OnPlayerSpawn, EventHookMode_Post);
 		HookEventEx("player_death", OnPlayerDeath, EventHookMode_Pre);
+		HookEventEx("player_team",  OnPlayerTeam,  EventHookMode_Post);
 		HookEventEx("post_inventory_application", OnPlayerInventory, EventHookMode_Post);
 		HookEventEx("teamplay_broadcast_audio", OnBroadcastAudio, EventHookMode_Pre);
 		HookEventEx("object_deflected", OnObjectDeflected);
@@ -104,6 +113,10 @@ void EnableDodgeBall()
 	char cfgFile[64];
 	CvarEnableCfgFile.GetString(cfgFile, sizeof(cfgFile));
 	ServerCommand("exec \"%s\"", cfgFile);
+
+	// Authoritative alive-counter reset. Subsequent maintenance is incremental
+	// via player_spawn / player_death / player_team / OnClientDisconnect.
+	RecountAlive();
 
 	Enabled      = true;
 	RoundStarted = false;

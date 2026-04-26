@@ -7,6 +7,7 @@
 #include <multicolors>
 
 #include <tfdb>
+#include <tfdb_clientcheck>
 
 #undef REQUIRE_PLUGIN
 #include <tfdbtrails>
@@ -300,10 +301,11 @@ public void OnClientConnected(int client)
 
 public Action CmdDodgeballMenu(int client, int args)
 {
-	if (client == 0)
+	// Menu must be displayed to a real human client (DisplayMenu(0,...) is undefined).
+	if (client == 0 || !IsClientInGame(client) || IsFakeClient(client))
 	{
 		ReplyToCommand(client, "Command is in-game only.");
-		
+
 		return Plugin_Handled;
 	}
 	

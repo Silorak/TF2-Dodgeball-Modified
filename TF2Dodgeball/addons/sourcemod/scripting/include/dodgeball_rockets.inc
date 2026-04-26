@@ -7,6 +7,8 @@
  * All logic directly related to creating, managing, and controlling rockets.
  */
 
+#define ROCKET_SLOT_NONE (-1)
+
 /**
  * Creates and spawns a new rocket from a spawner.
  *
@@ -84,6 +86,10 @@ void CreateRocket(int spawnerEntity, int spawnerClass, int team, int rocketClass
 	RocketIsValid[index]            = true;
 	RocketInstanceFlags[index]      = flags;
 	RocketEntity[index]             = EntIndexToEntRef(entity);
+	if (entity > 0 && entity < sizeof(g_EntityIndexToRocketSlot))
+	{
+		g_EntityIndexToRocketSlot[entity] = index;
+	}
 	RocketTarget[index]             = EntIndexToEntRef(target);
 	RocketClass[index]              = rocketClass;
 	RocketDeflections[index]        = 0;
@@ -163,6 +169,16 @@ void DestroyRocket(int index)
 	RocketCritGlowTeam[index] = 0;
 
 	int entity = EntRefToEntIndex(RocketEntity[index]);
+
+	// Clear the O(1) reverse-lookup cache. Guard with the slot match so a stale
+	// entry (entity recycled into a non-rocket then this slot freed) can't blow
+	// away another rocket's mapping.
+	if (entity > 0 && entity < sizeof(g_EntityIndexToRocketSlot)
+	    && g_EntityIndexToRocketSlot[entity] == index)
+	{
+		g_EntityIndexToRocketSlot[entity] = ROCKET_SLOT_NONE;
+	}
+
 	if (entity != INVALID_ENT_REFERENCE && IsValidEntity(entity))
 	{
 		RemoveEntity(entity);
@@ -211,13 +227,30 @@ void UpdateCritGlow(int index, int entity, int team)
 		}
 	}
 
+	// Resolve particle name: per-class override (cfg "crit glow particle <team>")
+	// wins; empty/unset falls back to the engine defaults.
 	char particleName[32];
 	if (team == view_as<int>(TFTeam_Blue))
-		particleName = "critical_rocket_blue";
+	{
+		if (RocketClassCritGlowParticleBlue[rocketClass][0] != '\0')
+			strcopy(particleName, sizeof(particleName), RocketClassCritGlowParticleBlue[rocketClass]);
+		else
+			particleName = "critical_rocket_blue";
+	}
 	else if (team == view_as<int>(TFTeam_Red))
-		particleName = "critical_rocket_red";
+	{
+		if (RocketClassCritGlowParticleRed[rocketClass][0] != '\0')
+			strcopy(particleName, sizeof(particleName), RocketClassCritGlowParticleRed[rocketClass]);
+		else
+			particleName = "critical_rocket_red";
+	}
 	else
-		particleName = "eyeboss_projectile";
+	{
+		if (RocketClassCritGlowParticleNeutral[rocketClass][0] != '\0')
+			strcopy(particleName, sizeof(particleName), RocketClassCritGlowParticleNeutral[rocketClass]);
+		else
+			particleName = "eyeboss_projectile";
+	}
 
 	// Clean up old stack first so we don't leak any lingering entries.
 	for (int i = 0; i < MAX_CRIT_STACK; i++)
@@ -318,12 +351,19 @@ int FindFreeRocketSlot()
  */
 int FindRocketByEntity(int entity)
 {
-	int index = -1;
-	while ((index = FindNextValidRocket(index)) != -1)
+	if (entity <= 0 || entity >= sizeof(g_EntityIndexToRocketSlot)) return -1;
+	int slot = g_EntityIndexToRocketSlot[entity];
+	if (slot < 0 || slot >= MAX_ROCKETS) return -1;
+
+	// Sanity check: entity recycling can leave stale entries (engine destroys
+	// the rocket, slot index gets reused for another entity). Verify the slot
+	// still points back to this entity before trusting the mapping.
+	if (EntRefToEntIndex(RocketEntity[slot]) != entity)
 	{
-		if (EntRefToEntIndex(RocketEntity[index]) == entity) return index;
+		g_EntityIndexToRocketSlot[entity] = ROCKET_SLOT_NONE;
+		return -1;
 	}
-	return -1;
+	return slot;
 }
 
 /**
@@ -408,7 +448,7 @@ bool ProcessDeflection(int index, int entity, int rocketClass, RocketFlags flags
 
 	RocketMphSpeed[index] = RocketSpeed[index] * HAMMER_TO_MPH;
 
-	if (CvarStealPreventionDamage.BoolValue && (RocketInstanceState[index] & RocketState_Stolen))
+	if (g_CacheStealPreventionDamage && (RocketInstanceState[index] & RocketState_Stolen))
 	{
 		SetEntDataFloat(entity, DamageOffset, 0.0, true);
 	}
@@ -453,6 +493,13 @@ void HomingRocketThink(int index)
 	int entity           = EntRefToEntIndex(RocketEntity[index]);
 	if (entity == -1) return;
 
+	// Hoisted natives: HomingRocketThink runs per-rocket per-tick. The audit found
+	// 5x GetGameTime, 2x GetGameTickCount, 2x GetTickInterval per call. All three
+	// are constant within a single tick — cache once at function entry.
+	float now            = GetGameTime();
+	int   currentTick    = GetGameTickCount();
+	float tickScaleConst = GetTickInterval() / TICK_BASE_INTERVAL;
+
 	int rocketClass      = RocketClass[index];
 	RocketFlags flags    = RocketInstanceFlags[index];
 	int target           = EntRefToEntIndex(RocketTarget[index]);
@@ -460,14 +507,14 @@ void HomingRocketThink(int index)
 	int targetTeam       = (TestFlags(flags, RocketFlag_IsNeutral)) ? 0 : GetAnalogueTeam(team);
 	int deflectionCount  = RocketEventDeflections[index];
 	float modifier       = CalculateModifier(rocketClass, deflectionCount);
-	
+
 	// --- Bounce unpause: clear the pause after per-class bounce control ticks ---
 	// OnTouch set RocketHomingPaused=true and stamped RocketBounceEventTick. We let the
 	// rocket fly its bounce direction blindly for that many ticks, then resume homing.
 	if (RocketHomingPaused[index])
 	{
 		int bounceReady = RocketBounceEventTick[index] + RocketClassBounceControl[rocketClass];
-		if (GetGameTickCount() >= bounceReady)
+		if (currentTick >= bounceReady)
 		{
 			ApplyRocketParameters(index);
 			RocketHomingPaused[index] = false;
@@ -486,7 +533,6 @@ void HomingRocketThink(int index)
 		int delayTicks  = RocketClassSteeringControl[rocketClass];
 		int eventTick   = RocketDragEventTick[index];
 		int readyTick   = eventTick + delayTicks;
-		int currentTick = GetGameTickCount();
 
 		if (currentTick >= readyTick)
 		{
@@ -509,7 +555,7 @@ void HomingRocketThink(int index)
 	// If "think interval" == 0, run per-tick with tickScale compensation (current 2.2.0 behavior).
 	float thinkInterval = RocketClassThinkInterval[rocketClass];
 	bool gatedThink = (thinkInterval > 0.0);
-	bool homingLerpEligible = !gatedThink || (GetGameTime() >= RocketNextHomingThink[index]);
+	bool homingLerpEligible = !gatedThink || (now >= RocketNextHomingThink[index]);
 
 	if (!RocketHomingPaused[index])
 	{
@@ -527,7 +573,7 @@ void HomingRocketThink(int index)
 				ExecuteCommands(RocketClassCmdsOnNoTarget[rocketClass], rocketClass, entity, owner, target, LastDeadClient, RocketSpeed[index], deflectionCount, RocketMphSpeed[index]);
 			}
 
-			if (CvarNoTargetRedirectDamage.BoolValue)
+			if (g_CacheNoTargetRedirectDamage)
 			{
 				SetEntDataFloat(entity, DamageOffset, 0.0, true);
 			}
@@ -535,10 +581,10 @@ void HomingRocketThink(int index)
 		}
 		else if (homingLerpEligible)
 		{
-			if ((GetGameTime() - RocketLastDeflectionTime[index]) >= RocketClassControlDelay[rocketClass])
+			if ((now - RocketLastDeflectionTime[index]) >= RocketClassControlDelay[rocketClass])
 			{
 				// tickScale: 1.0 for gated think (Damizean raw-lerp), else GetTickInterval()/TICK_BASE_INTERVAL.
-				float tickScale = gatedThink ? 1.0 : (GetTickInterval() / TICK_BASE_INTERVAL);
+				float tickScale = gatedThink ? 1.0 : tickScaleConst;
 				float turnRate = CalculateRocketTurnRate(rocketClass, modifier) * tickScale;
 				float directionToTarget[3]; CalculateDirectionToClient(entity, target, directionToTarget);
 
@@ -555,7 +601,7 @@ void HomingRocketThink(int index)
 
 				if (gatedThink)
 				{
-					RocketNextHomingThink[index] = GetGameTime() + thinkInterval;
+					RocketNextHomingThink[index] = now + thinkInterval;
 				}
 			}
 		}
@@ -563,9 +609,9 @@ void HomingRocketThink(int index)
 		// --- Smooth elevation (OnGameFrame, frame-rate independent) ---
 		if (UseSmoothElevation && (RocketInstanceFlags[index] & RocketFlag_Elevating))
 		{
-			if ((GetGameTime() - RocketLastDeflectionTime[index]) >= RocketClassControlDelay[rocketClass])
+			if ((now - RocketLastDeflectionTime[index]) >= RocketClassControlDelay[rocketClass])
 			{
-				float elevRate = RocketClassElevationRate[rocketClass] * (GetTickInterval() / TICK_BASE_INTERVAL);
+				float elevRate = RocketClassElevationRate[rocketClass] * tickScaleConst;
 				if (RocketDirection[index][2] < RocketClassElevationLimit[rocketClass])
 				{
 					RocketDirection[index][2] = FMin(RocketDirection[index][2] + elevRate, RocketClassElevationLimit[rocketClass]);
@@ -625,7 +671,7 @@ void SharedRocketThink(int index)
 			RocketLastBeepTime[index] = GetGameTime();
 		}
 
-		if (CvarDelayPrevention.BoolValue)
+		if (g_CacheDelayPrevention)
 		{
 			CheckRoundDelays(index);
 		}
@@ -668,7 +714,7 @@ void RocketLegacyThink(int index)
 			ExecuteCommands(RocketClassCmdsOnNoTarget[rocketClass], rocketClass, entity, owner, target, LastDeadClient, RocketSpeed[index], deflectionCount, RocketMphSpeed[index]);
 		}
 
-		if (CvarNoTargetRedirectDamage.BoolValue)
+		if (g_CacheNoTargetRedirectDamage)
 		{
 			SetEntDataFloat(entity, DamageOffset, 0.0, true);
 		}
@@ -912,7 +958,7 @@ void CheckRoundDelays(int index)
 	int target = EntRefToEntIndex(RocketTarget[index]);
 	float timeToCheck = RocketDeflections[index] == 0 ? LastSpawnTime[index] : RocketLastDeflectionTime[index];
 	
-	if (target == -1 || (GetGameTime() - timeToCheck) < CvarDelayPreventionTime.FloatValue) return;
+	if (target == -1 || (GetGameTime() - timeToCheck) < g_CacheDelayPreventionTime) return;
 
 	if (!(RocketInstanceState[index] & RocketState_Delayed))
 	{

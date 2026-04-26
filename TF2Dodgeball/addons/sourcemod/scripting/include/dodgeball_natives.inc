@@ -290,6 +290,50 @@ TFDB_NATIVE_SET(Native_SetRocketClassBounceCeiling,         RocketClassBounceCei
 TFDB_NATIVE_GET(Native_GetRocketClassCritGlowStack,         RocketClassCritGlowStack)
 TFDB_NATIVE_SET(Native_SetRocketClassCritGlowStack,         RocketClassCritGlowStack)
 
+/**
+ * TFDB_GetRocketClassCritGlowParticle(int iClass, int iTeam, char[] strBuffer, int iMaxLen)
+ *
+ * Reads the per-class crit glow particle name for a given team. Returns the
+ * stored override (set in cfg or via the setter); empty string means "use
+ * the engine default" — the caller can fall back to "critical_rocket_red" /
+ * "critical_rocket_blue" / "eyeboss_projectile" as appropriate.
+ *
+ * iTeam values: 2 = TFTeam_Red, 3 = TFTeam_Blue, 0 = neutral (any other value
+ * also routed to neutral).
+ */
+public any Native_GetRocketClassCritGlowParticle(Handle plugin, int numParams) {
+	int iClass = GetNativeCell(1);
+	int iTeam  = GetNativeCell(2);
+	int maxLen = GetNativeCell(4);
+	if (iClass < 0 || iClass >= MAX_ROCKET_CLASSES) return ThrowNativeError(SP_ERROR_NATIVE, "Invalid rocket class index %d", iClass);
+
+	if      (iTeam == view_as<int>(TFTeam_Red))   SetNativeString(3, RocketClassCritGlowParticleRed[iClass],     maxLen);
+	else if (iTeam == view_as<int>(TFTeam_Blue))  SetNativeString(3, RocketClassCritGlowParticleBlue[iClass],    maxLen);
+	else                                          SetNativeString(3, RocketClassCritGlowParticleNeutral[iClass], maxLen);
+	return 0;
+}
+
+/**
+ * TFDB_SetRocketClassCritGlowParticle(int iClass, int iTeam, const char[] strBuffer)
+ *
+ * Sets the per-class crit glow particle name for a given team. Empty string
+ * restores the engine default. Takes effect on the NEXT rocket spawn (existing
+ * rockets keep the particle they were spawned with).
+ */
+public any Native_SetRocketClassCritGlowParticle(Handle plugin, int numParams) {
+	int iClass = GetNativeCell(1);
+	int iTeam  = GetNativeCell(2);
+	if (iClass < 0 || iClass >= MAX_ROCKET_CLASSES) return ThrowNativeError(SP_ERROR_NATIVE, "Invalid rocket class index %d", iClass);
+
+	char buffer[32];
+	GetNativeString(3, buffer, sizeof(buffer));
+
+	if      (iTeam == view_as<int>(TFTeam_Red))   strcopy(RocketClassCritGlowParticleRed[iClass],     32, buffer);
+	else if (iTeam == view_as<int>(TFTeam_Blue))  strcopy(RocketClassCritGlowParticleBlue[iClass],    32, buffer);
+	else                                          strcopy(RocketClassCritGlowParticleNeutral[iClass], 32, buffer);
+	return 0;
+}
+
 public any Native_GetRocketClassSteeringControl(Handle plugin, int numParams) {
 	return RocketClassSteeringControl[GetNativeCell(1)];
 }

@@ -6,6 +6,7 @@
 #include <sdkhooks>
 #include <tf2_stocks>
 #include <multicolors>
+#include <tfdb_clientcheck>
 
 // TFDB API: optional dependency. Works without it but gains rocket-level
 // attribution (who deflected which rocket, exact speed, target info) when present.
@@ -48,11 +49,21 @@ char   ACImmunityFlag[4];
 #define PERFECT_TIMING_TIME 0.03 // ~2 ticks at 66, ~4 at 128
 
 // Reaction-time floor for ReactTimeFloor detection.
-// Per psychophysics literature: hard physiological floor ~100ms;
-// practical visual simple-RT floor ~150ms; typical ~180-250ms.
-// 0.120s is a defensible "below this is physically impossible without anticipation,
-// and TFDB's random target assignment prevents anticipation of specific rockets."
-#define REACT_FLOOR_SECS 0.120
+// Default value now exposed as ConVar `tfdb_ac_react_floor_ms` (2026-04-24).
+// Lowered default 120 -> 80 after FP audit: expert dodgeball players ANTICIPATE
+// the rocket's arrival based on trajectory — "react time" measured from
+// rocket-becomes-incoming to airblast regularly dips below 100ms legitimately.
+// Psychophysics simple-RT floor is ~100-120ms, but this game measures from the
+// moment targeting flips (which happens AFTER the player has already tracked
+// the rocket visually), so the effective reaction time includes anticipation.
+// Real tick-bot signature is sub-50ms. Kept the constant as a documentation
+// anchor; runtime value is `ReactFloorSecs` fed from the ConVar.
+#define REACT_FLOOR_DEFAULT_MS  80
+#define REACT_FLOOR_STREAK_NEEDED 3      // consecutive sub-floor deflects before scoring
+#define REACT_FLOOR_STREAK_WINDOW 10.0   // seconds; streak resets if gap exceeds this
+
+float ReactFloorSecs = 0.080;  // live value, updated from ConVar hook
+ConVar CvarReactFloorMs;
 
 // ============================================================================
 // Per-client data structures
@@ -92,13 +103,16 @@ int   AirblastFacingStreak[MAXPLAYERS + 1];     // Consecutive not-facing deflec
 int   OneTickM2Detections[MAXPLAYERS + 1];      // IN_ATTACK2 pressed for exactly 1 tick (cheat signature)
 int   OneTickM2Streak[MAXPLAYERS + 1];          // Consecutive 1-tick presses; scored at streak >=3
 int   M2PressStartTick[MAXPLAYERS + 1];         // Tick when IN_ATTACK2 began; used to measure hold duration
+float JoinTime[MAXPLAYERS + 1];                 // GetEngineTime() at OnClientPutInServer; 3s warmup gates ReactTimeFloor
 
 // Reaction-time floor tracking (physiological floor ~120ms per the
 // psychophysics literature). When a rocket becomes targeted at a client,
 // record the moment. If they deflect within 120ms of that moment, it's
 // below what any human can visually react to.
 float LastRocketIncomingTime[MAXPLAYERS + 1];   // Seconds (GetEngineTime) when any rocket last targeted this client
-int   ReactTimeFloorDetections[MAXPLAYERS + 1]; // Count of sub-floor deflects
+int   ReactTimeFloorDetections[MAXPLAYERS + 1]; // Count of sub-floor-deflect STREAKS (not individual hits; streak-gated 2026-04-24)
+int   ReactFloorStreakCount[MAXPLAYERS + 1];    // Current consecutive sub-floor deflect count (resets if >10s between hits)
+float ReactFloorStreakLastTime[MAXPLAYERS + 1]; // GetEngineTime() of the last sub-floor deflect
 int   AntiAimDetections[MAXPLAYERS + 1];       // m_angEyeAngles pitch outside [-89, 89]
 int   SnapAimDetections[MAXPLAYERS + 1];       // Large angle snap coinciding with airblast
 int   PerfectStreakScore[MAXPLAYERS + 1];       // Scored streak milestones (not raw count)
@@ -130,6 +144,31 @@ int   PrevButtons[MAXPLAYERS + 1];
 // Raw (pre-modification) angles from OnPlayerRunCmdPre
 float RawAngles[MAXPLAYERS + 1][3];
 bool  RawAnglesValid[MAXPLAYERS + 1];
+
+// Cached admin-immunity state — HasImmunity() was a hot-path call (3x per
+// client per tick across OnPlayerRunCmd*/EvaluatePlayer) that ran
+// GetUserAdmin + FindFlagByChar + GetAdminFlag every invocation. Now resolved
+// once at OnClientPostAdminCheck / cvar-change and read as an array lookup.
+bool      g_ClientImmune[MAXPLAYERS + 1];
+AdminFlag g_ImmunityFlagBit;
+bool      g_ImmunityFlagValid = false;
+
+// Cached m_angEyeAngles sendprop offset — resolved once at OnPluginStart so
+// the per-tick AntiAim check skips the HasEntProp + GetEntPropFloat string
+// lookups. -1 = lookup failed (gate skips check).
+// (deprecated — Tier-1 perf attempt to cache m_angEyeAngles offset failed:
+//  FindSendPropInfo returned -1 in production. Reverted 2026-04-26 to use
+//  HasEntProp + GetEntPropFloat directly. Variable kept commented for the
+//  next contributor to know not to retry the same path without a real fix.)
+// int g_EyeAnglesPropOffset = -1;
+
+// Server tick rate, cached at OnMapStart so we can rate-limit per-tick spam
+// without calling GetTickInterval()/RoundToCeil in hot paths.
+int g_TicksPerSecond = 66;
+
+// Per-client cooldown for AntiAim detection — cheats holding AntiAim would
+// otherwise trigger LogDetection (synchronous LogToFile) every tick.
+int g_LastAntiAimTick[MAXPLAYERS + 1];
 
 // Network anomaly tracking
 
@@ -209,9 +248,14 @@ public void OnPluginStart()
         _, true, 0.0, true, 3.0
     );
 
-    // Total accumulated score needed to trigger action
+    // Total accumulated score needed to trigger action.
+    // Raised 30 -> 60 on 2026-04-24 after FP audit: legit skilled players
+    // routinely accumulated 25-35 in a single session under the old threshold.
+    // With SnapAim/PerfectStreak/ConsistentTiming zeroed AND threshold=60,
+    // a clean player never crosses; a real cheater tripping signature-level
+    // detectors (AntiAim, ReactTimeFloor streak, OneTickM2) still crosses fast.
     CvarActionThreshold = CreateConVar(
-        "tfdb_ac_action_threshold", "30",
+        "tfdb_ac_action_threshold", "60",
         "Total detection score needed before taking action on a player.",
         _, true, 5.0, true, 200.0
     );
@@ -223,9 +267,11 @@ public void OnPluginStart()
         _, true, 0.0, true, 2.0
     );
 
-    // Individual detection type thresholds (how many raw hits = 1 score point)
+    // Individual detection type thresholds (how many raw hits = 1 score point).
+    // Raised 3 -> 5 (2026-04-24) to require stronger evidence before silent-aim
+    // detectors (AntiAim/AirblastFacing/DragSnapback/SnapAim) contribute score.
     CvarSilentThreshold = CreateConVar(
-        "tfdb_ac_silent_hits", "3",
+        "tfdb_ac_silent_hits", "5",
         "Silent aim raw detections needed per score point.",
         _, true, 1.0, true, 20.0
     );
@@ -242,6 +288,17 @@ public void OnPluginStart()
         "Score points removed per decay tick.",
         _, true, 1.0, true, 10.0
     );
+
+    // ReactTimeFloor threshold (ms). Default 80 — expert dodgeball anticipation
+    // legitimately dips below 100ms. See tfdb_anti_cheat.sp:50-60 rationale.
+    // Detection is streak-gated (3 consecutive sub-floor deflects within 10s).
+    CvarReactFloorMs = CreateConVar(
+        "tfdb_ac_react_floor_ms", "80",
+        "Reaction-time floor (ms). Deflects faster than this contribute to a streak; streak of 3 within 10s scores.",
+        _, true, 30.0, true, 200.0
+    );
+    ReactFloorSecs = CvarReactFloorMs.FloatValue / 1000.0;
+    CvarReactFloorMs.AddChangeHook(OnReactFloorMsChanged);
 
     // Admin immunity
     CvarImmunityFlag = CreateConVar(
@@ -292,6 +349,13 @@ public void OnPluginStart()
 
     // Initial cache population
     CacheAllConVars();
+    RefreshImmunityFlag();
+
+    // Cache tick rate immediately so late-load before first map change has a
+    // valid value. OnMapStart re-populates with the actual server rate; this
+    // covers the gap where OnPlayerRunCmd could fire before OnMapStart on
+    // late plugin load. (Audit finding 2026-04-26.)
+    g_TicksPerSecond = RoundToCeil(1.0 / GetTickInterval());
 
     // Create HUD synchronizer for admin overlay
     HudSync = CreateHudSynchronizer();
@@ -302,6 +366,9 @@ public void OnPluginStart()
         if (IsClientInGame(i))
         {
             OnClientPutInServer(i);
+            // On late-load, OnClientPostAdminCheck won't fire for already-
+            // authed clients, so populate the immunity cache directly.
+            RefreshClientImmunity(i);
         }
     }
 
@@ -325,6 +392,10 @@ public void OnPluginStart()
 
 public void OnMapStart()
 {
+    // Cache server tick rate — used by per-client AntiAim rate-limit so we
+    // don't call GetTickInterval() in OnPlayerRunCmd.
+    g_TicksPerSecond = RoundToCeil(1.0 / GetTickInterval());
+
     // Recreate repeating timers — TIMER_FLAG_NO_MAPCHANGE kills them on map end.
     CreateTimer(CvarDecayInterval.FloatValue, Timer_DecayScores, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
     CreateTimer(1.0, Timer_AdminHud, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
@@ -401,19 +472,45 @@ public void TFDB_OnRocketDeflect(int index, int entity, int owner)
     if (HasImmunity(owner))
         return;
 
-    // ReactTimeFloor: compare deflect moment to when rocket last became
-    // incoming to this client. Sub-120ms = below physiological floor.
-    // LastRocketIncomingTime == 0.0 means "never tracked" — skip first
-    // few seconds after plugin load when state hasn't warmed up.
-    if (LastRocketIncomingTime[owner] > 0.0)
+    // ReactTimeFloor: sub-floor deflect detection. Streak-gated + join-warmup
+    // gated. Streak gate avoids single-shot anticipation FPs; warmup gate
+    // ignores the first 3s after a player joins (their first deflect can race
+    // with the spawn-tick targeting flip and produce a falsely-low elapsed).
+    if (LastRocketIncomingTime[owner] > 0.0 &&
+        (GetEngineTime() - JoinTime[owner]) > 3.0)
     {
-        float elapsed = GetEngineTime() - LastRocketIncomingTime[owner];
-        if (elapsed < REACT_FLOOR_SECS && elapsed > 0.0)
+        float now = GetEngineTime();
+        float elapsed = now - LastRocketIncomingTime[owner];
+        if (elapsed < ReactFloorSecs && elapsed > 0.0)
         {
-            ReactTimeFloorDetections[owner]++;
+            // Is this hit part of an active streak?
+            if (ReactFloorStreakCount[owner] > 0 &&
+                (now - ReactFloorStreakLastTime[owner]) <= REACT_FLOOR_STREAK_WINDOW)
+            {
+                ReactFloorStreakCount[owner]++;
+            }
+            else
+            {
+                ReactFloorStreakCount[owner] = 1;  // start fresh streak
+            }
+            ReactFloorStreakLastTime[owner] = now;
+
             LogDetection(owner, "ReactTimeFloor",
-                "elapsed=%.3fs (floor=%.3fs) - physiologically impossible",
-                elapsed, REACT_FLOOR_SECS);
+                "elapsed=%.3fs (floor=%.3fs) streak=%d/%d",
+                elapsed, ReactFloorSecs,
+                ReactFloorStreakCount[owner], REACT_FLOOR_STREAK_NEEDED);
+
+            // Only score when streak hits the threshold — sustained sub-floor
+            // pattern, not a one-off anticipation. Reset streak after scoring
+            // so continued cheating continues to score, but in multiples of N.
+            if (ReactFloorStreakCount[owner] >= REACT_FLOOR_STREAK_NEEDED)
+            {
+                ReactTimeFloorDetections[owner]++;
+                LogDetection(owner, "ReactTimeFloorStreakScored",
+                    "streak of %d sub-floor deflects in <%.0fs — SCORED",
+                    ReactFloorStreakCount[owner], REACT_FLOOR_STREAK_WINDOW);
+                ReactFloorStreakCount[owner] = 0;
+            }
         }
     }
 
@@ -747,11 +844,42 @@ void CacheAllConVars()
 public void OnConVarChanged(ConVar convar, const char[] oldValue, const char[] newValue)
 {
     CacheAllConVars();
+    // Immunity flag may have changed — re-resolve and recompute every client.
+    RefreshImmunityFlag();
+    RefreshAllClientImmunity();
+}
+
+/**
+ * Resolve the immunity flag once after configs have loaded. CacheAllConVars
+ * runs in OnPluginStart before AutoExecConfig has applied the .cfg file, so
+ * we re-resolve here to pick up the on-disk flag value.
+ */
+public void OnConfigsExecuted()
+{
+    RefreshImmunityFlag();
+    RefreshAllClientImmunity();
+}
+
+/**
+ * Cache immunity once per client, after their admin record is loaded.
+ * Caveat: if admins are reloaded mid-session (sm_reloadadmins) the cached
+ * value goes stale until reconnect. Acceptable trade-off for this plugin.
+ */
+public void OnClientPostAdminCheck(int client)
+{
+    RefreshClientImmunity(client);
+}
+
+/** Live-update the cached ReactTimeFloor seconds when the ms cvar changes. */
+public void OnReactFloorMsChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+    ReactFloorSecs = convar.FloatValue / 1000.0;
 }
 
 public void OnClientPutInServer(int client)
 {
     ResetClientState(client);
+    JoinTime[client] = GetEngineTime();  // ReactTimeFloor warmup window
     SDKHook(client, SDKHook_PreThink, OnPreThink);
 
     // Auto-enable debug logging if global collect mode is on
@@ -777,6 +905,8 @@ public void OnClientDisconnect(int client)
 
     ResetClientState(client);
     SDKUnhook(client, SDKHook_PreThink, OnPreThink);
+    g_ClientImmune[client] = false;
+    g_LastAntiAimTick[client] = 0;
 }
 
 void ResetClientState(int client)
@@ -797,6 +927,8 @@ void ResetClientState(int client)
     OneTickM2Streak[client]          = 0;
     M2PressStartTick[client]         = 0;
     ReactTimeFloorDetections[client] = 0;
+    ReactFloorStreakCount[client]    = 0;
+    ReactFloorStreakLastTime[client] = 0.0;
     LastRocketIncomingTime[client]   = 0.0;
     PerfectStreakScore[client]        = 0;
     LastDetectionTime[client]        = 0.0;
@@ -942,15 +1074,30 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse,
     // AntiAim. Zero false positive rate.
     // ------------------------------------------------------------------
 
+    // Read pitch via HasEntProp + GetEntPropFloat — the original API.
+    // The Tier-1 perf attempt to use FindSendPropInfo("CTFPlayer",
+    // "m_angEyeAngles") + GetEntDataFloat returned -1 in production
+    // (m_angEyeAngles isn't directly in the CTFPlayer SendTable; SourceMod's
+    // HasEntProp/GetEntPropFloat resolve through datamap fallbacks that
+    // FindSendPropInfo doesn't). Reverted 2026-04-26 — detection working
+    // beats the ~3168 string-lookups/sec "saving."
     if (HasEntProp(client, Prop_Send, "m_angEyeAngles"))
     {
         float eyePitch = GetEntPropFloat(client, Prop_Send, "m_angEyeAngles", 0);
         if (eyePitch > 89.1 || eyePitch < -89.1)
         {
-            AntiAimDetections[client]++;
-            LogDetection(client, "AntiAim",
-                "m_angEyeAngles[0]=%.2f (valid range [-89, 89])",
-                eyePitch);
+            // Rate-limit: a cheat holding AntiAim would otherwise drive
+            // LogDetection -> LogToFile (synchronous disk write) every tick
+            // AND inflate the score by ~66/sec. Cap at one detection per
+            // second per client. Score weight stays meaningful; log spam dies.
+            if ((currentTick - g_LastAntiAimTick[client]) >= g_TicksPerSecond)
+            {
+                g_LastAntiAimTick[client] = currentTick;
+                AntiAimDetections[client]++;
+                LogDetection(client, "AntiAim",
+                    "m_angEyeAngles[0]=%.2f (valid range [-89, 89])",
+                    eyePitch);
+            }
         }
     }
 
@@ -1385,6 +1532,25 @@ int CalculateScore(int client)
 {
     int score = 0;
 
+    // =====================================================================
+    // SCORE WEIGHTS — tuned 2026-04-24 after FP audit on production logs
+    // (50% of skilled players were getting auto-kicked in ~90 min sessions).
+    //
+    // KEEP at full weight (signature-level, near-zero FP):
+    //   AntiAim, AirblastFacing, DragSnapback, OneTickM2, ReactTimeFloor
+    //
+    // ZEROED (kept firing + logged for tuning, but contribute 0 score):
+    //   SnapAim        — fires on every natural deflect aim-correction
+    //   ConsistentTiming (InhaleExhaleDetections) — gameplay enforces
+    //                     tight timing; low variance is skill, not a bot
+    //   PerfectStreak  — routine 6+ streaks are warmup, not evidence
+    //
+    // If you have strong evidence a specific cheat trips one of the zeroed
+    // detectors but NOT the signature-level ones, re-enable by restoring the
+    // multiplier on its own line (leave the rest zero). See the AC wiki page
+    // `subplugins/AntiCheat.md` for the full rationale.
+    // =====================================================================
+
     // CRITICAL: AntiAim — m_angEyeAngles pitch outside [-89, 89]
     // Zero false positive rate. Does not decay.
     score += AntiAimDetections[client] / MaxInt(1, ACSilentHitsPerPoint) * 5;
@@ -1395,32 +1561,40 @@ int CalculateScore(int client)
     // HIGH: 3-angle drag snapback (return-to-origin after control delay)
     score += DragSnapbackDetections[client] / MaxInt(1, ACSilentHitsPerPoint) * 4;
 
-    // HIGH: SnapAim — large angle snap + airblast + return to origin
-    score += SnapAimDetections[client] / MaxInt(1, ACSilentHitsPerPoint) * 5;
+    // DISABLED: SnapAim — every natural dodgeball deflect is a snap-to-target
+    // then re-correction; detector can't distinguish from silent aim.
+    score += SnapAimDetections[client] / MaxInt(1, ACSilentHitsPerPoint) * 0;
 
-    // MEDIUM-HIGH: timing (primary detector for auto-airblast)
-    score += InhaleExhaleDetections[client] * 3;
+    // DISABLED: ConsistentTiming — the airblast window is ~2 ticks wide BY DESIGN,
+    // so skilled players naturally cluster at low variance. A real tick-bot already
+    // trips ReactTimeFloor harder; this adds no marginal signal.
+    score += InhaleExhaleDetections[client] * 0;
 
-    // MEDIUM-HIGH: streak milestones (each milestone = 4 points)
-    score += PerfectStreakScore[client] * 4;
+    // DISABLED: PerfectStreak — 6-deflect streaks are a warmup on any competitive
+    // server. Real cheats show ReactTimeFloor and OneTickM2 first.
+    score += PerfectStreakScore[client] * 0;
 
     // HIGH: 1-tick IN_ATTACK2 signature (free-paste cheat fingerprint).
     // Every detection already requires a 3-deep streak before scoring, so
     // full weight (6) is safe; false-positive rate is near zero.
     score += OneTickM2Detections[client] * 6;
 
-    // CRITICAL: ReactTimeFloor — deflect within 120ms of rocket becoming
-    // incoming. Physiologically impossible; weight heavy. Does NOT decay
-    // (like AntiAim) — permanent evidence.
-    score += ReactTimeFloorDetections[client] * 8;
+    // CRITICAL: ReactTimeFloor — deflect faster than human anticipation floor.
+    // Weight reduced 8 -> 5 because ReactTimeFloor is now streak-gated: a
+    // SINGLE sub-floor deflect no longer counts (expert anticipation can dip
+    // sub-floor briefly). 3 sub-floor deflects within 10s is the real signal.
+    score += ReactTimeFloorDetections[client] * 5;
 
     return score;
 }
 
 void EvaluatePlayer(int client)
 {
-    // Only evaluate every 66 ticks (~1 second) to avoid spam
-    if (GetGameTickCount() % RoundToCeil(1.0 / GetTickInterval()) != 0) return;
+    // Only evaluate every ~1 second of ticks to avoid spam.
+    // Use the cached g_TicksPerSecond (populated in OnMapStart) instead of
+    // recomputing 1.0/GetTickInterval() every tick — this runs from
+    // OnPlayerRunCmd for every player on every tick, so the math adds up.
+    if (GetGameTickCount() % g_TicksPerSecond != 0) return;
 
     int score = CalculateScore(client);
 
@@ -1736,7 +1910,7 @@ bool EnableDebugOnClient(int target)
 public Action Timer_AutoDebugPlayer(Handle timer, any userid)
 {
     int client = GetClientOfUserId(userid);
-    if (client == 0 || !IsClientInGame(client) || IsFakeClient(client)) return Plugin_Stop;
+    if (client == 0 || !TFDB_IsRealHuman(client)) return Plugin_Stop;
     if (!CollectAll) return Plugin_Stop;  // Collect mode was turned off before timer fired
 
     if (EnableDebugOnClient(client))
@@ -1775,7 +1949,7 @@ public Action Command_DebugPlayer(int client, int args)
             int count = 0;
             for (int i = 1; i <= MaxClients; i++)
             {
-                if (IsClientInGame(i) && !IsFakeClient(i))
+                if (TFDB_IsRealHuman(i))
                 {
                     if (EnableDebugOnClient(i))
                         count++;
@@ -1851,15 +2025,33 @@ int MaxInt(int a, int b)
 
 bool HasImmunity(int client)
 {
-    if (ACImmunityFlag[0] == '\0') return false;
+    return g_ClientImmune[client];
+}
 
+/** Resolve the immunity flag character once into an AdminFlag bit. */
+void RefreshImmunityFlag()
+{
+    g_ImmunityFlagValid = (ACImmunityFlag[0] != '\0')
+                          && FindFlagByChar(ACImmunityFlag[0], g_ImmunityFlagBit);
+}
+
+/** Recompute one client's cached immunity. Cheap — no string lookups. */
+void RefreshClientImmunity(int client)
+{
+    if (!g_ImmunityFlagValid) { g_ClientImmune[client] = false; return; }
     AdminId admin = GetUserAdmin(client);
-    if (admin == INVALID_ADMIN_ID) return false;
+    g_ClientImmune[client] = (admin != INVALID_ADMIN_ID)
+                             && GetAdminFlag(admin, g_ImmunityFlagBit);
+}
 
-    AdminFlag flagBit;
-    if (!FindFlagByChar(ACImmunityFlag[0], flagBit)) return false;
-
-    return GetAdminFlag(admin, flagBit);
+/** Refresh immunity for every connected client (call after cvar/flag change). */
+void RefreshAllClientImmunity()
+{
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (IsClientInGame(i)) RefreshClientImmunity(i);
+        else g_ClientImmune[i] = false;
+    }
 }
 
 void LogDetection(int client, const char[] type, const char[] format, any ...)

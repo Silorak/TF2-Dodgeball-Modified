@@ -6,6 +6,7 @@
 #include <sdkhooks>
 #include <tf2_stocks>
 #include <multicolors>
+#include <tfdb_clientcheck>
 
 #undef REQUIRE_PLUGIN
 #tryinclude <tfdb>

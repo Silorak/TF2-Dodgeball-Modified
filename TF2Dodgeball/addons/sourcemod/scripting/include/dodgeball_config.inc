@@ -61,6 +61,9 @@ void ResetRocketClass(int index)
 	RocketClassMaxBounces[index]        = 0;
 	RocketClassBounceCeiling[index]     = 0.0;
 	RocketClassCritGlowStack[index]     = 1;
+	RocketClassCritGlowParticleRed[index][0]     = '\0';  // empty = use default "critical_rocket_red"
+	RocketClassCritGlowParticleBlue[index][0]    = '\0';  // empty = use default "critical_rocket_blue"
+	RocketClassCritGlowParticleNeutral[index][0] = '\0';  // empty = use default "eyeboss_projectile"
 	RocketClassOrbitTightness[index]    = 0.0;
 	RocketClassMaxSpeed[index]          = 0.0;
 	RocketClassMaxDeflections[index]    = 0;
@@ -569,6 +572,14 @@ void ParseClasses(KeyValues config)
 		RocketClassCritGlowStack[index]     = config.GetNum("crit glow stack", 1);
 		if (RocketClassCritGlowStack[index] < 1)              RocketClassCritGlowStack[index] = 1;
 		if (RocketClassCritGlowStack[index] > MAX_CRIT_STACK) RocketClassCritGlowStack[index] = MAX_CRIT_STACK;
+
+		// Per-class crit glow particle override per team. Empty string = use the
+		// engine default for that team (red/blue/neutral; see UpdateCritGlow).
+		// Particle name MUST exist in the ParticleEffectNames string table or it
+		// renders nothing — use stock TF2 particle names.
+		config.GetString("crit glow particle red",     RocketClassCritGlowParticleRed[index],     32, "");
+		config.GetString("crit glow particle blue",    RocketClassCritGlowParticleBlue[index],    32, "");
+		config.GetString("crit glow particle neutral", RocketClassCritGlowParticleNeutral[index], 32, "");
 		RocketClassPlayerModifier[index]    = config.GetFloat("no. players modifier");
 		RocketClassRocketsModifier[index]   = config.GetFloat("no. rockets modifier");
 		RocketClassTargetWeight[index]      = config.GetFloat("direction to target weight");

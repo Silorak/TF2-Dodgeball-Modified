@@ -626,6 +626,11 @@
 		"en"		"[{olive}TFDB{default}] Changed spawners rocket class chances to {darkorange}{1}{default}."
 	}
 	
+	"Dodgeball_Vote_MustBeOnTeam"
+	{
+		"en"		"[{olive}TFDB{default}] You must be on RED or BLU to call a vote."
+	}
+
 	"Dodgeball_BounceVote_Cooldown"
 	{
 		"#format"	"{1:i}"
@@ -1060,6 +1065,29 @@
 		"en"		"[{olive}TFDB{default}] Vote blocked! Too many players ({steelblue}{1}{default} > {steelblue}{2}{default})."
 	}
 
+	"PvB_Vote_AbovePvBLimit"
+	{
+		"#format"	"{1:d},{2:d}"
+		"en"		"[{olive}TFDB{default}] Bot can't run with this many players ({steelblue}{1}{default} on server, max {steelblue}{2}{default} for PvB). Wait until some leave or have an admin force it with {community}!pvb{default}."
+	}
+
+	"PvB_TooManyPlayers_DeferredDisable"
+	{
+		"#format"	"{1:d},{2:d}"
+		"en"		"[{olive}TFDB{default}] {steelblue}{1}{default} players exceeds PvB max ({steelblue}{2}{default}). Bot will leave at end of this round."
+	}
+
+	"PvB_Vote_MustBeOnTeam"
+	{
+		"en"		"[{olive}TFDB{default}] You must be on {red}RED{default} or {blue}BLU{default} to vote for the bot."
+	}
+
+	"PvB_HotSwap_Deferred"
+	{
+		"#format"	"{1:s}"
+		"en"		"[{olive}TFDB{default}] Vote passed: bot will switch to {community}{1}{default} at end of this round."
+	}
+
 	"PvB_Vote_StartDisable"
 	{
 		"#format"	"{1:N}"
@@ -1191,6 +1219,11 @@
 	"DeathMatch_NER_Not_Allowed"
 	{
 		"en"		"[{olive}TFDB{default}] {darkmagenta}DeathMatch{default} is currently {red}disabled{default}."
+	}
+
+	"DeathMatch_MustBeOnTeam"
+	{
+		"en"		"[{olive}TFDB{default}] You must be on {red}RED{default} or {blue}BLU{default} to use this command."
 	}
 
 	"DeathMatch_NERVote_Cooldown"

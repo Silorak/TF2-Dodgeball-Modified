@@ -7,6 +7,7 @@
 #include <tfdb> // Include the Dodgeball plugin's natives
 #include <clientprefs> // Include for cookie functions
 #include <multicolors> // Include for colored chat and translations
+#include <tfdb_clientcheck>
 
 #define PLUGIN_VERSION "2.2.0"
 
@@ -113,10 +114,12 @@ public void OnClientCookiesCached(int client)
 
 public Action Command_ToggleHud(int client, int args)
 {
-	// This command is for players only.
-	if (client == 0)
+	// Per-client toggle — must reject server console (no cookie/state slot)
+	// AND fake clients (a bot somehow invoking this would write to a slot
+	// it can't observe).
+	if (client == 0 || !IsClientInGame(client) || IsFakeClient(client))
 	{
-		PrintToServer("This command can only be used by players.");
+		ReplyToCommand(client, "[TFDB] sm_speedhud is an in-game command (real players only).");
 		return Plugin_Handled;
 	}
 
@@ -268,7 +271,7 @@ public Action DisplayHud(Handle timer)
 
 		for (int i = 1; i <= MaxClients; i++)
 		{
-			if (IsClientInGame(i))
+			if (IsClientInGame(i) && !IsFakeClient(i))
 			{
 				if (HudEnabledForClient[i])
 				{
@@ -334,7 +337,7 @@ public Action DisplayHud(Handle timer)
 		// Display the list on the left side for all players.
 		for (int i = 1; i <= MaxClients; i++)
 		{
-			if (IsClientInGame(i))
+			if (IsClientInGame(i) && !IsFakeClient(i))
 			{
 				if (HudEnabledForClient[i])
 				{
