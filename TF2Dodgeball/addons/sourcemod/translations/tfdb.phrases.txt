@@ -1088,39 +1088,10 @@
 		"en"		"[{olive}TFDB{default}] Vote passed: bot will switch to {community}{1}{default} at end of this round."
 	}
 
-	"PvB_Vote_StartDisable"
-	{
-		"#format"	"{1:N}"
-		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} started a vote to {red}DISABLE{default} the bot!"
-	}
-
 	"PvB_Vote_StartClass"
 	{
 		"#format"	"{1:N}"
 		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} started a bot class vote!"
-	}
-
-	"PvB_Vote_YesDisable"
-	{
-		"#format"	"{1:N},{2:d},{3:d}"
-		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} voted {olive}YES{default} to disable ({steelblue}{2}{default}/{steelblue}{3}{default})"
-	}
-
-	"PvB_Vote_No_KeepBot"
-	{
-		"#format"	"{1:N}"
-		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} voted {red}NO{default} (keep bot)"
-	}
-
-	"PvB_Vote_DisablePassed"
-	{
-		"en"		"[{olive}TFDB{default}] Vote passed! {red}Disabling bot...{default} Normal match resumed."
-	}
-
-	"PvB_Vote_DisableFailed"
-	{
-		"#format"	"{1:d},{2:d}"
-		"en"		"[{olive}TFDB{default}] Vote failed ({steelblue}{1}{default}/{steelblue}{2}{default}). Bot stays active."
 	}
 
 	"PvB_PlayerJoined_BotDisabled"
@@ -1373,11 +1344,6 @@
 	{
 		"#format"	"{1:s}"
 		"en"		"Speech Settings\nSpeech: {1}"
-	}
-
-	"PvB_Menu_Vote_Disable"
-	{
-		"en"		"Vote: Disable PvB Bot?\n(Return to normal match)"
 	}
 
 	"PvB_Menu_Choose_Opponent"

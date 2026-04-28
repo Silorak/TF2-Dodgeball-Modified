@@ -204,6 +204,8 @@ ConVar CvarBanDuration;  // Minutes (0 = permanent). Default 1440 = 24h.
 
 // Admin HUD synchronizer — persistent overlay for admins showing live scores
 Handle HudSync = null;
+Handle g_DecayTimer = null;
+Handle g_AdminHudTimer = null;
 
 // ============================================================================
 // Plugin Info
@@ -396,13 +398,36 @@ public void OnMapStart()
     // don't call GetTickInterval() in OnPlayerRunCmd.
     g_TicksPerSecond = RoundToCeil(1.0 / GetTickInterval());
 
-    // Recreate repeating timers — TIMER_FLAG_NO_MAPCHANGE kills them on map end.
-    CreateTimer(CvarDecayInterval.FloatValue, Timer_DecayScores, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-    CreateTimer(1.0, Timer_AdminHud, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+    // Recreate repeating timers — TIMER_FLAG_NO_MAPCHANGE kills them on map end,
+    // so the handles only need to be remembered for OnPluginEnd cleanup (reload
+    // mid-map would otherwise leak a timer that fires against the unloaded plugin).
+    g_DecayTimer = CreateTimer(CvarDecayInterval.FloatValue, Timer_DecayScores, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+    g_AdminHudTimer = CreateTimer(1.0, Timer_AdminHud, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+}
+
+public void OnMapEnd()
+{
+    // TIMER_FLAG_NO_MAPCHANGE means the engine kills these for us at map end —
+    // just null the handles so OnPluginEnd doesn't double-free a stale pointer.
+    g_DecayTimer = null;
+    g_AdminHudTimer = null;
 }
 
 public void OnPluginEnd()
 {
+    // Kill repeating timers so they don't fire against an unloaded plugin
+    // after `sm plugins reload tfdb_anti_cheat`.
+    if (g_DecayTimer != null)
+    {
+        KillTimer(g_DecayTimer);
+        g_DecayTimer = null;
+    }
+    if (g_AdminHudTimer != null)
+    {
+        KillTimer(g_AdminHudTimer);
+        g_AdminHudTimer = null;
+    }
+
     // Release the HUD synchronizer handle. SM will clean on unload but being
     // explicit avoids handle-table pressure during dev iteration.
     if (HudSync != null)

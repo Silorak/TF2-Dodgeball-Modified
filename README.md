@@ -60,7 +60,7 @@ A modular plugin suite built around a shared native API. The core plugin handles
 
 **DeathMatch (NER + Solo)** — Never-Ending Rounds keeps small-server rounds alive by swapping players between teams on death. Solo queue lets players sit out and rejoin when a team empties. Per-client respawn protection, two-pass cosmetic team-color fix after swap, FFA coexistence. Mutually exclusive with Guardian and PvB.
 
-**Cross-plugin ecosystem** — Guardian, PvB, and DeathMatch use a three-way mutual-exclusion protocol so they never run simultaneously (team-management conflict). FFA coexists with all three. Plugin-developer friendly: every subplugin registers a library via `RegPluginLibrary` and exposes optional natives (`TFDB_IsGuardianActive`, `TFDB_IsPvBActive`, `TFDB_IsDeathMatchActive`). Third-party plugins can integrate via runtime `LibraryExists` gates without hard dependencies.
+**Cross-plugin ecosystem** — Guardian, PvB, and DeathMatch use a three-way mutual-exclusion protocol so they never run simultaneously (team-management conflict). **FFA coexists with DeathMatch only** — Guardian and PvB take exclusive control of team layout and refuse to activate while FFA is on (FFA's neutral-team semantics break the bot-on-BLU and boss-on-BLU contracts). Plugin-developer friendly: every subplugin registers a library via `RegPluginLibrary` and exposes optional natives (`TFDB_IsGuardianActive`, `TFDB_IsPvBActive`, `TFDB_IsDeathMatchActive`). Third-party plugins can integrate via runtime `LibraryExists` gates without hard dependencies.
 
 **Per-map configs** — Override any setting for specific maps by creating `configs/dodgeball/tfdb_mapname.cfg`. The gamemode activates automatically on maps prefixed `tfdb_`, `db_`, or `dbs_` (including Workshop maps).
 
@@ -379,7 +379,7 @@ Companion plugin `tfdb_ac_debug.smx` provides the per-client CSV logging for tri
 <details>
 <summary><b>FFA</b> — free-for-all mode</summary>
 
-Free-for-all mode. Enables friendly fire so rockets target everyone. Toggled via vote or admin command. Automatically blocked during Guardian rounds. **Coexists with DeathMatch** — NER behavior adapts to skip team swaps when FFA is active.
+Free-for-all mode. Enables friendly fire so rockets target everyone. Toggled via vote or admin command. **Mutually exclusive with Guardian and PvB** (their team layouts assume RED/BLU semantics that FFA's neutral-team mode breaks). **Coexists with DeathMatch** — NER behavior adapts to skip team swaps when FFA is active.
 
 </details>
 

@@ -41,6 +41,16 @@ int RocketFakeEntity       [MAX_ROCKETS] = {-1, ...};
 // reverse-lookup which fake belongs to a dying rocket.
 int RocketRealEntity       [MAX_ROCKETS] = {-1, ...};
 
+// Per-rocket tracking of every info_particle_system / env_spritetrail entity
+// we spawn. When TrailFlag_RemoveParticles is UNSET, the trail entity is
+// parented directly to the real rocket — and Source does NOT cascade-delete
+// SetParent children, so without explicit reaping these orphan and walk the
+// edict count toward 2048 on long-running servers. We store entrefs (not raw
+// indices) so stale-entity reads are safe.
+#define MAX_TRAILS_PER_ROCKET 8
+int RocketTrailEntities    [MAX_ROCKETS][MAX_TRAILS_PER_ROCKET];
+int RocketTrailEntityCount [MAX_ROCKETS];
+
 char       RocketClassTrail         [MAX_ROCKET_CLASSES][PLATFORM_MAX_PATH];
 char       RocketClassSprite        [MAX_ROCKET_CLASSES][PLATFORM_MAX_PATH];
 char       RocketClassSpriteColor   [MAX_ROCKET_CLASSES][16];
@@ -179,9 +189,32 @@ public void OnMapEnd()
 		}
 		RocketFakeEntity[i] = -1;
 		RocketRealEntity[i] = -1;
+
+		// Reap any trail/sprite entities parented to the real rocket — these
+		// don't die with the fake (which only takes its own children).
+		KillRocketTrailEntities(i);
 	}
 
 	RocketClassCount = 0;
+}
+
+public void OnPluginEnd()
+{
+	// On unload, the same orphan problem exists: trail entities parented to
+	// real rockets stay alive in-world even though we'll no longer track
+	// them. Reap everything we know about before our state is destroyed.
+	for (int i = 0; i < MAX_ROCKETS; i++)
+	{
+		int fake = EntRefToEntIndex(RocketFakeEntity[i]);
+		if (fake != -1 && IsValidEntity(fake))
+		{
+			AcceptEntityInput(fake, "Kill");
+		}
+		RocketFakeEntity[i] = -1;
+		RocketRealEntity[i] = -1;
+
+		KillRocketTrailEntities(i);
+	}
 }
 
 public void OnEntityDestroyed(int entity)
@@ -203,8 +236,42 @@ public void OnEntityDestroyed(int entity)
 		}
 		RocketFakeEntity[i] = -1;
 		RocketRealEntity[i] = -1;
+
+		// Reap any trail/sprite entities we spawned for this rocket. Required
+		// when TrailFlag_RemoveParticles is unset (the trail is parented to
+		// the real rocket, not the fake, so it does not die with the fake).
+		// Redundant for the parented-to-fake case, but IsValidEntity guards
+		// the double-kill.
+		KillRocketTrailEntities(i);
 		break;
 	}
+}
+
+// Kills every tracked trail/sprite entity for the given rocket slot and
+// resets the count. Safe to call multiple times.
+void KillRocketTrailEntities(int index)
+{
+	int count = RocketTrailEntityCount[index];
+	for (int t = 0; t < count; t++)
+	{
+		int trailEnt = EntRefToEntIndex(RocketTrailEntities[index][t]);
+		if (trailEnt != -1 && IsValidEntity(trailEnt))
+		{
+			RemoveEntity(trailEnt);
+		}
+		RocketTrailEntities[index][t] = INVALID_ENT_REFERENCE;
+	}
+	RocketTrailEntityCount[index] = 0;
+}
+
+// Push a freshly-spawned trail/sprite entity onto the per-rocket tracking
+// list. Bounded by MAX_TRAILS_PER_ROCKET — overflow is silently ignored
+// (defensive; with the current two spawn sites we cap at 2 per rocket).
+void TrackRocketTrailEntity(int index, int trailEntity)
+{
+	if (index < 0 || index >= MAX_ROCKETS) return;
+	if (RocketTrailEntityCount[index] >= MAX_TRAILS_PER_ROCKET) return;
+	RocketTrailEntities[index][RocketTrailEntityCount[index]++] = EntIndexToEntRef(trailEntity);
 }
 
 public void OnClientDisconnect(int client)
@@ -344,6 +411,12 @@ public void TFDB_OnRocketCreated(int index, int entity)
 			DispatchKeyValue(trailEntity, "effect_name", RocketClassTrail[classIndex]);
 			DispatchSpawn(trailEntity);
 			ActivateEntity(trailEntity);
+
+			// Track for cleanup. Required when this trail ends up parented to
+			// the real rocket (RemoveParticles unset) — Source orphans rather
+			// than cascade-deletes children. Tracking the parented-to-fake
+			// case is harmless: the redundant kill is gated by IsValidEntity.
+			TrackRocketTrailEntity(index, trailEntity);
 			
 			if (TestFlags(flags, TrailFlag_RemoveParticles))
 			{
@@ -436,6 +509,11 @@ public void TFDB_OnRocketCreated(int index, int entity)
 			
 			DispatchSpawn(spriteEntity);
 			SDKHook(spriteEntity, SDKHook_SetTransmit, SpriteSetTransmit);
+
+			// Track for cleanup — same reasoning as the info_particle_system
+			// branch above. Without this, sprites parented to the real
+			// rocket (RemoveParticles unset) leak edicts on every rocket.
+			TrackRocketTrailEntity(index, spriteEntity);
 		}
 	}
 	

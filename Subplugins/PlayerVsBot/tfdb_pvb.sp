@@ -288,7 +288,9 @@ bool DebugActive = false;
 int  BotDebugTick[MAXPLAYERS + 1];  // Per-bot tick counter (was global, caused 4x logging with 4 bots)
 int  DebugSampleRate = 10;          // Log every N ticks (10 = ~6.6 samples/sec at 66 tick)
 int  DebugLinesWritten = 0;
+int  DebugTotalLines = 0;            // Cumulative across rotations — drives hard-cap shutoff (DebugLinesWritten resets on rotate)
 #define DEBUG_MAX_LINES 50000        // Rotate log file after this many lines (~400/bot/minute at rate=10, 66 tick)
+#define DEBUG_MAX_TOTAL_LINES 500000 // Hard cap: auto-stop logging if user forgets sm_stopdebug (prevents unbounded rotated-file growth)
 char DebugLogPath[PLATFORM_MAX_PATH];
 File DebugFile = null;               // File handle for high-frequency writes (avoids console spam)
 
@@ -539,7 +541,7 @@ public void OnPluginStart() {
     // === ADMIN Commands ===
     RegAdminCmd("sm_botadmin", Cmd_BotAdmin, ADMFLAG_KICK, "[ADMIN] Open bot administration menu.");
     RegAdminCmd("sm_setbottype", Cmd_SetBotType, ADMFLAG_KICK, "[ADMIN] Set bot type by class index (see pvb.cfg for available classes).");
-    RegAdminCmd("sm_reloadbotcfg", Cmd_ReloadConfig, ADMFLAG_KICK, "[ADMIN] Reload pvb.cfg");
+    RegAdminCmd("sm_reloadbotcfg", Cmd_ReloadConfig, ADMFLAG_CONFIG, "[ADMIN] Reload pvb.cfg");
     RegAdminCmd("sm_resetbrain", Cmd_ResetBrain, ADMFLAG_ROOT, "[ROOT] Reset bot brain (all learning data).");
     RegAdminCmd("sm_botdebug", Cmd_BotDebug, ADMFLAG_ROOT, "[ROOT] Toggle persistent bot debug logging to CSV.");
 
@@ -2332,6 +2334,18 @@ public Action Event_PlayerTeamChange(Event event, const char[] name, bool dontBr
     // post-transition state. (2026-04-26 fix: bot lingered when last human
     // went to spec because the count was sampled pre-transition.)
     RequestFrame(Frame_RefreshCachedCounts);
+
+    // Solo-player bot menu: when a human transitions FROM spec TO a play team
+    // and is the only one playing, offer them the bot menu. The
+    // OnClientPutInServer path covers fresh connections / map changes; this
+    // covers the spec→play case which has no putinserver event. (2026-04-28
+    // regression fix: pre-clientcheck migration the menu fired because old
+    // counts included spectators; now it needs an explicit trigger.)
+    if (newTeam == view_as<int>(TFTeam_Red) || newTeam == view_as<int>(TFTeam_Blue)) {
+        // Defer 1.5s — gives Frame_RefreshCachedCounts time to land AND lets
+        // the player's spawn settle so the menu doesn't pop during freezecam.
+        CreateTimer(1.5, Timer_CheckPlayerJoin, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+    }
 
     // The remaining BLU collision backstop only matters in active PvB mode.
     if (!BotEnabled || TrainingMode) return Plugin_Continue;
@@ -4521,16 +4535,38 @@ void AdjustBrain(const char[] brainKey, int optionId, int adjustment, const int[
     if (BrainMemory == null) return;
 
     int weights[MAX_BRAIN_OPTIONS];
-    if (!BrainMemory.GetArray(brainKey, weights, numOptions)) {
+    bool wasInBrain = BrainMemory.GetArray(brainKey, weights, numOptions);
+    if (!wasInBrain) {
         for (int i = 0; i < numOptions; i++) weights[i] = defaults[i];
     }
 
+    int oldWeight = weights[optionId];
     weights[optionId] += adjustment;
     if (weights[optionId] < 1) weights[optionId] = 1;
     if (weights[optionId] > 200) weights[optionId] = 200;
+    int newWeight = weights[optionId];
 
     BrainMemory.SetArray(brainKey, weights, numOptions);
     QueueBrainWrite(brainKey, optionId, weights[optionId]);
+
+    // Reward-signal trace — proves learning is firing. Each line here means
+    // a class state's weight just got nudged. If the debug log shows DECISION
+    // events but ZERO REWARD events, the learning loop is broken upstream.
+    // 2026-04-27: added because frozen-weights audit couldn't distinguish
+    // "reward never fires" vs "reward fires but blend hides it".
+    if (DebugActive && DebugFile != null) {
+        // SourcePawn's Format does not support the "+" flag (%+d). Build the
+        // sign manually. Without this fix, %+d printed as the literal "+d"
+        // and consumed zero args, shifting every subsequent %d left by one
+        // — the 04-27 session's logs all read weight=ADJ->OLD defaultsKnown=NEW.
+        char signStr[2];
+        signStr[0] = (adjustment >= 0) ? '+' : '\0';  // negative numbers carry their own sign
+        signStr[1] = '\0';
+
+        DebugFile.WriteLine("[REWARD] key=%s opt=%d adj=%s%d weight=%d->%d seeded=%d",
+            brainKey, optionId, signStr, adjustment, oldWeight, newWeight, wasInBrain ? 1 : 0);
+        DebugBumpLineCount();
+    }
 
     // Shared base policy propagation.
     // After updating the class-specific key, also propagate a HALF-magnitude
@@ -4899,10 +4935,23 @@ float DecideReactMultiplier(int client, float speed, int botType) {
     BuildReactKey(LastReactKey[client], sizeof(LastReactKey[]), sTier, botType);
     int choice = ChooseWeighted(LastReactKey[client], DefReact, 3);
     LastReactChoice[client] = choice;
-    
-    if (choice == 0) return 1.3;
-    if (choice == 2) return 0.7;
-    return 1.0;
+
+    float mult = 1.0;
+    if      (choice == 0) mult = 1.3;
+    else if (choice == 2) mult = 0.7;
+
+    if (DebugActive) {
+        static const char reactNames[3][] = { "SLOW", "NORMAL", "FAST" };
+        char det[160];
+        FormatEx(det, sizeof(det),
+            "DecideReact key=%s sTier=%d -> %s (mult=%.2f)",
+            LastReactKey[client], sTier,
+            (choice >= 0 && choice < 3) ? reactNames[choice] : "?",
+            mult);
+        DebugLogDecision(client, "React", det);
+    }
+
+    return mult;
 }
 
 float DecideAimOffset(int client, float speed, int botType) {
@@ -4911,10 +4960,21 @@ float DecideAimOffset(int client, float speed, int botType) {
     BuildAimKey(LastAimKey[client], sizeof(LastAimKey[]), sTier, dTier, botType);
     int choice = ChooseWeighted(LastAimKey[client], DefAim, 5);
     LastAimChoice[client] = choice;
-    
+
     // Get opponent profile to modulate aim
     int enemy = TargetEnemy[client];
     int tendency = GetOpponentTendency(enemy);
+
+    if (DebugActive) {
+        static const char aimNames[5][] = { "STRAIGHT", "LEFT15", "RIGHT15", "TRACK", "RANDOM" };
+        char det[192];
+        FormatEx(det, sizeof(det),
+            "DecideAim key=%s sTier=%d dTier=%d brain_choice=%s tendency=%d (override possible)",
+            LastAimKey[client], sTier, dTier,
+            (choice >= 0 && choice < 5) ? aimNames[choice] : "?",
+            tendency);
+        DebugLogDecision(client, "Aim", det);
+    }
     
     // Override aim based on opponent profiling when we have data
     // If opponent always strafes left, aim right to catch them
@@ -5557,6 +5617,11 @@ public Action Cmd_BotDebug(int client, int args) {
         if (rate >= 1 && rate <= 66) DebugSampleRate = rate;
     }
 
+    // Fresh user-initiated session — reset cumulative-line counter so the hard
+    // cap measures THIS session, not the previous one. (RotateDebugFile also
+    // calls StartDebugLogging but must NOT reset DebugTotalLines, otherwise the
+    // hard cap would never trigger across rotations.)
+    DebugTotalLines = 0;
     StartDebugLogging();
     CReplyToCommand(client, "[PvB] Debug logging STARTED (every %d ticks). sm_stopdebug to stop.", DebugSampleRate);
     CReplyToCommand(client, "[PvB] Log: %s", DebugLogPath);
@@ -5879,6 +5944,8 @@ void StartDebugLogging() {
     // Write header
     DebugFile.WriteLine("=== PVB DEBUG START === map=%s rate=%d ===", CurrentMap, DebugSampleRate);
     DebugFile.WriteLine("FORMAT: [TICK] #clientIdx name team=(2R/3B) (type alive) | pos(x y z) | move=MODE blend(idle toward circle away) | look=STATE(aimDampen) | rocket(ent mine=targeted tgtcl=actualTarget dist spd approach=headingToMe) | orbit(active/phase) | trick=NAME(applying) | danger | enemy=#idx(dist) | teammate=name(dist) | react=airblastDist | vel(x y) | ang(pitch yaw) | btn=MOETR | EVENT");
+    DebugFile.WriteLine("DECISION events: MoveMode (M_*), Trick (T_*), Evade (E_*), Orbit (O_*), Aim (A_*), React (R_*). Each prints brain key + sTier + chosen option.");
+    DebugFile.WriteLine("[REWARD] events: brain weight adjustment. Format: key=<...> opt=N adj=+/-N weight=OLD->NEW seeded=0/1 (1 = key was already in BrainMemory). Zero REWARD lines + many DECISION lines = learning loop broken.");
 
     DebugActive = true;
     for (int i = 1; i <= MaxClients; i++) BotDebugTick[i] = 0;
@@ -5899,6 +5966,25 @@ void StopDebugLogging() {
 void RotateDebugFile() {
     StopDebugLogging();
     StartDebugLogging();
+}
+
+// Shared post-write bookkeeping: bumps line counters, enforces the hard cap
+// (auto-stops logging if the user forgot sm_stopdebug — otherwise rotated
+// files would grow unbounded), then rotates the current file at DEBUG_MAX_LINES.
+// Call after every DebugFile.WriteLine() that participates in the line budget.
+void DebugBumpLineCount() {
+    DebugLinesWritten++;
+    DebugTotalLines++;
+
+    if (DebugTotalLines >= DEBUG_MAX_TOTAL_LINES) {
+        PrintToServer("[PvB] Debug log hit hard cap (%d lines) — auto-stopping. Use sm_stopdebug next time.", DEBUG_MAX_TOTAL_LINES);
+        StopDebugLogging();
+        return;
+    }
+
+    if (DebugLinesWritten >= DEBUG_MAX_LINES) {
+        RotateDebugFile();
+    }
 }
 
 // Called from OnPlayerRunCmd for each bot every DebugSampleRate ticks.
@@ -6053,11 +6139,7 @@ void DebugLogBotState(int client, float vel[3], float angles[3], const char[] ev
         angles[0], angles[1],
         btnStr, event);
 
-    DebugLinesWritten++;
-
-    if (DebugLinesWritten >= DEBUG_MAX_LINES) {
-        RotateDebugFile();
-    }
+    DebugBumpLineCount();
 }
 
 // Log a one-off event (deflect, kill, death, trick, etc.) - always written regardless of sample rate
@@ -6093,10 +6175,7 @@ void DebugLogDecision(int client, const char[] where, const char[] details)
         "[tick %d] DECISION/%s #%d %s type=%d %s",
         GetGameTickCount(), where, client, botName, botType, details);
 
-    DebugLinesWritten++;
-    if (DebugLinesWritten >= DEBUG_MAX_LINES) {
-        RotateDebugFile();
-    }
+    DebugBumpLineCount();
 }
 
 // ============================================================================
@@ -6220,10 +6299,7 @@ void DebugLogPlayerState(int client, float vel[3], float angles[3], int buttons)
         nearEnemy, nearEnemyDist,
         btnStr);
 
-    DebugLinesWritten++;
-    if (DebugLinesWritten >= DEBUG_MAX_LINES) {
-        RotateDebugFile();
-    }
+    DebugBumpLineCount();
 }
 
 // ============================================================================
@@ -6334,13 +6410,31 @@ void LoadOpponentFromDB(int client) {
     FormatEx(query, sizeof(query),
         "SELECT strafe_left, strafe_right, stood_still, jumped, crouched, cqc_approach, cqc_retreat, total_deflects, total_kills, total_deaths, avg_deflect_speed FROM bot_opponent_v1 WHERE steam_id=%d",
         sid);
-    BrainDB.Query(SQL_LoadOpponent, query, GetClientUserId(client));
+
+    // Pack (userid, expectedSid) so the callback can verify the slot still
+    // holds the SAME player it queried for. Prevents slot-reuse hijacks where
+    // player A disconnects mid-query and player B reconnects into slot A
+    // before the callback fires, causing B to inherit A's brain profile.
+    DataPack pack = new DataPack();
+    pack.WriteCell(GetClientUserId(client));
+    pack.WriteCell(sid);
+    BrainDB.Query(SQL_LoadOpponent, query, pack);
 }
 
-public void SQL_LoadOpponent(Database db, DBResultSet results, const char[] error, any data) {
+public void SQL_LoadOpponent(Database db, DBResultSet results, const char[] error, DataPack pack) {
+    pack.Reset();
+    int userid     = pack.ReadCell();
+    int expectedSid = pack.ReadCell();
+    delete pack;
+
     if (error[0] != '\0') { LogError("[PvB] Opponent load error: %s", error); return; }
-    int client = GetClientOfUserId(data);
+
+    int client = GetClientOfUserId(userid);
     if (client <= 0 || !IsClientInGame(client)) return;
+    // Slot-reuse guard: if the slot now holds a different player than the one
+    // we queried for, drop the result silently. The new player gets their own
+    // load via OnClientPostAdminCheck.
+    if (GetSteamAccountID(client, true) != expectedSid) return;
 
     if (results.FetchRow()) {
         OpProfile[client].strafeLeftCount  = results.FetchInt(0);

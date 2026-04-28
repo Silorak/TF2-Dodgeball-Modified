@@ -18,19 +18,41 @@
 
 // Generate a getter that returns Field[GetNativeCell(1)].
 // Uses view_as<any> so float arrays work without a separate macro.
-// Example: TFDB_NATIVE_GET(Native_GetRocketClassDamage, RocketClassDamage)
+// Bounds-check the rocket index — third-party subplugins that forget to call
+// IsValidRocket() first would otherwise read/write adjacent memory and crash
+// core. ThrowNativeError raises a script exception in the calling subplugin
+// instead of corrupting our state. (Audit finding 2026-04-28.)
+//
+// All TFDB rocket-instance arrays are sized [MAX_ROCKETS] (see dodgeball.sp).
+// Class arrays use a separate set of natives that have their own bounds path.
+//
+// Example: TFDB_NATIVE_GET(Native_GetRocketSpeed, RocketSpeed)
 #define TFDB_NATIVE_GET(%1,%2) \
-	public any %1(Handle plugin, int numParams) { return view_as<any>(%2[GetNativeCell(1)]); }
+	public any %1(Handle plugin, int numParams) { \
+		int idx = GetNativeCell(1); \
+		if (idx < 0 || idx >= MAX_ROCKETS) return ThrowNativeError(SP_ERROR_PARAM, "Rocket index %d out of range [0..%d)", idx, MAX_ROCKETS); \
+		return view_as<any>(%2[idx]); \
+	}
 
 // Generate a setter that writes GetNativeCell(2) into Field[GetNativeCell(1)].
-// Example: TFDB_NATIVE_SET(Native_SetRocketClassDamage, RocketClassDamage)
+// Example: TFDB_NATIVE_SET(Native_SetRocketSpeed, RocketSpeed)
 #define TFDB_NATIVE_SET(%1,%2) \
-	public any %1(Handle plugin, int numParams) { %2[GetNativeCell(1)] = GetNativeCell(2); return 0; }
+	public any %1(Handle plugin, int numParams) { \
+		int idx = GetNativeCell(1); \
+		if (idx < 0 || idx >= MAX_ROCKETS) return ThrowNativeError(SP_ERROR_PARAM, "Rocket index %d out of range [0..%d)", idx, MAX_ROCKETS); \
+		%2[idx] = GetNativeCell(2); \
+		return 0; \
+	}
 
 // Setter with an enum cast (for typed-enum arrays like RocketInstanceFlags).
 // Example: TFDB_NATIVE_SET_CAST(Native_SetRocketFlags, RocketInstanceFlags, RocketFlags)
 #define TFDB_NATIVE_SET_CAST(%1,%2,%3) \
-	public any %1(Handle plugin, int numParams) { %2[GetNativeCell(1)] = view_as<%3>(GetNativeCell(2)); return 0; }
+	public any %1(Handle plugin, int numParams) { \
+		int idx = GetNativeCell(1); \
+		if (idx < 0 || idx >= MAX_ROCKETS) return ThrowNativeError(SP_ERROR_PARAM, "Rocket index %d out of range [0..%d)", idx, MAX_ROCKETS); \
+		%2[idx] = view_as<%3>(GetNativeCell(2)); \
+		return 0; \
+	}
 
 // *********************************************************************************
 // NATIVES - GENERAL & STATE
