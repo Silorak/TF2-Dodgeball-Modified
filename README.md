@@ -21,7 +21,7 @@ One required core plugin plus 13 optional modules. Install only what you want.
 | Plugin | What it does |
 |---|---|
 | **Core** (`dodgeball.smx`) | The game itself — rockets, airblast, deflection, bouncing. **Required.** |
-| **Guardian** | One player becomes a boss with extra HP and special abilities. Everyone else fights them. |
+| **Guardian** | One player becomes a boss with extra HP and special abilities. Everyone else fights them. **Beta — framework solid, design not fully fleshed out.** |
 | **PlayerVsBot** | An AI bot that learns as it plays. You can fight it 1-vs-1 or watch bots train each other. |
 | **DeathMatch** | Keeps small servers alive — when a team would lose, swap a player or respawn a soloer. |
 | **AntiCheat** | Catches obvious public-tier cheats. **Beta — read the warning before enabling.** (Needs more testing) |
@@ -46,6 +46,8 @@ Anything you don't want? Just don't install its `.smx` file — or move it to `p
 - **Crit glow customization** — stack 1-10 fake-crit particles per class. Override the particle name per team.
 - **Modes don't fight each other** — Guardian / PvB / DeathMatch refuse to run together (they all play with team layout). FFA pairs with DeathMatch only.
 - **Three old plugins built into the core** (Airblast Prevention, Anti-Switch, NoBlock). Same settings, just live in `general.cfg` now.
+
+For the full release notes including upgrade instructions from 2.1.0, see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -100,6 +102,10 @@ Click a section to expand details.
 One player per round becomes the Guardian. They get extra HP, a boss health bar, a glow effect and two special abilities you pick from a list. Everyone else fights them.
 
 The Guardian gets picked at random each round, weighted by class. Players can opt out of being chosen with `sm_guardian`. Guardian rounds skip when bots are on the server, when FFA is active or when fewer than 2 players qualify.
+
+> **⚠️ Beta — working but not finished.**
+>
+> The framework is solid (selection, abilities, opt-out, mutex with other modes) but the design isn't fully fleshed out. Class balance is rough, the ability set is short (5 types) and there's no late-round catch-up logic if the Guardian falls behind. Plays well as a "occasional change of pace" round but isn't tuned for competitive league use yet. Expect class tuning and ability additions in future releases.
 
 **Commands**
 
