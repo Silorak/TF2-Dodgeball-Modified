@@ -47,8 +47,6 @@ Anything you don't want? Just don't install its `.smx` file — or move it to `p
 - **Modes don't fight each other** — Guardian / PvB / DeathMatch refuse to run together (they all play with team layout). FFA pairs with DeathMatch only.
 - **Three old plugins built into the core** (Airblast Prevention, Anti-Switch, NoBlock). Same settings, just live in `general.cfg` now.
 
-For the full release notes including upgrade instructions from 2.1.0, see [CHANGELOG.md](CHANGELOG.md).
-
 ---
 
 ## Quick install
