@@ -522,8 +522,6 @@ Register your own library with `RegPluginLibrary("your_name")` so partners can c
 
 If you're building from source: compile `dodgeball.sp` first (it generates the natives in `tfdb.inc`). Then compile subplugins in any order. Subplugin source lives in `Subplugins/<name>/scripting/`.
 
-Or use the project's `/tfdb-compile` skill if you have Claude integration set up.
-
 ### File layout (for reference)
 
 <details>
