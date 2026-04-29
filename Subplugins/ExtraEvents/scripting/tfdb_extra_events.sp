@@ -5,16 +5,25 @@
 #include <sdkhooks>
 
 #include <tfdb>
+#include <tfdb_clientcheck>
 
 #define PLUGIN_NAME        "[TFDB] Extra events"
-#define PLUGIN_AUTHOR      "x07x08"
+#define PLUGIN_AUTHOR      "x07x08, Silorak"
 #define PLUGIN_DESCRIPTION "Adds more events for use with external commands."
-#define PLUGIN_VERSION     "1.0.1"
-#define PLUGIN_URL         "https://github.com/x07x08/TF2-Dodgeball-Modified"
+#define PLUGIN_VERSION     "2.2.0"
+#define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball"
 
 int RocketClassCount;
 
 DataPack RocketClassCmdsOnDestroyed[MAX_ROCKET_CLASSES];
+
+// Per-rocket flag: true if an OnTouch DataPack has already been queued for this
+// rocket on the current frame. SDKHook_Touch fires per-overlap, often many times
+// per tick per rocket; the destroy-detection branch in TouchRequestFrame only
+// reads "did the entity get freed by next frame?", so one queued check per
+// rocket per frame is sufficient. Cleared at the head of TouchRequestFrame and
+// on map/config reset.
+bool g_TouchPending[MAX_ROCKETS];
 
 public Plugin myinfo =
 {
@@ -31,58 +40,72 @@ public void OnPluginStart()
 	
 	TFDB_OnRocketsConfigExecuted("general.cfg");
 	
-	for (int iIndex = 0; iIndex < MAX_ROCKETS; iIndex++)
+	for (int index = 0; index < MAX_ROCKETS; index++)
 	{
-		if (!TFDB_IsValidRocket(iIndex)) continue;
-		
-		SDKHook(EntRefToEntIndex(TFDB_GetRocketEntity(iIndex)), SDKHook_Touch, OnTouch);
+		if (!TFDB_IsValidRocket(index)) continue;
+
+		// TFDB_GetRocketEntity already unwraps the ent ref internally and returns
+		// an entity INDEX. Do NOT wrap it in EntRefToEntIndex again — double-wrapping
+		// a raw index returns INVALID_ENT_REFERENCE (raw indices lack the ent-ref magic
+		// bits), which makes SDKHook(-1, ...) silently fail on plugin late-load.
+		int entity = TFDB_GetRocketEntity(index);
+		if (entity > 0 && IsValidEntity(entity))
+		{
+			SDKHook(entity, SDKHook_Touch, OnTouch);
+		}
 	}
 }
 
-public void TFDB_OnRocketsConfigExecuted(const char[] strConfigFile)
+public void TFDB_OnRocketsConfigExecuted(const char[] configFile)
 {
-	if (!(strcmp(strConfigFile, "general.cfg") == 0)) return;
+	if (!(strcmp(configFile, "general.cfg") == 0)) return;
 	
-	for (int iIndex = 0; iIndex < RocketClassCount; iIndex++)
+	for (int index = 0; index < RocketClassCount; index++)
 	{
-		delete RocketClassCmdsOnDestroyed[iIndex];
+		delete RocketClassCmdsOnDestroyed[index];
+		RocketClassCmdsOnDestroyed[index] = null;
 	}
-	
+
 	RocketClassCount = 0;
-	
-	ParseConfigurations(strConfigFile);
+
+	ParseConfigurations(configFile);
 }
 
 public void OnMapEnd()
 {
-	for (int iIndex = 0; iIndex < RocketClassCount; iIndex++)
+	for (int index = 0; index < RocketClassCount; index++)
 	{
-		delete RocketClassCmdsOnDestroyed[iIndex];
+		delete RocketClassCmdsOnDestroyed[index];
+		RocketClassCmdsOnDestroyed[index] = null;
 	}
-	
+
 	RocketClassCount = 0;
+
+	// Reset dedupe flags — any RequestFrame still in flight will be discarded
+	// on map change, so flags stuck at true would block touches on the next map.
+	for (int i = 0; i < sizeof(g_TouchPending); i++) g_TouchPending[i] = false;
 }
 
-void ParseConfigurations(const char[] strConfigFile)
+void ParseConfigurations(const char[] configFile)
 {
-	char strPath[PLATFORM_MAX_PATH];
-	char strFileName[PLATFORM_MAX_PATH];
-	FormatEx(strFileName, sizeof(strFileName), "configs/dodgeball/%s", strConfigFile);
-	BuildPath(Path_SM, strPath, sizeof(strPath), strFileName);
+	char path[PLATFORM_MAX_PATH];
+	char fileName[PLATFORM_MAX_PATH];
+	FormatEx(fileName, sizeof(fileName), "configs/dodgeball/%s", configFile);
+	BuildPath(Path_SM, path, sizeof(path), fileName);
 	
-	if (!FileExists(strPath, true)) return;
+	if (!FileExists(path, true)) return;
 	
 	KeyValues kvConfig = new KeyValues("TF2_Dodgeball");
 	
-	if (kvConfig.ImportFromFile(strPath) == false) SetFailState("Error while parsing the configuration file.");
+	if (kvConfig.ImportFromFile(path) == false) SetFailState("[TFDB ExtraEvents] Error while parsing configuration file: %s", path);
 	
 	kvConfig.GotoFirstSubKey();
 	
 	do
 	{
-		char strSection[64]; kvConfig.GetSectionName(strSection, sizeof(strSection));
+		char section[64]; kvConfig.GetSectionName(section, sizeof(section));
 		
-		if (StrEqual(strSection, "classes")) ParseClasses(kvConfig);
+		if (StrEqual(section, "classes")) ParseClasses(kvConfig);
 	}
 	while (kvConfig.GotoNextKey());
 	
@@ -91,15 +114,21 @@ void ParseConfigurations(const char[] strConfigFile)
 
 void ParseClasses(KeyValues kvConfig)
 {
-	char strBuffer[256];
+	char buffer[256];
 	
 	kvConfig.GotoFirstSubKey();
 	do
 	{
-		int iIndex = RocketClassCount;
+		if (RocketClassCount >= MAX_ROCKET_CLASSES)
+		{
+			LogError("Reached maximum rocket classes (%d). Remaining classes will be ignored.", MAX_ROCKET_CLASSES);
+			break;
+		}
+
+		int index = RocketClassCount;
 		
-		kvConfig.GetString("on destroyed", strBuffer, sizeof(strBuffer));
-		RocketClassCmdsOnDestroyed[iIndex] = ParseCommands(strBuffer);
+		kvConfig.GetString("on destroyed", buffer, sizeof(buffer));
+		RocketClassCmdsOnDestroyed[index] = ParseCommands(buffer);
 		
 		RocketClassCount++;
 	}
@@ -108,140 +137,161 @@ void ParseClasses(KeyValues kvConfig)
 	kvConfig.GoBack();
 }
 
-DataPack ParseCommands(char[] strLine)
+DataPack ParseCommands(char[] line)
 {
-	TrimString(strLine);
+	TrimString(line);
 	
-	if (!strLine[0])
+	if (!line[0])
 	{
 		return null;
 	}
 	
-	char strStrings[8][255];
-	int iNumStrings = ExplodeString(strLine, ";", strStrings, 8, 255);
+	char strings[8][255];
+	int numStrings = ExplodeString(line, ";", strings, 8, 255);
 	
-	DataPack hDataPack = new DataPack();
-	hDataPack.WriteCell(iNumStrings);
+	DataPack dataPack = new DataPack();
+	dataPack.WriteCell(numStrings);
 	
-	for (int i = 0; i < iNumStrings; i++)
+	for (int i = 0; i < numStrings; i++)
 	{
-		hDataPack.WriteString(strStrings[i]);
+		dataPack.WriteString(strings[i]);
 	}
 	
-	return hDataPack;
+	return dataPack;
 }
 
-void ExecuteCommands(DataPack hDataPack,
-                     int iClass,
-                     int iRocket,
-                     int iOwner,
-                     int iTarget,
-                     int iLastDead,
-                     float fSpeed,
-                     int iNumDeflections,
-                     float fMphSpeed)
+void ExecuteCommands(DataPack dataPack,
+                     int rocketClass,
+                     int rocket,
+                     int owner,
+                     int target,
+                     int lastDead,
+                     float speed,
+                     int numDeflections,
+                     float mphSpeed)
 {
-	hDataPack.Reset(false);
-	int iNumCommands = hDataPack.ReadCell();
+	dataPack.Reset(false);
+	int numCommands = dataPack.ReadCell();
 	
-	while (iNumCommands-- > 0)
+	while (numCommands-- > 0)
 	{
-		static char strCmd[256], strBuffer[32];
+		static char cmd[256], buffer[32];
 		
-		hDataPack.ReadString(strCmd, sizeof(strCmd));
-		ReplaceString(strCmd, sizeof(strCmd), "@name", GetRocketClassLongName(iClass));
-		FormatEx(strBuffer, sizeof(strBuffer), "%i", iRocket);                           ReplaceString(strCmd, sizeof(strCmd), "@rocket", strBuffer);
-		FormatEx(strBuffer, sizeof(strBuffer), "%i", iOwner);                            ReplaceString(strCmd, sizeof(strCmd), "@owner", strBuffer);
-		FormatEx(strBuffer, sizeof(strBuffer), "%i", iTarget);                           ReplaceString(strCmd, sizeof(strCmd), "@target", strBuffer);
-		FormatEx(strBuffer, sizeof(strBuffer), "%i", iLastDead);                         ReplaceString(strCmd, sizeof(strCmd), "@dead", strBuffer);
-		FormatEx(strBuffer, sizeof(strBuffer), "%i", iNumDeflections);                   ReplaceString(strCmd, sizeof(strCmd), "@deflections", strBuffer);
-		FormatEx(strBuffer, sizeof(strBuffer), "%f", fSpeed);                            ReplaceString(strCmd, sizeof(strCmd), "@speed", strBuffer);
-		FormatEx(strBuffer, sizeof(strBuffer), "%i", RoundToNearest(fMphSpeed));         ReplaceString(strCmd, sizeof(strCmd), "@mphspeed", strBuffer);
-		FormatEx(strBuffer, sizeof(strBuffer), "%i", RoundToNearest(fSpeed * 0.042614)); ReplaceString(strCmd, sizeof(strCmd), "@capmphspeed", strBuffer);
-		FormatEx(strBuffer, sizeof(strBuffer), "%f", fMphSpeed / 0.042614);              ReplaceString(strCmd, sizeof(strCmd), "@nocapspeed", strBuffer);
-		FormatEx(strBuffer, sizeof(strBuffer), "%.2f", fSpeed);                          ReplaceString(strCmd, sizeof(strCmd), "@2dspeed", strBuffer);
-		FormatEx(strBuffer, sizeof(strBuffer), "%.2f", fMphSpeed / 0.042614);            ReplaceString(strCmd, sizeof(strCmd), "@2dnocapspeed", strBuffer);
+		dataPack.ReadString(cmd, sizeof(cmd));
+		ReplaceString(cmd, sizeof(cmd), "@name", GetRocketClassLongName(rocketClass));
+		FormatEx(buffer, sizeof(buffer), "%i", rocket);                           ReplaceString(cmd, sizeof(cmd), "@rocket", buffer);
+		FormatEx(buffer, sizeof(buffer), "%i", owner);                            ReplaceString(cmd, sizeof(cmd), "@owner", buffer);
+		FormatEx(buffer, sizeof(buffer), "%i", target);                           ReplaceString(cmd, sizeof(cmd), "@target", buffer);
+		FormatEx(buffer, sizeof(buffer), "%i", lastDead);                         ReplaceString(cmd, sizeof(cmd), "@dead", buffer);
+		FormatEx(buffer, sizeof(buffer), "%i", numDeflections);                   ReplaceString(cmd, sizeof(cmd), "@deflections", buffer);
+		FormatEx(buffer, sizeof(buffer), "%f", speed);                            ReplaceString(cmd, sizeof(cmd), "@speed", buffer);
+		FormatEx(buffer, sizeof(buffer), "%i", RoundToNearest(mphSpeed));         ReplaceString(cmd, sizeof(cmd), "@mphspeed", buffer);
+		FormatEx(buffer, sizeof(buffer), "%i", RoundToNearest(speed * 0.042614)); ReplaceString(cmd, sizeof(cmd), "@capmphspeed", buffer);
+		FormatEx(buffer, sizeof(buffer), "%f", mphSpeed / 0.042614);              ReplaceString(cmd, sizeof(cmd), "@nocapspeed", buffer);
+		FormatEx(buffer, sizeof(buffer), "%.2f", speed);                          ReplaceString(cmd, sizeof(cmd), "@2dspeed", buffer);
+		FormatEx(buffer, sizeof(buffer), "%.2f", mphSpeed / 0.042614);            ReplaceString(cmd, sizeof(cmd), "@2dnocapspeed", buffer);
 		
-		ServerCommand(strCmd);
+		ServerCommand(cmd);
 	}
 }
 
-public void TFDB_OnRocketCreated(int iIndex, int iEntity)
+public void TFDB_OnRocketCreated(int index, int entity)
 {
-	SDKHook(iEntity, SDKHook_Touch, OnTouch);
+	SDKHook(entity, SDKHook_Touch, OnTouch);
 }
 
-public Action OnTouch(int iEntity, int iOther)
+public Action OnTouch(int entity, int other)
 {
-	int iIndex = TFDB_FindRocketByEntity(iEntity);
+	int index = TFDB_FindRocketByEntity(entity);
 	
-	if (iIndex == -1) return Plugin_Continue;
+	if (index == -1) return Plugin_Continue;
 	
-	int iClass = TFDB_GetRocketClass(iIndex);
+	int rocketClass = TFDB_GetRocketClass(index);
+	if (rocketClass < 0 || rocketClass >= RocketClassCount) return Plugin_Continue;
+
+	if (RocketClassCmdsOnDestroyed[rocketClass] == null) return Plugin_Continue;
+
+	// Dedupe: only one queued check per rocket per frame.
+	if (g_TouchPending[index]) return Plugin_Continue;
+	g_TouchPending[index] = true;
+
+	DataPack touchInfo = new DataPack();
+
+	touchInfo.WriteCell(index);
+	touchInfo.WriteCell(rocketClass);
+	touchInfo.WriteCell(EntIndexToEntRef(entity));
+	touchInfo.WriteCell(EntIndexToEntRef(GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity")));
+	touchInfo.WriteCell(TFDB_GetRocketTarget(index));
+	touchInfo.WriteCell(TFDB_GetLastDeadClient());
+	touchInfo.WriteFloat(TFDB_GetRocketSpeed(index));
+	touchInfo.WriteCell(TFDB_GetRocketEventDeflections(index));
+	touchInfo.WriteFloat(TFDB_GetRocketMphSpeed(index));
+	touchInfo.WriteCell(((other > 0) && (other <= MaxClients)) ? GetClientUserId(other) : -1);
 	
-	if (RocketClassCmdsOnDestroyed[iClass] == null) return Plugin_Continue;
-	
-	DataPack hTouchInfo = new DataPack();
-	
-	hTouchInfo.WriteCell(iClass);
-	hTouchInfo.WriteCell(EntIndexToEntRef(iEntity));
-	hTouchInfo.WriteCell(EntIndexToEntRef(GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity")));
-	hTouchInfo.WriteCell(TFDB_GetRocketTarget(iIndex));
-	hTouchInfo.WriteCell(EntIndexToEntRef(TFDB_GetLastDeadClient()));
-	hTouchInfo.WriteCell(TFDB_GetRocketSpeed(iIndex));
-	hTouchInfo.WriteCell(TFDB_GetRocketEventDeflections(iIndex));
-	hTouchInfo.WriteCell(TFDB_GetRocketMphSpeed(iIndex));
-	hTouchInfo.WriteCell(((iOther > 0) && (iOther <= MaxClients)) ? GetClientUserId(iOther) : -1);
-	
-	RequestFrame(TouchRequestFrame, hTouchInfo);
+	RequestFrame(TouchRequestFrame, touchInfo);
 	
 	return Plugin_Continue;
 }
 
-public void TouchRequestFrame(DataPack hTouchInfo)
+public void TouchRequestFrame(DataPack touchInfo)
 {
-	hTouchInfo.Reset();
-	
-	int iClass          = hTouchInfo.ReadCell();
-	int iRocket         = EntRefToEntIndex(hTouchInfo.ReadCell());
-	int iOwner          = EntRefToEntIndex(hTouchInfo.ReadCell());
-	int iTarget         = EntRefToEntIndex(hTouchInfo.ReadCell());
-	int iLastDead       = EntRefToEntIndex(hTouchInfo.ReadCell());
-	float fSpeed        = hTouchInfo.ReadCell();
-	int iNumDeflections = hTouchInfo.ReadCell();
-	float fMphSpeed     = hTouchInfo.ReadCell();
-	
-	int iOther          = hTouchInfo.ReadCell();
-	
-	delete hTouchInfo;
-	
-	if (iRocket != -1) return;
-	
-	if (iOther != -1)
+	touchInfo.Reset();
+
+	int index           = touchInfo.ReadCell();
+	// Clear the per-rocket dedupe flag first thing, regardless of which branch
+	// below we take — if we early-return without clearing, future touches on
+	// this rocket index would never re-arm.
+	if (index >= 0 && index < MAX_ROCKETS) g_TouchPending[index] = false;
+
+	int rocketClass     = touchInfo.ReadCell();
+	int rocket          = EntRefToEntIndex(touchInfo.ReadCell());
+	int owner           = EntRefToEntIndex(touchInfo.ReadCell());
+	// Re-validate the owner: if the player disconnected between frames,
+	// EntRefToEntIndex returns -1 and `@owner` would expand to "-1" —
+	// clamp to 0 so substituted commands receive a sentinel instead.
+	if (owner < 1 || owner > MaxClients || !IsClientInGame(owner))
 	{
-		if (((iOther = GetClientOfUserId(iOther)) == 0) ||
-		    !(IsClientInGame(iOther) && IsPlayerAlive(iOther)))
+		owner = 0;
+	}
+	int target          = touchInfo.ReadCell();
+	int lastDead        = touchInfo.ReadCell();
+	float speed         = touchInfo.ReadFloat();
+	int numDeflections  = touchInfo.ReadCell();
+	float mphSpeed      = touchInfo.ReadFloat();
+	
+	int other           = touchInfo.ReadCell();
+	
+	delete touchInfo;
+	
+	if (rocket != -1) return;
+	if (rocketClass < 0 || rocketClass >= RocketClassCount) return;
+	if (RocketClassCmdsOnDestroyed[rocketClass] == null) return;
+
+	if (other != -1)
+	{
+		if (((other = GetClientOfUserId(other)) == 0) ||
+		    !(IsClientInGame(other) && IsPlayerAlive(other)))
 		{
 			return;
 		}
 		
-		iTarget = iOther;
+		target = other;
 	}
 	
-	ExecuteCommands(RocketClassCmdsOnDestroyed[iClass],
-	                iClass,
-	                iRocket,
-	                iOwner,
-	                iTarget,
-	                iLastDead,
-	                fSpeed,
-	                iNumDeflections,
-	                fMphSpeed);
+	ExecuteCommands(RocketClassCmdsOnDestroyed[rocketClass],
+	                rocketClass,
+	                rocket,
+	                owner,
+	                target,
+	                lastDead,
+	                speed,
+	                numDeflections,
+	                mphSpeed);
 }
 
-char[] GetRocketClassLongName(int iClass)
+char[] GetRocketClassLongName(int rocketClass)
 {
-	char strBuffer[32]; TFDB_GetRocketClassLongName(iClass, strBuffer, sizeof(strBuffer));
+	char buffer[32]; TFDB_GetRocketClassLongName(rocketClass, buffer, sizeof(buffer));
 	
-	return strBuffer;
+	return buffer;
 }

@@ -220,7 +220,7 @@ native void TFDB_SetRocketClassTrailFlags(int iClass, TrailFlags iFlags);
 public SharedPlugin __pl_TFDBTrails =
 {
 	name = "tfdbtrails",
-	file = "TF2DodgeballTrails.smx",
+	file = "tfdb_trails.smx",
 	
 	#if defined REQUIRE_PLUGIN
 		required=1,

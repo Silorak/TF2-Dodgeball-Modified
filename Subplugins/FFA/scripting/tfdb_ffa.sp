@@ -3,15 +3,22 @@
 
 #include <sourcemod>
 #include <tf2>
+#include <sdktools_functions>
 #include <multicolors>
 
 #include <tfdb>
+#include <tfdb_clientcheck>
+// FFA only needs to refuse Guardian + PvB (DM and FFA coexist intentionally).
+#undef REQUIRE_PLUGIN
+#tryinclude <tfdb_guardian>
+#tryinclude <tfdb_pvb>
+#define REQUIRE_PLUGIN
 
 #define PLUGIN_NAME        "[TFDB] Free-for-All"
-#define PLUGIN_AUTHOR      "x07x08"
+#define PLUGIN_AUTHOR      "x07x08, Silorak"
 #define PLUGIN_DESCRIPTION "Makes all rockets neutral"
-#define PLUGIN_VERSION     "1.1.3"
-#define PLUGIN_URL         "https://github.com/x07x08/TF2-Dodgeball-Modified"
+#define PLUGIN_VERSION     "2.2.0"
+#define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball"
 
 bool  Loaded;
 bool  FFAEnabled;
@@ -19,8 +26,6 @@ int   BotCount;
 bool  VoteAllowed;
 float LastVoteTime;
 int   OldTeam[MAXPLAYERS + 1];
-
-Address MyWearables;
 
 ConVar CvarDisableOnBot;
 ConVar CvarVoteTimeout;
@@ -45,8 +50,6 @@ public void OnPluginStart()
 {
 	LoadTranslations("tfdb.phrases.txt");
 	
-	MyWearables = view_as<Address>(FindSendPropInfo("CTFPlayer", "m_hMyWearables"));
-	
 	CvarDisableOnBot  = CreateConVar("tf_dodgeball_ffa_bot", "1", "Disable FFA when a bot joins?", _, true, 0.0, true, 1.0);
 	CvarVoteTimeout   = CreateConVar("tf_dodgeball_ffa_timeout", "150", "Vote timeout (in seconds)", _, true, 0.0);
 	CvarVoteDuration  = CreateConVar("tf_dodgeball_ffa_duration", "20", "Vote duration (in seconds)", _, true, 0.0);
@@ -59,7 +62,14 @@ public void OnPluginStart()
 	
 	RegAdminCmd("sm_ffa", CmdToggleFFA, ADMFLAG_CONFIG, "Forcefully toggle FFA");
 	RegConsoleCmd("sm_voteffa", CmdVoteFFA, "Start a vote to toggle FFA");
-	
+
+	// Cross-plugin mutex surface: register the library + an `IsFFAActive`
+	// native so PvB / Guardian / DeathMatch can refuse to coexist with FFA.
+	// Pattern matches Guardian / PvB / DM. Without this, PvB silently spawned
+	// a bot during FFA which made the bot neutral and broke 1v1 semantics.
+	RegPluginLibrary("tfdb_ffa");
+	CreateNative("TFDB_IsFFAActive", Native_IsFFAActive);
+
 	if (!TFDB_IsDodgeballEnabled()) return;
 	
 	TFDB_OnRocketsConfigExecuted("general.cfg");
@@ -69,31 +79,31 @@ public void TFDB_OnRocketsConfigExecuted(const char[] strConfigFile)
 {
 	if (Loaded) return;
 	
-	int iTeam;
+	int savedTeam;
 	
 	VoteAllowed  = true;
 	FFAEnabled   = false;
 	BotCount     = 0;
 	LastVoteTime = 0.0;
 	
-	for (int iClient = 1; iClient <= MaxClients; iClient++)
+	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(iClient)) continue;
+		if (!IsClientInGame(client)) continue;
 		
-		iTeam = GetClientTeam(iClient);
+		savedTeam = GetClientTeam(client);
 		
-		if (!(iTeam >= 2)) continue;
+		if (!(savedTeam >= 2)) continue;
 		
-		OldTeam[iClient] = iTeam;
+		OldTeam[client] = savedTeam;
 		
-		if (IsFakeClient(iClient)) BotCount++;
+		if (IsFakeClient(client)) BotCount++;
 	}
 	
 	CvarDisableOnBot.AddChangeHook(DisableOnBotCallback);
 	
-	HookEvent("player_team", OnPlayerTeam);
-	HookEvent("player_death", OnPlayerDeath);
-	HookEvent("teamplay_round_start", OnRoundStart);
+	HookEventEx("player_team", OnPlayerTeam);
+	HookEventEx("player_death", OnPlayerDeath);
+	HookEventEx("teamplay_round_start", OnRoundStart);
 	
 	Loaded = true;
 }
@@ -102,9 +112,10 @@ public void OnMapEnd()
 {
 	if (!Loaded) return;
 	
-	UnhookEvent("player_team", OnPlayerTeam);
-	UnhookEvent("player_death", OnPlayerDeath);
-	UnhookEvent("teamplay_round_start", OnRoundStart);
+	Loaded = false;
+	
+	// Do NOT UnhookEvent here — SM auto-cleans on plugin unload.
+	// Manual unhooking causes cascading errors.
 	
 	CvarDisableOnBot.RemoveChangeHook(DisableOnBotCallback);
 	
@@ -115,13 +126,11 @@ public void OnMapEnd()
 	
 	CvarFriendlyFire.RestoreDefault();
 	ExecuteDisableConfig();
-	
-	Loaded = false;
 }
 
-public void OnClientDisconnect(int iClient)
+public void OnClientDisconnect(int client)
 {
-	OldTeam[iClient] = 0;
+	OldTeam[client] = 0;
 	
 	if (!FFAEnabled ||
 	    !CvarSwitchTeams.BoolValue ||
@@ -131,57 +140,60 @@ public void OnClientDisconnect(int iClient)
 		return;
 	}
 	
-	int iTeam = GetClientTeam(iClient);
+	int team = GetClientTeam(client);
 	
-	if (iTeam <= 1) return;
+	if (team <= 1) return;
 	
-	int iOtherTeam = GetAnalogueTeam(iTeam);
+	int otherTeam = GetAnalogueTeam(team);
 	
-	if (((GetTeamAliveClientCount(iTeam) - view_as<int>(IsPlayerAlive(iClient))) == 0) &&
-	    ((GetTeamAliveClientCount(iOtherTeam) - 1) >= 1))
+	if (((GetTeamAliveClientCount(team) - view_as<int>(IsPlayerAlive(client))) == 0) &&
+	    ((GetTeamAliveClientCount(otherTeam) - 1) >= 1))
 	{
-		ChangeAliveClientTeam(GetRandomTeamAliveClient(iOtherTeam), iTeam);
+		int swap = GetRandomTeamAliveClient(otherTeam);
+		if (swap != -1) ChangeAliveClientTeam(swap, team);
 	}
 }
 
-public void OnClientConnected(int iClient)
+public void OnClientConnected(int client)
 {
-	OldTeam[iClient] = 0;
+	OldTeam[client] = 0;
 }
 
-public void OnPlayerTeam(Event hEvent, char[] strEventName, bool bDontBroadcast)
+public void OnPlayerTeam(Event event, char[] eventName, bool dontBroadcast)
 {
-	int iClient  = GetClientOfUserId(hEvent.GetInt("userid"));
-	int iTeam    = hEvent.GetInt("team");
-	int iOldTeam = hEvent.GetInt("oldteam");
-	
+	int client  = GetClientOfUserId(event.GetInt("userid"));
+	if (client == 0) return;
+	int team    = event.GetInt("team");
+	int oldTeam = event.GetInt("oldteam");
+
 	if (!FFAEnabled ||
 	    !CvarSwitchTeams.BoolValue ||
 	    (CvarDisableOnBot.BoolValue && BotCount) ||
 	    !TFDB_GetRoundStarted())
 	{
-		OldTeam[iClient] = iTeam;
+		OldTeam[client] = team;
 	}
 	else
 	{
 		// If you swap between RED and BLU, this event gets fired first instead of player_death.
 		// This makes GetClientTeam report the new team instead of the old one when used inside a player_death callback.
 		
-		if (iTeam <= 1)
+		if (team <= 1)
 		{
-			OldTeam[iClient] = iTeam;
+			OldTeam[client] = team;
 		}
-		else if ((iOldTeam >= 2) &&
-		         ((GetTeamAliveClientCount(iOldTeam) - view_as<int>(IsPlayerAlive(iClient))) == 0) &&
-		         ((GetTeamAliveClientCount(iTeam) - 1) >= 1))
+		else if ((oldTeam >= 2) &&
+		         ((GetTeamAliveClientCount(oldTeam) - view_as<int>(IsPlayerAlive(client))) == 0) &&
+		         ((GetTeamAliveClientCount(team) - 1) >= 1))
 		{
-			ChangeAliveClientTeam(GetRandomTeamAliveClient(iTeam), iOldTeam);
+			int swap = GetRandomTeamAliveClient(team);
+			if (swap != -1) ChangeAliveClientTeam(swap, oldTeam);
 		}
 	}
 	
-	if (!IsFakeClient(iClient)) return;
+	if (!IsFakeClient(client)) return;
 	
-	if ((iOldTeam <= 1) && (iTeam >= 2))
+	if ((oldTeam <= 1) && (team >= 2))
 	{
 		BotCount++;
 		
@@ -192,7 +204,7 @@ public void OnPlayerTeam(Event hEvent, char[] strEventName, bool bDontBroadcast)
 			ExecuteDisableConfig();
 		}
 	}
-	else if ((iOldTeam >= 2) && (iTeam <= 1))
+	else if ((oldTeam >= 2) && (team <= 1))
 	{
 		BotCount--;
 		
@@ -205,7 +217,7 @@ public void OnPlayerTeam(Event hEvent, char[] strEventName, bool bDontBroadcast)
 	}
 }
 
-public void OnPlayerDeath(Event hEvent, char[] strEventName, bool bDontBroadcast)
+public void OnPlayerDeath(Event event, char[] eventName, bool dontBroadcast)
 {
 	if (!FFAEnabled ||
 	    !CvarSwitchTeams.BoolValue ||
@@ -215,24 +227,26 @@ public void OnPlayerDeath(Event hEvent, char[] strEventName, bool bDontBroadcast
 		return;
 	}
 	
-	int iVictim = GetClientOfUserId(hEvent.GetInt("userid"));
+	int victim = GetClientOfUserId(event.GetInt("userid"));
+	if (victim == 0) return;
+
+	int team = GetClientTeam(victim);
 	
-	int iTeam = GetClientTeam(iVictim);
+	if (team <= 1) return; // ...
 	
-	if (iTeam <= 1) return; // ...
-	
-	int iOtherTeam = GetAnalogueTeam(iTeam);
+	int otherTeam = GetAnalogueTeam(team);
 	
 	// Checking the alive players count in here doesn't exclude the player that has just died.
 	// Doing this check in a SDKHook_OnTakeDamagePost callback excludes him for some reason...
 	
-	if (((GetTeamAliveClientCount(iTeam) - 1) == 0) && ((GetTeamAliveClientCount(iOtherTeam) - 1) >= 1))
+	if (((GetTeamAliveClientCount(team) - 1) == 0) && ((GetTeamAliveClientCount(otherTeam) - 1) >= 1))
 	{
-		ChangeAliveClientTeam(GetRandomTeamAliveClient(iOtherTeam), iTeam);
+		int swap = GetRandomTeamAliveClient(otherTeam);
+		if (swap != -1) ChangeAliveClientTeam(swap, team);
 	}
 }
 
-public void OnRoundStart(Event hEvent, char[] strEventName, bool bDontBroadcast)
+public void OnRoundStart(Event event, char[] eventName, bool dontBroadcast)
 {
 	if (!FFAEnabled ||
 	    !CvarSwitchTeams.BoolValue ||
@@ -241,57 +255,117 @@ public void OnRoundStart(Event hEvent, char[] strEventName, bool bDontBroadcast)
 		return;
 	}
 	
-	int iTeam;
+	int team;
 	
-	for (int iClient = 1; iClient <= MaxClients; iClient++)
+	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(iClient) || ((iTeam = GetClientTeam(iClient)) <= 1)) continue;
+		if (!IsClientInGame(client) || ((team = GetClientTeam(client)) <= 1)) continue;
 		
-		if ((OldTeam[iClient] >= 2) &&
-		    (OldTeam[iClient] != iTeam) &&
-		    ((GetTeamAliveClientCount(iTeam) - view_as<int>(IsPlayerAlive(iClient))) >= 1))
+		if ((OldTeam[client] >= 2) &&
+		    (OldTeam[client] != team) &&
+		    ((GetTeamAliveClientCount(team) - view_as<int>(IsPlayerAlive(client))) >= 1))
 		{
-			ChangeClientTeam(iClient, OldTeam[iClient]);
+			ChangeClientTeam(client, OldTeam[client]);
 		}
 		
-		if (OldTeam[iClient] <= 1) OldTeam[iClient] = iTeam;
+		if (OldTeam[client] <= 1) OldTeam[client] = team;
 	}
 }
 
-public Action CmdToggleFFA(int iClient, int iArgs)
+/**
+ * Returns true if Guardian or PvB is currently active. Used to gate FFA enable.
+ *
+ * NOTE: DeathMatch (NER/Solo) is intentionally NOT in this list — DM and FFA
+ * coexist fine. DM swaps players between RED/BLU; FFA makes rockets neutral.
+ * Different layers, no conflict. Only Guardian (boss-on-BLU rule) and PvB
+ * (1v1 team-vs-team) actually break under FFA.
+ *
+ * Each check uses the standard three-gate (LibraryExists + FeatureStatus +
+ * native call) to avoid "Plugin owning this native is currently paused"
+ * exceptions when a partner plugin crashed/paused after load.
+ */
+bool IsModeActive()
+{
+	if (LibraryExists("tfdb_guardian") &&
+	    GetFeatureStatus(FeatureType_Native, "TFDB_IsGuardianActive") == FeatureStatus_Available &&
+	    TFDB_IsGuardianActive())
+		return true;
+
+	if (LibraryExists("tfdb_pvb") &&
+	    GetFeatureStatus(FeatureType_Native, "TFDB_IsPvBActive") == FeatureStatus_Available &&
+	    TFDB_IsPvBActive())
+		return true;
+
+	return false;
+}
+
+public Action CmdToggleFFA(int client, int args)
 {
 	if (!TFDB_IsDodgeballEnabled())
 	{
-		CReplyToCommand(iClient, "%t", "Command_Disabled");
-		
+		CReplyToCommand(client, "%t", "Command_Disabled");
+
 		return Plugin_Handled;
 	}
-	
+
+	// Preemptive mutex — refuse to enable FFA while Guardian/PvB/DM is active.
+	// (If FFA is already on, allow the toggle-OFF path to proceed regardless —
+	// admins should always be able to turn FFA off.)
+	if (!FFAEnabled && IsModeActive())
+	{
+		CReplyToCommand(client, "{olive}[TFDB]{default} Cannot enable FFA while Guardian / PvB / DeathMatch is active.");
+		return Plugin_Handled;
+	}
+
 	ToggleFFA();
-	
+
 	return Plugin_Handled;
 }
 
-public Action CmdVoteFFA(int iClient, int iArgs)
+public Action CmdVoteFFA(int client, int args)
 {
-	if (iClient == 0)
+	if (client == 0)
 	{
 		// CReplyToCommand prints the message twice...
-		ReplyToCommand(iClient, "Command is in-game only.");
-		
+		ReplyToCommand(client, "Command is in-game only.");
+
 		return Plugin_Handled;
 	}
-	
+
+	// Reject bots and disconnect-mid-flight callers.
+	if (!TFDB_IsRealHuman(client))
+	{
+		return Plugin_Handled;
+	}
+
+	// Spectators can't start gameplay-altering votes.
+	if (GetClientTeam(client) <= view_as<int>(TFTeam_Spectator))
+	{
+		if (TranslationPhraseExists("Dodgeball_Vote_MustBeOnTeam"))
+			CReplyToCommand(client, "%t", "Dodgeball_Vote_MustBeOnTeam");
+		else
+			CReplyToCommand(client, "[TFDB] You must be on RED or BLU to call a vote.");
+		return Plugin_Handled;
+	}
+
+	// Preemptive mutex — same logic as CmdToggleFFA. Refuse VOTE-TO-ENABLE when
+	// a partner mode is running (vote-to-disable is allowed regardless).
+	if (!FFAEnabled && IsModeActive())
+	{
+		CReplyToCommand(client, "{olive}[TFDB]{default} Cannot vote for FFA while Guardian / PvB / DeathMatch is active.");
+		return Plugin_Handled;
+	}
+
 	if (!TFDB_IsDodgeballEnabled())
 	{
-		CReplyToCommand(iClient, "%t", "Command_Disabled");
+		CReplyToCommand(client, "%t", "Command_Disabled");
 		
 		return Plugin_Handled;
 	}
 	
 	if (IsVoteInProgress())
 	{
-		CReplyToCommand(iClient, "%t", "Dodgeball_FFAVote_Conflict");
+		CReplyToCommand(client, "%t", "Dodgeball_FFAVote_Conflict");
 		
 		return Plugin_Handled;
 	}
@@ -306,18 +380,18 @@ public Action CmdVoteFFA(int iClient, int iArgs)
 	}
 	else
 	{
-		CReplyToCommand(iClient, "%t", "Dodgeball_FFAVote_Cooldown",
+		CReplyToCommand(client, "%t", "Dodgeball_FFAVote_Cooldown",
 		                RoundToCeil((LastVoteTime + CvarVoteTimeout.FloatValue) - GetGameTime()));
 	}
 	
 	return Plugin_Handled;
 }
 
-public void DisableOnBotCallback(ConVar hConvar, const char[] strOldValue, const char[] strNewValue)
+public void DisableOnBotCallback(ConVar convar, const char[] oldValue, const char[] newValue)
 {
 	if (!FFAEnabled || !BotCount) return;
 	
-	if (hConvar.BoolValue)
+	if (convar.BoolValue)
 	{
 		CvarFriendlyFire.RestoreDefault();
 		ExecuteDisableConfig();
@@ -331,64 +405,65 @@ public void DisableOnBotCallback(ConVar hConvar, const char[] strOldValue, const
 
 void StartFFAVote()
 {
-	char strMode[16];
-	strMode = !FFAEnabled ? "Enable" : "Disable";
+	Menu menu = new Menu(VoteMenuHandler);
+	menu.VoteResultCallback = VoteResultHandler;
+
+	// Vote menu shown to all clients — use server language
+	char title[64];
+	FormatEx(title, sizeof(title), "%T",
+		FFAEnabled ? "FFA_Vote_Menu_Title_Disable" : "FFA_Vote_Menu_Title_Enable", LANG_SERVER);
+	menu.SetTitle(title);
 	
-	Menu hMenu = new Menu(VoteMenuHandler);
-	hMenu.VoteResultCallback = VoteResultHandler;
+	menu.AddItem("0", "Yes");
+	menu.AddItem("1", "No");
 	
-	hMenu.SetTitle("%s FFA mode?", strMode);
+	int total;
+	int[] clients = new int[MaxClients];
 	
-	hMenu.AddItem("0", "Yes");
-	hMenu.AddItem("1", "No");
-	
-	int iTotal;
-	int[] iClients = new int[MaxClients];
-	
-	for (int iClient = 1; iClient <= MaxClients; iClient++)
+	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(iClient) || IsFakeClient(iClient) || GetClientTeam(iClient) <= 1)
+		if (!TFDB_IsRealHumanPlaying(client))
 		{
 			continue;
 		}
 		
-		iClients[iTotal++] = iClient;
+		clients[total++] = client;
 	}
 	
-	hMenu.DisplayVote(iClients, iTotal, CvarVoteDuration.IntValue);
+	menu.DisplayVote(clients, total, CvarVoteDuration.IntValue);
 }
 
-public int VoteMenuHandler(Menu hMenu, MenuAction iMenuActions, int iParam1, int iParam2)
+public int VoteMenuHandler(Menu menu, MenuAction menuActions, int param1, int param2)
 {
-	switch (iMenuActions)
+	switch (menuActions)
 	{
 		case MenuAction_End :
 		{
-			delete hMenu;
+			delete menu;
 		}
 	}
 	
 	return 0;
 }
 
-public void VoteResultHandler(Menu hMenu,
-                              int iNumVotes,
-                              int iNumClients,
-                              const int[][] iClientInfo,
-                              int iNumItems,
-                              const int[][] iItemInfo)
+public void VoteResultHandler(Menu menu,
+                              int numVotes,
+                              int numClients,
+                              const int[][] clientInfo,
+                              int numItems,
+                              const int[][] itemInfo)
 {
-	int iWinnerIndex = 0;
+	int winnerIndex = 0;
 	
-	if (iNumItems > 1 &&
-	    (iItemInfo[0][VOTEINFO_ITEM_VOTES] == iItemInfo[1][VOTEINFO_ITEM_VOTES]))
+	if (numItems > 1 &&
+	    (itemInfo[0][VOTEINFO_ITEM_VOTES] == itemInfo[1][VOTEINFO_ITEM_VOTES]))
 	{
-		iWinnerIndex = GetRandomInt(0, 1);
+		winnerIndex = GetRandomInt(0, 1);
 	}
 	
-	char strWinner[8]; hMenu.GetItem(iItemInfo[iWinnerIndex][VOTEINFO_ITEM_INDEX], strWinner, sizeof(strWinner));
+	char winner[8]; menu.GetItem(itemInfo[winnerIndex][VOTEINFO_ITEM_INDEX], winner, sizeof(winner));
 	
-	if (StrEqual(strWinner, "0"))
+	if (StrEqual(winner, "0"))
 	{
 		ToggleFFA();
 	}
@@ -464,55 +539,59 @@ void ToggleFFA()
 
 void ChangeRockets()
 {
-	RocketFlags iFlags, iClassFlags;
-	int iEntity;
+	RocketFlags flags, classFlags;
+	int entity;
 	
-	for (int iIndex = 0; iIndex < MAX_ROCKETS; iIndex++)
+	for (int index = 0; index < MAX_ROCKETS; index++)
 	{
-		if (!TFDB_IsValidRocket(iIndex)) continue;
+		if (!TFDB_IsValidRocket(index)) continue;
 		
-		iFlags = TFDB_GetRocketFlags(iIndex);
-		iClassFlags = TFDB_GetRocketClassFlags(TFDB_GetRocketClass(iIndex));
-		iEntity = EntRefToEntIndex(TFDB_GetRocketEntity(iIndex));
+		flags = TFDB_GetRocketFlags(index);
+		classFlags = TFDB_GetRocketClassFlags(TFDB_GetRocketClass(index));
+		entity = EntRefToEntIndex(TFDB_GetRocketEntity(index));
 		
 		if (FFAEnabled)
 		{
-			iFlags |= RocketFlag_IsNeutral;
+			flags |= RocketFlag_IsNeutral;
 			
-			if (CvarAllowStealing.BoolValue) iFlags |= RocketFlag_CanBeStolen;
+			if (CvarAllowStealing.BoolValue) flags |= RocketFlag_CanBeStolen;
 			
-			SetEntProp(iEntity, Prop_Send, "m_iTeamNum", 1, 1);
+			SetEntProp(entity, Prop_Send, "m_iTeamNum", 1, 1);
 			
-			TFDB_SetRocketFlags(iIndex, iFlags);
+			TFDB_SetRocketFlags(index, flags);
 		}
 		else
 		{
-			if (!(iClassFlags & RocketFlag_IsNeutral)) iFlags &= ~RocketFlag_IsNeutral;
+			if (!(classFlags & RocketFlag_IsNeutral)) flags &= ~RocketFlag_IsNeutral;
 			
-			if (CvarAllowStealing.BoolValue && !(iClassFlags & RocketFlag_CanBeStolen)) iFlags &= ~RocketFlag_CanBeStolen;
+			if (CvarAllowStealing.BoolValue && !(classFlags & RocketFlag_CanBeStolen)) flags &= ~RocketFlag_CanBeStolen;
 			
-			int iOwner = GetEntPropEnt(iEntity, Prop_Send, "m_hOwnerEntity");
-			SetEntProp(iEntity, Prop_Send, "m_iTeamNum", GetClientTeam(iOwner), 1);
+			int owner = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
 			
-			TFDB_SetRocketFlags(iIndex, iFlags);
+			if (owner >= 1 && owner <= MaxClients && IsClientInGame(owner))
+			{
+				SetEntProp(entity, Prop_Send, "m_iTeamNum", GetClientTeam(owner), 1);
+			}
+			
+			TFDB_SetRocketFlags(index, flags);
 		}
 	}
 }
 
-public Action VoteTimeoutCallback(Handle hTimer)
+public Action VoteTimeoutCallback(Handle timer)
 {
 	VoteAllowed = true;
 	
 	return Plugin_Continue;
 }
 
-public Action TFDB_OnRocketCreatedPre(int iIndex, int &iClass, RocketFlags &iFlags)
+public Action TFDB_OnRocketCreatedPre(int index, int &rocketClass, RocketFlags &flags)
 {
 	if (FFAEnabled && (!CvarDisableOnBot.BoolValue || !BotCount))
 	{
-		iFlags |= RocketFlag_IsNeutral;
+		flags |= RocketFlag_IsNeutral;
 		
-		if (CvarAllowStealing.BoolValue) iFlags |= RocketFlag_CanBeStolen;
+		if (CvarAllowStealing.BoolValue) flags |= RocketFlag_CanBeStolen;
 		
 		return Plugin_Changed;
 	}
@@ -522,94 +601,119 @@ public Action TFDB_OnRocketCreatedPre(int iIndex, int &iClass, RocketFlags &iFla
 
 void ExecuteDisableConfig()
 {
-	char strConfigPath[64]; CvarDisableConfig.GetString(strConfigPath, sizeof(strConfigPath));
-	ServerCommand("exec \"%s\"", strConfigPath);
+	char configPath[PLATFORM_MAX_PATH]; CvarDisableConfig.GetString(configPath, sizeof(configPath));
+	if (configPath[0] == '\0') return;
+	ExecCfgIfExists(configPath, "disable");
 }
 
 void ExecuteEnableConfig()
 {
-	char strConfigPath[64]; CvarEnableConfig.GetString(strConfigPath, sizeof(strConfigPath));
-	ServerCommand("exec \"%s\"", strConfigPath);
+	char configPath[PLATFORM_MAX_PATH]; CvarEnableConfig.GetString(configPath, sizeof(configPath));
+	if (configPath[0] == '\0') return;
+	ExecCfgIfExists(configPath, "enable");
 }
 
-int GetTeamAliveClientCount(int iTeam)
+// Server cfgs live under the game's cfg/ folder. SM's FileExists with
+// use_valve_fs=true + "GAME" path id resolves relative to the mod dir,
+// which is the correct scope for "cfg/<relPath>".
+// Validate existence before issuing `exec` so missing files become a single
+// log line instead of a silent no-op.
+static void ExecCfgIfExists(const char[] relPath, const char[] label)
 {
-	int iCount;
-	
-	for (int iClient = 1; iClient <= MaxClients; iClient++)
+	char resolved[PLATFORM_MAX_PATH];
+	FormatEx(resolved, sizeof(resolved), "cfg/%s", relPath);
+	if (!FileExists(resolved, true, "GAME"))
 	{
-		if (!IsClientInGame(iClient)) continue;
+		LogMessage("[FFA] %s config not found: %s — skipping exec", label, resolved);
+		return;
+	}
+	ServerCommand("exec \"%s\"", relPath);
+}
+
+int GetTeamAliveClientCount(int team)
+{
+	int count;
+	
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (!IsClientInGame(client)) continue;
 		
-		if ((GetClientTeam(iClient) == iTeam) && IsPlayerAlive(iClient)) iCount++;
+		if ((GetClientTeam(client) == team) && IsPlayerAlive(client)) count++;
 	}
 	
-	return iCount;
+	return count;
 }
 
-stock int GetAnalogueTeam(int iTeam)
+stock int GetAnalogueTeam(int team)
 {
-	if (iTeam == view_as<int>(TFTeam_Red)) return view_as<int>(TFTeam_Blue);
+	if (team == view_as<int>(TFTeam_Red)) return view_as<int>(TFTeam_Blue);
 	
 	return view_as<int>(TFTeam_Red);
 }
 
 // https://forums.alliedmods.net/showthread.php?t=286924
 
-int GetRandomTeamAliveClient(int iTeam)
+int GetRandomTeamAliveClient(int team)
 {
-	int[] iClients = new int[MaxClients];
-	int iCount;
+	int[] clients = new int[MaxClients];
+	int count;
 	
-	for (int iClient = 1; iClient <= MaxClients; iClient++)
+	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (!IsClientInGame(iClient)) continue;
+		if (!IsClientInGame(client)) continue;
 		
-		if ((GetClientTeam(iClient) == iTeam) && IsPlayerAlive(iClient)) iClients[iCount++] = iClient;
+		if ((GetClientTeam(client) == team) && IsPlayerAlive(client)) clients[count++] = client;
 	}
 	
-	return iCount == 0 ? -1 : iClients[GetRandomInt(0, iCount - 1)];
+	return count == 0 ? -1 : clients[GetRandomInt(0, count - 1)];
 }
 
 // https://forums.alliedmods.net/showthread.php?t=314271
 
-void ChangeAliveClientTeam(int iClient, int iTeam)
+void ChangeAliveClientTeam(int client, int team)
 {
-	int iLifeState = GetEntProp(iClient, Prop_Send, "m_lifeState");
-	SetEntProp(iClient, Prop_Send, "m_lifeState", 2);
+	int lifeState = GetEntProp(client, Prop_Send, "m_lifeState");
+	SetEntProp(client, Prop_Send, "m_lifeState", 2);
 	
-	ChangeClientTeam(iClient, iTeam);
-	SetEntProp(iClient, Prop_Send, "m_lifeState", iLifeState);
-	
-	int iWearable;
-	int iWearablesCount = GetPlayerWearablesCount(iClient);
-	Address pData = DereferencePointer(GetEntityAddress(iClient) + MyWearables);
-	
-	for (int iIndex = 0; iIndex < iWearablesCount; iIndex++)
+	ChangeClientTeam(client, team);
+	SetEntProp(client, Prop_Send, "m_lifeState", lifeState);
+
+	// Safer than raw memory walking: update owned wearable entities by classname.
+	UpdateClientWearablesTeam(client, team);
+}
+
+void UpdateClientWearablesTeam(int client, int team)
+{
+	static const char wearableClassnames[][] =
 	{
-		iWearable = LoadEntityHandleFromAddress(pData + view_as<Address>(0x04 * iIndex));
-		
-		SetEntProp(iWearable, Prop_Send, "m_nSkin", (iTeam == view_as<int>(TFTeam_Blue)) ? 1 : 0);
-		SetEntProp(iWearable, Prop_Send, "m_iTeamNum", iTeam);
+		"tf_wearable",
+		"tf_wearable_demoshield",
+		"tf_powerup_bottle"
+	};
+
+	for (int i = 0; i < sizeof(wearableClassnames); i++)
+	{
+		int entity = -1;
+		while ((entity = FindEntityByClassname(entity, wearableClassnames[i])) != -1)
+		{
+			if (GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity") != client) continue;
+
+			SetEntProp(entity, Prop_Send, "m_nSkin", (team == view_as<int>(TFTeam_Blue)) ? 1 : 0);
+			SetEntProp(entity, Prop_Send, "m_iTeamNum", team);
+		}
 	}
 }
 
-/*
-	https://github.com/nosoop/SM-TFUtils/blob/master/scripting/tf2utils.sp
-	https://github.com/nosoop/stocksoup/blob/master/memory.inc
-*/
+// ============================================================================
+// Cross-plugin mutex
+// ============================================================================
 
-stock int LoadEntityHandleFromAddress(Address pAddress)
+/**
+ * TFDB_IsFFAActive() — true while FFA toggle is on. Used by PvB / Guardian /
+ * DeathMatch to refuse to coexist with FFA (FFA flips rocket teams to neutral
+ * which breaks the bot-vs-humans team semantics those modes assume).
+ */
+public any Native_IsFFAActive(Handle plugin, int numParams)
 {
-	return EntRefToEntIndex(LoadFromAddress(pAddress, NumberType_Int32) | (1 << 31));
-}
-
-stock Address DereferencePointer(Address pAddress)
-{
-	// maybe someday we'll do 64-bit addresses
-	return view_as<Address>(LoadFromAddress(pAddress, NumberType_Int32));
-}
-
-int GetPlayerWearablesCount(int iClient)
-{
-	return GetEntData(iClient, view_as<int>(MyWearables) + 0x0C);
+	return FFAEnabled;
 }
