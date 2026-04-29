@@ -24,7 +24,7 @@ One required core plugin plus 13 optional modules. Install only what you want.
 | **Guardian** | One player becomes a boss with extra HP and special abilities. Everyone else fights them. |
 | **PlayerVsBot** | An AI bot that learns as it plays. You can fight it 1-vs-1 or watch bots train each other. |
 | **DeathMatch** | Keeps small servers alive — when a team would lose, swap a player or respawn a soloer. |
-| **AntiCheat** | Catches obvious public-tier cheats. **Beta — read the warning before enabling.** |
+| **AntiCheat** | Catches obvious public-tier cheats. **Beta — read the warning before enabling.** (Needs more testing) |
 | **FFA** | Free-for-all mode. Friendly fire on. Coexists with DeathMatch. |
 | **Votes** | Players can vote to toggle bouncing rockets, change rocket class, etc. |
 | **Menu** | In-game admin menu for tuning rockets without editing files. |
