@@ -86,7 +86,7 @@ int FindRocketClassByName(const char[] name)
 
 	for (int index = 0; index < RocketClassCount; index++)
 	{
-		if (StrEqual(RocketClassName[index], key)) return index;
+		if (StrEqual(RocketClassName[index], key, false)) return index;
 	}
 
 	return -1;
@@ -414,14 +414,19 @@ void ParseConfigurations(char[] configFile = "general.cfg")
 		return;
 	}
 
-	config.GotoFirstSubKey();
+	if (!config.GotoFirstSubKey())
+	{
+		delete config;
+		return;
+	}
+
 	do
 	{
 		char section[64]; config.GetSectionName(section, sizeof(section));
-		if (StrEqual(section, "general"))       ParseGeneral(config);
-		else if (StrEqual(section, "classes"))  ParseClasses(config);
-		else if (StrEqual(section, "spawners")) ParseSpawners(config);
-		else if (StrEqual(section, "presets"))  ParsePresets(config);
+		if (StrEqual(section, "general", false))       ParseGeneral(config);
+		else if (StrEqual(section, "classes", false))  ParseClasses(config);
+		else if (StrEqual(section, "spawners", false)) ParseSpawners(config);
+		else if (StrEqual(section, "presets", false))  ParsePresets(config);
 	}
 	while (config.GotoNextKey());
 
@@ -471,7 +476,7 @@ void ParseClasses(KeyValues config)
 {
 	char name[64];
 	char buffer[256];
-	config.GotoFirstSubKey();
+	if (!config.GotoFirstSubKey()) return;
 	do
 	{
 		config.GetSectionName(name, sizeof(name));
@@ -506,8 +511,8 @@ void ParseClasses(KeyValues config)
 		}
 
 		config.GetString("behaviour", buffer, sizeof(buffer), "homing");
-		if (StrEqual(buffer, "homing")) RocketClassBehaviour[index] = Behaviour_Homing;
-		else if (StrEqual(buffer, "legacy homing")) RocketClassBehaviour[index] = Behaviour_LegacyHoming;
+		if (StrEqual(buffer, "homing", false)) RocketClassBehaviour[index] = Behaviour_Homing;
+		else if (StrEqual(buffer, "legacy homing", false)) RocketClassBehaviour[index] = Behaviour_LegacyHoming;
 		else RocketClassBehaviour[index] = Behaviour_Unknown;
 
 		if (config.GetNum("play spawn sound", 0) == 1)
@@ -647,7 +652,7 @@ void ParseClasses(KeyValues config)
 void ParseSpawners(KeyValues config)
 {
 	char buffer[256];
-	config.GotoFirstSubKey();
+	if (!config.GotoFirstSubKey()) return;
 	do
 	{
 		config.GetSectionName(buffer, sizeof(buffer));
@@ -693,7 +698,7 @@ void ParseSpawners(KeyValues config)
 void ParsePresets(KeyValues config)
 {
 	PresetCount = 0;
-	config.GotoFirstSubKey();
+	if (!config.GotoFirstSubKey()) return;
 	do
 	{
 		int index = PresetCount;
