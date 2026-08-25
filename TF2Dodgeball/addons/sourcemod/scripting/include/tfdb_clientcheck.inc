@@ -77,7 +77,7 @@ stock bool TFDB_IsSpectator(int client)
 /**
  * In-game bot (fake client) that's actually playable — excludes replay/SourceTV.
  *
- * Use for: PvB bot targeting, training mode bot iteration, any code that
+ * Use for: PvB bot targeting, debug-states mode bot iteration, any code that
  * needs to find "the bot" rather than just "any non-human client."
  */
 stock bool TFDB_IsLiveBot(int client)

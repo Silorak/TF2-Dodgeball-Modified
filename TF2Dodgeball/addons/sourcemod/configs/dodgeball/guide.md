@@ -25,14 +25,14 @@ The fields you'll tune 90% of the time, with a one-sentence description.
 |---|---|---|
 | `speed` | Starting rocket speed in Hammer Units/second | 500–1500 |
 | `speed increment` | Speed added per deflection | 50–300 |
-| `speed limit` | Hard cap on speed (0 = no cap, engine default 3500) | 0, 3000–3500 |
+| `speed limit` | Optional stricter per-class cap; 0 uses global `max velocity` | 0, 3000–3500 |
 | `turn rate` | How sharply the rocket turns per homing tick | 0.15–0.30 |
 | `turn rate increment` | Turn rate added per deflection | 0.01–0.03 |
 | `damage` | Base damage on hit | 40–200 |
 | `damage increment` | Damage added per deflection | 25–200 |
-| `steering control` | Pre-read drag window in **seconds** (auto-converts to ticks for any tickrate) | 0.000–0.150 |
-| `bounce control` | Post-bounce blind window in **seconds** | 0.000–0.150 |
-| `think interval` | Homing cadence override (0 = per-tick, 0.05 = 20Hz, 0.1 = 10Hz) | 0 or 0.05 |
+| `drag delay` | Global fixed pre-read drag window in **seconds**; 0 selects legacy grid timing | 0 or 0.015–0.150 |
+| `drag grid interval` | Global shared bounce-grid interval in **milliseconds** | 10–100 |
+| `think interval` | Homing cadence override (0 = per-tick, 0.05 = explicit 20Hz, 0.1 = 10Hz) | 0 or 0.05 |
 | `critical chance` | % chance the rocket is a crit | 0–100 |
 
 Everything else is tuned rarely — see full reference below.
@@ -46,45 +46,56 @@ A rocket's life, in order:
 1. **Spawn** — `on spawn` fires. Speed, turn rate, damage are set from class defaults.
 2. **Fly** — per tick (or per `think interval`), the rocket turns toward its target by `turn rate` degrees.
 3. **Player airblasts** — the rocket enters the drag window.
-   - For `steering control` seconds, the rocket flies its current direction (blind)
-   - At window expiry, the plugin reads the player's **eye angles** and commits the new direction
-   - If `control delay > 0`, adds extra blind time after the eye read
+   - For the global `drag delay` duration, the rocket flies its current direction (blind)
+   - At window expiry, the plugin reads the player's **eye angles once** and commits that direction
+   - The default fixed 0.045s window is consistent; `drag delay 0` opts into the variable legacy grid
+   - If per-class `control delay > 0`, it adds extra blind time after the eye read
 4. **Deflect** — `on deflect` fires. Speed, turn rate, damage each increase by their `increment`. Rocket re-targets an enemy.
 5. **Wall bounce** (if it hits a surface):
-   - Velocity reflects off the surface normal via `v' = v − 2(v·n)n` — pure physics, magnitude preserved
-   - Rocket enters **bounce control** blind window — flies bounced direction without homing
-   - At window expiry, homing resumes toward target
+   - Velocity reflects off the surface normal via `v' = v − 2(v·n)n` — pure physics, magnitude preserved by default
+   - The rocket flies blind until the next shared `drag grid interval` boundary (phase-dependent, practically about one tick through ~100ms)
+   - At that boundary, homing resumes toward the target; all bounces share the same clock
    - `max bounces` caps how many bounces before the rocket explodes
 6. **Target hit or expired** — `on kill` / `on explode` / `on destroyed` fires.
 
-### The two "drag" windows explained
+### The drag and bounce windows explained
 
-TFDB has TWO separate blind windows:
+TFDB intentionally uses two different schedules:
 
 | Window | When | Field | Typical |
 |---|---|---|---|
-| **Pre-read drag** | Between airblast and eye-angle read | `steering control` (seconds) | 0.045 (~45ms) |
-| **Post-bounce commit** | Between wall bounce and homing resume | `bounce control` (seconds) | 0.045 (~45ms) |
-| (Optional) **Post-read commit** | AFTER eye read, before homing | `control delay` (seconds) | 0 |
+| **Fixed pre-read drag** | Between airblast and the one-shot eye-angle read | global `drag delay` (seconds) | 0.045 (~45ms) |
+| **Grid-gated bounce** | Between surface reflection and homing resume | global `drag grid interval` (milliseconds) | phase-dependent, ~one tick–100ms |
+| (Optional) **Post-read commit** | AFTER eye read, before homing | per-class `control delay` (seconds) | 0 |
 
-Most classes leave `control delay` at 0. Use `steering control` for drag feel and `bounce control` for bounce feel.
+This split makes player flicks learnable while retaining the unpredictable, synchronized bounce behavior. Setting `drag delay` to 0 restores legacy grid timing for drags without changing bounce behavior.
+
+> **2.3 timing migration:** the former per-class `steering control` and `bounce control` keys are no longer read. Set the global `drag delay` and `drag grid interval` in the `general` section instead. Per-class `control delay` remains separate and still applies after the eye-angle read. These deadlines govern modern `behaviour "homing"`; the explicit `legacy homing` compatibility path retains its coarse ~10Hz processing.
 
 ### Feel guide
 
-`steering control` and `bounce control` are in **seconds**. The plugin converts to real server ticks at config load, so the feel is identical on 66/100/128-tick servers.
+`drag delay` is real-time seconds. Its deadline is checked every server frame, so it keeps approximately the same real-time feel across tickrates (actual execution rounds up to the next frame).
 
 | seconds | feel |
 |---|---|
-| 0.000 | instant — no window |
+| 0.000 | legacy shared-grid drag — variable, not instant |
 | 0.015 | very tight |
 | 0.030 | tight |
-| **0.045** | **master-like (default)** |
+| **0.045** | **balanced fixed endpoint (default)** |
 | 0.060 | slight weight |
 | 0.075 | noticeable drag |
 | **0.091** | **heavy drag** |
 | 0.106 | sluggish |
 | 0.121 | very sluggish |
-| 0.150+ | laggy-feeling |
+| 0.150 | maximum — laggy-feeling |
+
+#### v1.9.6 conversion warning
+
+Version 1.9.6's `drag time min` / `drag time max` were not a random range. The normal defaults were `.05/.05`: the first frame that noticed a deflection sampled immediately, then later frames sampled again between the min and `max + one tick`. The final `.05/.05` sample often landed roughly **62–76ms after the actual deflection** at 66–128 tick. That is why the current fixed `.060`–`.070` range—and the later public v2.2 beta's tick-rounded `.074` one-shot setting—can feel closer to old 1.9.6 than a literal modern `.050`. Because the current deadline rounds upward rather than to the nearest tick, use `.070` as the closer current cross-tick-rate starting point instead of copying `.074` blindly.
+
+If by “0.6/0.7” you mean `.060/.070`, those are valid moderate current settings. If an old min/max server literally used `.06/.07`, its repeated late samples and finalization ran later; start the current one-shot comparison near `.075` (or `.090` if matching homing-resume time). Literal `0.600/0.700` means 600–700ms and the current parser clamps either to 150ms. For *less* player drag, move downward through `.030`, `.020`, then `.015`; do not use zero, because zero selects variable grid timing.
+
+The old min/max model continuously reread eye angles and was tick-rate dependent, so it remains deliberately removed rather than being restored just for familiar key names. See [`docs/drag-design.md`](../../../../../docs/drag-design.md) for source citations, conversion tables, rejected designs, and the live-test protocol.
 
 ---
 
@@ -103,7 +114,7 @@ Most classes leave `control delay` at 0. Use `steering control` for drag feel an
 |---|---|---|
 | `speed` | float | Initial speed in HU/s. Community range 600–1300. |
 | `speed increment` | float | Added per deflection. Higher = faster rallies. |
-| `speed limit` | float | Hard cap. 0 = unlimited (but engine caps at 3500 without `max velocity` override in general settings). |
+| `speed limit` | float | Optional per-class cap. 0 means no stricter class cap; TFDB still pre-clamps to global/server `max velocity`. |
 | `turn rate` | float | Radians-ish per homing tick. 0.2 is vanilla-feel; >0.30 is sharp. |
 | `turn rate increment` | float | Added per deflection. Rally intensifies. |
 | `turn rate limit` | float | Max turn rate allowed (0 = no cap). |
@@ -112,12 +123,16 @@ Most classes leave `control delay` at 0. Use `steering control` for drag feel an
 
 | Field | Type | Description |
 |---|---|---|
-| `steering control` | float seconds | Pre-read drag window. 0 = unflickable (instant). 0.045 = master-like. 0.091 = heavy. Auto-scales across tickrates. |
-| `bounce control` | float seconds | Post-bounce blind time before homing resumes. 0 = instant. 0.045 ≈ old behavior. 0.091 = committed. |
-| `control delay` | float seconds | Extra blind period AFTER eye-read. Most classes use 0. Set to 0.1 for "legacy feel." |
-| `think interval` | float seconds | Homing cadence. 0 = per-tick (smooth, default). 0.05 = 20Hz (Damizean authentic). 0.1 = 10Hz (classic chunky). |
+| `drag delay` | global float seconds | Fixed pre-read drag window. 0 selects legacy shared-grid timing; 0.045 is the consistent default. |
+| `drag grid interval` | global int milliseconds | Shared bounce clock (10–100ms). Bounces always use it; drags use it only when `drag delay` is 0. |
+| `control delay` | per-class float seconds | Extra blind period AFTER the eye-angle read. Most classes use 0. |
+| `think interval` | float seconds | Homing cadence. 0 = per-tick (smooth, default). 0.05 = explicit 20Hz. 0.1 = 10Hz. Historical lzardy requested 20Hz but SourceMod 1.9 actually dispatched its shared timer at ~10Hz; neither override alone is a complete authenticity preset. |
 | `max bounces` | int | How many wall bounces before the rocket explodes. 0 = never bounces (explodes on first contact). |
-| `bounce ceiling` | float HU | Max bounce arc height above the bounce point. `0` = no clamp (pure physics). `300-500` = typical tune to prevent high-deflect rockets from launching to the map ceiling. Rocket speed is preserved — excess vertical energy is redistributed to horizontal components. Only affects upward bounces (floor/slope); ceiling bounces (rocket hits ceiling) unaffected. |
+| `bounce ceiling` | float | Deprecated non-legacy world-up velocity reshaper. Keep `0` for canonical reflection. TF rockets have zero gravity, so this is not a real arc-height ceiling; nonzero values flatten upward floor/slope reflections and redirect magnitude horizontally. |
+
+Bounce speed-loss, blind-displacement, and pseudo-ceiling experiments are documented as noncanonical or rejected. See [`docs/bounce-design.md`](../../../../../docs/bounce-design.md) before proposing another bounce nerf.
+
+Drag min/max, fixed endpoint timing, zero-delay compatibility behavior, and rejected continuous-sampling designs are recorded in [`docs/drag-design.md`](../../../../../docs/drag-design.md).
 
 ### Damage
 
@@ -127,6 +142,9 @@ Most classes leave `control delay` at 0. Use `steering control` for drag feel an
 | `damage increment` | float | Added per deflection. |
 | `critical chance` | int % | 0–100. 100 = always crit. |
 | `crit glow stack` | int | Number of fake-crit glow particles stacked on the rocket's trail attachment. `1` = default single glow. `2-10` = denser visual glow (useful for low-damage rockets that want a "charged" look). Clamped to 1–10. Cosmetic only; does not affect damage. |
+| `crit glow particle red` | string | Per-class crit glow particle override for Red team. Empty = engine default. |
+| `crit glow particle blue` | string | Per-class crit glow particle override for Blue team. Empty = engine default. |
+| `crit glow particle neutral` | string | Per-class crit glow particle override for neutral (FFA) rockets. Empty = engine default. |
 
 ### Targeting behavior
 
@@ -181,6 +199,30 @@ Most classes leave `control delay` at 0. Use `steering control` for drag feel an
 | `elevate on deflect` | 0/1 | Does the rocket gain altitude after each deflection? |
 | `elevation rate` | float | How fast it rises. |
 | `elevation limit` | float | Max rise. |
+
+### General section
+
+These live in the `"general"` block of `general.cfg`, not inside rocket class definitions.
+
+| Field | Type | Description |
+|---|---|---|
+| `music` | 0/1 | Enable round music. |
+| `use web player` | 0/1 | Use web-based music player (MOTD panel) instead of sound files. |
+| `web player url` | string | URL for the web music player. |
+| `round start` | path | Sound file for round start. |
+| `round end (win)` | path | Sound file for round win. |
+| `round end (lose)` | path | Sound file for round loss. |
+| `gameplay` | path | Background gameplay music. |
+| `smooth elevation` | 0/1 | Smooth elevation transitions during homing. |
+| `drag delay` | float | Seconds before the deflector's eye angles are sampled. `0` = legacy shared-grid timing. Range: 0-0.15. |
+| `drag grid interval` | int (ms) | Shared legacy grid interval in ms. Range: 10-100. |
+| `max velocity` | float | Engine-wide projectile speed cap. `0` = leave server default. |
+| `push prevention` | 0/1 | Prevent players from pushing each other (built into core). |
+| `push prevention toggle` | 0/1 | Allow players to toggle push prevention via chat command. |
+| `noblock` | 0/1 | Enable NoBlock (players pass through each other). |
+| `target lock` | 0/1 | Lock rocket targets at spawn (prevents mid-flight retargeting). |
+| `target lock bot only` | 0/1 | Target lock only applies to bots. |
+| `disable round freeze` | 0/1 | Let players move during Arena pre-round setup. |
 
 ### Events
 
@@ -259,8 +301,6 @@ Fast rocket with tight control. Rewards quick reflexes.
     "damage"                 "60"
     "damage increment"       "40"
     "critical chance"        "100"
-    "steering control"       "0.015"      // very tight, unflickable
-    "bounce control"         "0"          // instant re-home
     "max bounces"            "5"
     "keep direction"         "1"
     "reset bounces"          "1"
@@ -284,8 +324,6 @@ Slow, high damage, committed direction.
     "damage"                 "150"
     "damage increment"       "100"
     "critical chance"        "50"
-    "steering control"       "0.121"      // heavy drag
-    "bounce control"         "0.121"      // long commit after bounce
     "max bounces"            "20"
     "keep direction"         "1"
     "reset bounces"          "0"
@@ -308,8 +346,6 @@ Slow, high damage, committed direction.
     "damage"                 "100"
     "damage increment"       "50"
     "critical chance"        "10"
-    "steering control"       "0.045"
-    "bounce control"         "0.045"
     "max bounces"            "10000"
     "think interval"         "0.05"       // KEY: 20Hz homing, raw turn rate
     "keep direction"         "0"
@@ -335,8 +371,6 @@ Single-hit lethal. Slow but relentless.
     "damage increment"       "200"
     "critical chance"        "100"
     "max bounces"            "0"          // no bounces; explodes on impact
-    "steering control"       "0.045"
-    "bounce control"         "0.045"
     "elevation rate"         "0.1237"
     "elevation limit"        "0.1237"
     "can be stolen"          "1"
@@ -361,8 +395,6 @@ The community-standard middle ground. What `common` is set to in shipped config.
     "damage"                 "40"
     "damage increment"       "25"
     "critical chance"        "100"
-    "steering control"       "0.045"
-    "bounce control"         "0.045"
     "max bounces"            "10000"
     "keep direction"         "1"
     "reset bounces"          "1"
@@ -422,21 +454,21 @@ Makes elevation ramp continuously per-frame instead of stepped ~10Hz. Visual cha
 
 ### "My rocket is uncatchable"
 
-Usually `steering control` is too high combined with high `turn rate`. Try:
-- Lower `steering control` to 0–0.045
+Usually the global `drag delay` is too long combined with a high per-class `turn rate`. Try:
+- Lower `drag delay` toward 0.030–0.045 (do not use 0 unless you want legacy grid randomness)
 - Lower `turn rate` below 0.25
-- Add `control delay "0.05"` (brief post-read pause) — makes the drag window more visible
+- Keep `control delay` at 0 unless you intentionally want an extra post-read pause
 
 ### "My rocket feels floaty / doesn't home"
 
 Check:
-- `think interval` is set correctly (0 for per-tick, 0.05 for Damizean)
+- `think interval` is set correctly (0 for per-tick; nonzero only for an intentional coarse cadence)
 - `turn rate` isn't too low (try 0.2+)
 - `turn rate limit` isn't capping too aggressively
 
 ### "Rocket stops turning after hitting a wall"
 
-You set `keep direction "1"` which is correct behavior for most rockets. If you want post-bounce homing to resume, make sure `bounce control` isn't excessively long.
+`keep direction "1"` is normal for most rockets. Bounce homing resumes at the next shared grid boundary; lower the global `drag grid interval` if that blind flight is too long.
 
 ### "Rocket explodes on first bounce"
 
@@ -444,7 +476,7 @@ You set `keep direction "1"` which is correct behavior for most rockets. If you 
 
 ### "Speed caps at ~3500"
 
-Engine default. Override with `"max velocity" "5000"` in general settings (note: this is ENGINE cap; `speed limit` is per-CLASS cap).
+The global `max velocity` is both the engine cap and TFDB's internal pre-write cap. Override it with `"max velocity" "5000"`; `speed limit` can impose a stricter per-class cap.
 
 ### "I need to reload config without restarting"
 
@@ -466,4 +498,4 @@ For the curious / debugging:
 
 ---
 
-*This guide covers `general.cfg`. For anti-cheat (`tfdb_anticheat.cfg`), PvB (`pvb.cfg`), guardian (`guardian.cfg`), and presets (`presets.cfg`), see the respective cfg files' inline comments or the wiki.*
+*This guide covers `general.cfg` (rocket classes + general section). For PvB (`pvb.cfg`), Guardian (`guardian.cfg`), presets (`presets.cfg`), and presets (`presets.cfg`), see the respective cfg files' inline comments or the wiki.*

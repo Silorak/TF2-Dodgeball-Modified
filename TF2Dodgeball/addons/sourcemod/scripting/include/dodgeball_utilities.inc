@@ -9,18 +9,25 @@
  */
  
 /**
- * Converts a duration in seconds to server ticks on the current tickrate.
- * Used to author drag / bounce windows in real time (seconds) in cfg files
- * so feel is identical across 66 / 100 / 128-tick servers.
+ * Returns the next boundary of the shared legacy grid (interval =
+ * DragGridInterval, seconds; default 0.1) anchored at game time 0, strictly
+ * after `t`. For example: ..., 0.3, 0.4, 0.5, ... at the default interval.
  *
- * 0.0 returns 0 (no window). Any positive value returns at least 1 tick so a
- * tiny cfg value doesn't round to 0.
+ * Every bounce uses this clock, preserving the original repeating-timer
+ * behavior: events in the same cell resume homing together after a variable
+ * wait of roughly 0-DragGridInterval. Drag uses this grid only when the
+ * general "drag delay" is 0; otherwise drag has a fixed per-event deadline.
+ *
+ * This interval remains separate from FPS_LOGIC_INTERVAL, so bounce feel can
+ * be tuned without changing the spawner, beep, elevation, or delay-prevention
+ * cadence.
  */
-stock int SecondsToTicks(float seconds)
+stock float NextLegacyGridTick(float t)
 {
-	if (seconds <= 0.0) return 0;
-	int out = RoundToNearest(seconds / GetTickInterval());
-	return (out < 1) ? 1 : out;
+	int steps = RoundToCeil(t / DragGridInterval);
+	float boundary = float(steps) * DragGridInterval;
+	if (boundary <= t) boundary += DragGridInterval;
+	return boundary;
 }
 
 stock void StopSoundToAll(int channel, const char[] sound)
@@ -124,8 +131,8 @@ stock bool IsValidClientEx(int client, bool alive = false)
 /**
  * Full recount of g_AliveCount[] from scratch. Authoritative reset path —
  * called at round_start, EnableDodgeBall, and as a safety net if drift is
- * ever suspected. Counters are also maintained incrementally via the player
- * spawn / death / team-change / disconnect events.
+ * ever suspected. Also refreshes the aggregate PlayerCount from the same
+ * snapshot so native consumers cannot observe a stale total.
  */
 void RecountAlive()
 {
@@ -138,6 +145,7 @@ void RecountAlive()
 		int t = GetClientTeam(i);
 		if (t == 2 || t == 3) g_AliveCount[t]++;
 	}
+	PlayerCount = g_AliveCount[2] + g_AliveCount[3];
 }
 
 /**
@@ -200,7 +208,20 @@ stock int GetAnalogueTeam(int team)
  * Selects a target for a homing rocket based on team and optional directional weighting.
  * Falls back to random selection if rocket entity is invalid.
  */
-stock int SelectTarget(int team, int rocket = -1)
+/**
+ * @param dirOverrideValid  Score against dirOverride instead of the rocket's
+ *                          currently-stored direction.
+ *
+ * ProcessDeflection must pick a target using the direction the deflector JUST
+ * aimed, but must not commit that direction to RocketDirection[] until the
+ * pre-deflect forward has had its chance to veto the deflection. Without this
+ * override those two requirements are mutually exclusive: score against the
+ * stale direction (wrong target) or mutate before the veto (half-applied
+ * cancel).
+ */
+stock int SelectTarget(int team, int rocket = -1,
+                       bool dirOverrideValid = false,
+                       const float dirOverride[3] = {0.0, 0.0, 0.0})
 {
 	// Fast no-target early-out: if the cached counter says zero alive on
 	// the requested team, there's nothing to pick. team==0 means "any"
@@ -229,7 +250,15 @@ stock int SelectTarget(int team, int rocket = -1)
 			owner = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
 			
 			GetEntPropVector(entity, Prop_Send, "m_vecOrigin", rocketPosition);
-			CopyVectors(RocketDirection[rocket], rocketDirection);
+			// Component copy rather than CopyVectors: dirOverride is const and
+			// CopyVectors takes its source non-const.
+			if (dirOverrideValid)
+			{
+				rocketDirection[0] = dirOverride[0];
+				rocketDirection[1] = dirOverride[1];
+				rocketDirection[2] = dirOverride[2];
+			}
+			else CopyVectors(RocketDirection[rocket], rocketDirection);
 			weight = RocketClassTargetWeight[rocketClass];
 			
 			useRocket = true;
@@ -249,7 +278,23 @@ stock int SelectTarget(int team, int rocket = -1)
 		{
 			float clientPosition[3]; GetClientEyePosition(client, clientPosition);
 			float directionToClient[3]; MakeVectorFromPoints(rocketPosition, clientPosition, directionToClient);
-			
+
+			// Deliberately NOT normalized -- restored to the original 1.9.6
+			// formula (github.com/Silorak/TF2-Dodgeball, tag v1.9.6,
+			// TF2Dodgeball.sp::SelectTarget) after the user directly
+			// compared the two and confirmed 1.9.6's targeting felt right
+			// while this normalized version felt "awful". The raw
+			// (unnormalized) directionToClient carries the distance in
+			// Hammer Units, so this dot product is distance * cos(angle),
+			// not just cos(angle) -- it dominates the 0-100 random roll
+			// above by design, producing decisive, predictable targeting
+			// (whoever's roughly in front and far away) rather than a
+			// muddier, closer-to-random pick. A later "fix" here
+			// normalized this vector on the reasoning that raw distance
+			// swamping the configured weight was a bug -- mathematically
+			// true, but it made target selection noticeably more random
+			// and worse in actual play. Do not re-normalize without
+			// re-confirming against the original 1.9.6 feel first.
 			newWeight += GetVectorDotProduct(rocketDirection, directionToClient) * weight;
 		}
 		

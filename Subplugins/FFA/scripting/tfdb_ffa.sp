@@ -17,7 +17,7 @@
 #define PLUGIN_NAME        "[TFDB] Free-for-All"
 #define PLUGIN_AUTHOR      "x07x08, Silorak"
 #define PLUGIN_DESCRIPTION "Makes all rockets neutral"
-#define PLUGIN_VERSION     "2.2.0"
+#define PLUGIN_VERSION "2.3.0"
 #define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball"
 
 bool  Loaded;
@@ -226,20 +226,39 @@ public void OnPlayerDeath(Event event, char[] eventName, bool dontBroadcast)
 	{
 		return;
 	}
-	
+
 	int victim = GetClientOfUserId(event.GetInt("userid"));
 	if (victim == 0) return;
 
 	int team = GetClientTeam(victim);
-	
+
 	if (team <= 1) return; // ...
-	
+
+	// Defer the team-balance check to the next frame. When two players on
+	// the same team die in the same tick (e.g., from the same rocket
+	// explosion), both death events fire before the alive-count cache is
+	// updated. Checking synchronously, the second death still sees the
+	// first victim as alive, producing a wrong alive-count and an extra or
+	// missed team swap. RequestFrame runs after all same-tick death events
+	// have been processed and the alive counts are settled.
+	DataPack pack = new DataPack();
+	pack.WriteCell(team);
+	RequestFrame(DeferredFFATeamBalance, pack);
+}
+
+public void DeferredFFATeamBalance(DataPack pack)
+{
+	pack.Reset();
+	int team = pack.ReadCell();
+	delete pack;
+
+	if (!FFAEnabled || !TFDB_GetRoundStarted()) return;
+
 	int otherTeam = GetAnalogueTeam(team);
-	
-	// Checking the alive players count in here doesn't exclude the player that has just died.
-	// Doing this check in a SDKHook_OnTakeDamagePost callback excludes him for some reason...
-	
-	if (((GetTeamAliveClientCount(team) - 1) == 0) && ((GetTeamAliveClientCount(otherTeam) - 1) >= 1))
+
+	// By the time this runs (next frame), the death is fully processed and
+	// GetTeamAliveClientCount reflects the real state. No more -1 hack.
+	if ((GetTeamAliveClientCount(team) == 0) && (GetTeamAliveClientCount(otherTeam) >= 1))
 	{
 		int swap = GetRandomTeamAliveClient(otherTeam);
 		if (swap != -1) ChangeAliveClientTeam(swap, team);
@@ -313,7 +332,7 @@ public Action CmdToggleFFA(int client, int args)
 	// admins should always be able to turn FFA off.)
 	if (!FFAEnabled && IsModeActive())
 	{
-		CReplyToCommand(client, "{olive}[TFDB]{default} Cannot enable FFA while Guardian / PvB / DeathMatch is active.");
+		CReplyToCommand(client, "{olive}[TFDB]{default} Cannot enable FFA while Guardian / PvB is active.");
 		return Plugin_Handled;
 	}
 

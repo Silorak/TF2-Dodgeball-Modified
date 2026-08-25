@@ -1,10 +1,8 @@
-#playername closed the distance. Adjusting range.
-#deflects deflects. Need better positioning next time.
-Good angle, #playername. I'll adapt.
-#playername found the gap in my coverage. Noted.
+// Midrange — clinical even in defeat. Analyzes what went wrong.
+Good angle, #playername. My spacing was off by 47 units.
 Recalculating optimal distance after #deflects deflects.
-That orbit threw me off. Learning, #playername.
-#deflects before going down. Positioning data saved.
-#playername exploited my pattern. New approach loading.
+That orbit threw me off. Adjusting the model, #playername.
 Range miscalculation. Won't happen twice.
 Well played #playername. My spacing was off.
+You broke my positioning, #playername. Impressive.
+#deflects deflects. I need to account for that angle next time.

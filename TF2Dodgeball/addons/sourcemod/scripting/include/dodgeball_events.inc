@@ -10,6 +10,8 @@
 /** Called when a new round starts. Resets steal info and plays round start music. */
 public void OnRoundStart(Event event, char[] eventName, bool dontBroadcast)
 {
+	if (!Enabled) return;
+
 	if (Music[Music_RoundStart])
 	{
 		EmitSoundToAll(MusicPath[Music_RoundStart]);
@@ -24,20 +26,80 @@ public void OnRoundStart(Event event, char[] eventName, bool dontBroadcast)
 	// Authoritative reset of cached alive counters. Catches any drift that
 	// might have accumulated through the round.
 	RecountAlive();
+
+	// Optional: let players move during Arena's pre-round.
+	//
+	// Repeating rather than one-shot on purpose. The freeze is not a single
+	// event to undo -- the game re-applies it, and players spawning during
+	// setup arrive already frozen, so a single pass at round_start would
+	// unfreeze whoever happened to exist at that instant and nobody else.
+	// This runs until the round actually goes live (OnSetupFinished clears
+	// RoundStarted's guard) and then stops itself.
+	if (UnfreezeDuringSetup)
+	{
+		delete UnfreezeTimer;
+		UnfreezeTimer = CreateTimer(0.1, Timer_UnfreezeSetup, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+	}
+}
+
+/**
+ * Strips the pre-round movement lock. Two mechanisms, because TF2 does not
+ * use just one: TFCond_FreezeInput blocks the usercmd, and FL_FROZEN blocks
+ * movement at the entity level. Clearing only one leaves players stuck.
+ */
+public Action Timer_UnfreezeSetup(Handle timer)
+{
+	if (!Enabled || RoundStarted || !UnfreezeDuringSetup)
+	{
+		UnfreezeTimer = null;
+		return Plugin_Stop;
+	}
+
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (!IsValidClientEx(client, true)) continue;
+
+		if (TF2_IsPlayerInCondition(client, TFCond_FreezeInput))
+		{
+			TF2_RemoveCondition(client, TFCond_FreezeInput);
+		}
+
+		int flags = GetEntityFlags(client);
+		if (flags & FL_FROZEN) SetEntityFlags(client, flags & ~FL_FROZEN);
+	}
+
+	return Plugin_Continue;
 }
 
 /** Called when setup phase ends. Initializes spawn points and starts the game timer. */
 public void OnSetupFinished(Event event, char[] eventName, bool dontBroadcast)
 {
+	if (!Enabled) return;
+
 	// Guard against being called twice (both teamplay_round_active and arena_round_start hook this)
 	if (RoundStarted) return;
+
+	// Defensive recount: g_AliveCount may be stale from a team swap where
+	// m_lifeState was spoofed (ChangeAliveClientTeam sets it to 2 before
+	// ChangeClientTeam fires player_team, so the immediate RecountAlive in
+	// OnPlayerTeam doesn't count the swapped player). The deferred recount
+	// in OnPlayerTeam's RequestFrame handles this, but recount here too as
+	// belt-and-suspenders before checking BothTeamsPlaying().
+	RecountAlive();
 	if (!BothTeamsPlaying()) return;
 
 	PopulateSpawnPoints();
+	if (SpawnPointsRedCount == 0 || SpawnPointsBluCount == 0)
+	{
+		LogError("Cannot start Dodgeball round: RED spawns=%d, BLU spawns=%d.",
+			SpawnPointsRedCount, SpawnPointsBluCount);
+		return;
+	}
+
 	if (LastDeadTeam == 0) LastDeadTeam = GetURandomIntRange(view_as<int>(TFTeam_Red), view_as<int>(TFTeam_Blue));
 	if (!IsValidClient(LastDeadClient)) LastDeadClient = 0;
 	
-	LogicTimer      = CreateTimer(FPS_LOGIC_INTERVAL, OnDodgeBallGameFrame, _, TIMER_REPEAT);
+	LogicTimer      = CreateTimer(FPS_LOGIC_INTERVAL, OnDodgeBallGameFrame, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 	PlayerCount     = CountAlivePlayers();
 	RocketsFired    = 0;
 	CurrentRedSpawn = 0;
@@ -45,11 +107,17 @@ public void OnSetupFinished(Event event, char[] eventName, bool dontBroadcast)
 	NextSpawnTime   = GetGameTime();
 	RoundStarted    = true;
 	RoundCount++;
+
+	// Round is live -- the setup unfreeze has done its job.
+	delete UnfreezeTimer;
+	UnfreezeTimer = null;
 }
 
 /** Called when round ends. Stops timer, music, and destroys all rockets. */
 public void OnRoundEnd(Event event, char[] eventName, bool dontBroadcast)
 {
+	if (!Enabled) return;
+
 	if (LogicTimer != null)
 	{
 		KillTimer(LogicTimer);
@@ -79,6 +147,8 @@ public void OnRoundEnd(Event event, char[] eventName, bool dontBroadcast)
 /** Called when player spawns. Forces Pyro class. */
 public void OnPlayerSpawn(Event event, char[] eventName, bool dontBroadcast)
 {
+	if (!Enabled) return;
+
 	int client = GetClientOfUserId(event.GetInt("userid"));
 	if (!IsValidClient(client)) return;
 
@@ -170,12 +240,29 @@ public void OnPlayerDeath(Event event, char[] eventName, bool dontBroadcast)
  */
 public void OnPlayerTeam(Event event, char[] eventName, bool dontBroadcast)
 {
+	if (!Enabled) return;
+	RecountAlive();
+
+	// Deferred recount: ChangeAliveClientTeam (NER, DM) sets m_lifeState = 2
+	// before ChangeClientTeam, then restores it to 0 after. The immediate
+	// RecountAlive above runs INSIDE that window — while m_lifeState is still
+	// spoofed dead — and doesn't count the swapped player. This stale count
+	// makes BothTeamsPlaying() return false, stopping the rocket spawner.
+	// Recount again on the next frame when m_lifeState is back to 0.
+	RequestFrame(Frame_DeferredRecount);
+}
+
+void Frame_DeferredRecount(any data)
+{
+	#pragma unused data
 	RecountAlive();
 }
 
 /** Called when player receives inventory. Removes non-flamethrower weapons and applies built-in features. */
 public void OnPlayerInventory(Event event, char[] eventName, bool dontBroadcast)
 {
+	if (!Enabled) return;
+
 	int client = GetClientOfUserId(event.GetInt("userid"));
 
 	if (!IsValidClient(client)) return;
@@ -208,7 +295,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float veloc
 /** Handles custom music for round start, win, and lose events. */
 public Action OnBroadcastAudio(Event event, char[] eventName, bool dontBroadcast)
 {
-	if (!MusicEnabled) return Plugin_Continue;
+	if (!Enabled || !MusicEnabled) return Plugin_Continue;
 
 	char sound[PLATFORM_MAX_PATH];
 	event.GetString("sound", sound, sizeof(sound));
@@ -275,7 +362,9 @@ public void OnObjectDeflected(Event event, char[] eventName, bool dontBroadcast)
 	if (RocketInstanceState[index] & RocketState_Delayed)
 	{
 		Internal_SetRocketState(index, (RocketInstanceState[index] & ~RocketState_Delayed));
-		RocketSpeed[index] = CalculateRocketSpeed(RocketClass[index], CalculateModifier(RocketClass[index], RocketDeflections[index]));
+		int rocketClass = RocketClass[index];
+		RocketSpeed[index] = LimitRocketSpeed(rocketClass, RocketInstanceFlags[index],
+			CalculateRocketSpeed(rocketClass, CalculateModifier(rocketClass, RocketDeflections[index])));
 	}
 
 	if (RocketInstanceFlags[index] & RocketFlag_ResetBounces)
@@ -310,12 +399,20 @@ public void OnObjectDeflected(Event event, char[] eventName, bool dontBroadcast)
 		UpdateCritGlow(index, entity, newTeam);
 	}
 
-	// --- Record event tick for deferred eye-angle read in HomingRocketThink ---
-	// The event handler does NOT read eye angles. It records the moment and the deflector.
-	// HomingRocketThink reads eye angles after the per-class "steering control" ticks
-	// have elapsed. That gap is the drag window — mouse movement during it is captured
-	// when the read finally fires.
-	RocketDragEventTick[index] = GetGameTickCount();
+	// --- Record the deferred eye-angle-read deadline for HomingRocketThink ---
+	// The event handler deliberately does NOT read eye angles. With the default
+	// fixed delay, every deflection gets the same learnable drag window and the
+	// deflector's aim is sampled once at its end. A zero delay explicitly opts
+	// into the old shared-grid timing (variable 0-DragGridInterval wait).
+	float now = GetGameTime();
+	if (DragDelay > 0.0)
+	{
+		RocketDragEventBoundary[index] = now + DragDelay;
+	}
+	else
+	{
+		RocketDragEventBoundary[index] = NextLegacyGridTick(now);
+	}
 }
 
 /**
@@ -325,9 +422,9 @@ public void OnObjectDeflected(Event event, char[] eventName, bool dontBroadcast)
  * SDKHook_Think fires at the entity's native think rate. For
  * `tf_projectile_rocket` that's only the rocket's own lifetime/fuel schedule
  * (~10 Hz at best), NOT per-tick like it is for players. Driving homing from
- * SDKHook_Think produces ~10 Hz homing, visible sine-wave motion from the
- * engine-gravity vs our-correction mismatch, and rockets that "fly to space"
- * against moving targets. OnGameFrame iteration is the supported path.
+ * SDKHook_Think produces ~10 Hz homing, visible stepped/sine-wave correction,
+ * and rockets that "fly to space" against moving targets. TF rockets themselves
+ * use zero gravity; the artifact is coarse steering cadence, not ballistic fall. OnGameFrame iteration is the supported path.
  *
  * Dispatches:
  *   - HomingRocketThink (per-tick, internal "think interval" gating)
@@ -367,11 +464,26 @@ void OnRocketThink(int index)
 public void OnGameFrame()
 {
 	if (!Enabled || !RoundStarted) return;
+	if (!g_CoreProfileWindow.active)
+	{
+		int inactiveIndex = -1;
+		while ((inactiveIndex = FindNextValidRocket(inactiveIndex)) != -1)
+		{
+			OnRocketThink(inactiveIndex);
+		}
+		return;
+	}
+
+	g_CoreProfileFrames++;
 
 	int index = -1;
 	while ((index = FindNextValidRocket(index)) != -1)
 	{
+		g_CoreProfileRockets++;
+		bool emitEvent = TFDB_ProfileTakeEvent(g_CoreProfileWindow);
+		if (emitEvent) EnterProfilingEvent("TFDB/Core", "RocketThink");
 		OnRocketThink(index);
+		if (emitEvent) LeaveProfilingEvent();
 	}
 }
 
@@ -463,6 +575,45 @@ public Action OnStartTouch(int entity, int other)
 	return Plugin_Handled;
 }
 
+/**
+ * Deprecated non-legacy world-up velocity reshaper retained for configuration
+ * compatibility. TF rockets use MOVETYPE_FLY with gravity 0, so `ceiling` is
+ * not a physical peak height. The historical formula merely maps its value to
+ * max v_z = sqrt(2 * 800 * ceiling), then redirects excess vertical magnitude
+ * horizontally. That flattens high-speed floor/slope reflections.
+ *
+ * Authentic/canonical behavior requires ceiling = 0. Only upward bounces are
+ * affected; wall/ceiling cases normally bypass the cap.
+ *
+ * @param bounceVec   The bounce velocity vector (modified in place).
+ * @param ceiling     Legacy pseudo-height control. 0 = disabled/authentic.
+ */
+void ApplyBounceCeiling(float bounceVec[3], float ceiling)
+{
+	if (ceiling <= 0.0 || bounceVec[2] <= 0.0) return;
+
+	float maxVz = SquareRoot(2.0 * 800.0 * ceiling);  // g = 800 HU/s² (Source default)
+	if (bounceVec[2] <= maxVz) return;
+
+	float origMagSq = bounceVec[0]*bounceVec[0] + bounceVec[1]*bounceVec[1] + bounceVec[2]*bounceVec[2];
+	float newVzSq   = maxVz * maxVz;
+	float origXYSq  = bounceVec[0]*bounceVec[0] + bounceVec[1]*bounceVec[1];
+
+	bounceVec[2] = maxVz;
+
+	// Boost horizontal components to preserve total magnitude.
+	// Skip redistribution on pure-vertical bounces (XY ≈ 0) — would divide by
+	// zero. Rocket just loses speed in that degenerate case (very rare in play).
+	if (origXYSq <= 1.0) return;
+
+	float targetXYSq = origMagSq - newVzSq;
+	if (targetXYSq <= 0.0) return;
+
+	float xyScale = SquareRoot(targetXYSq / origXYSq);
+	bounceVec[0] *= xyScale;
+	bounceVec[1] *= xyScale;
+}
+
 public Action OnTouch(int entity, int other)
 {
 	int index = FindRocketByEntity(entity);
@@ -482,63 +633,25 @@ public Action OnTouch(int entity, int other)
 	float velocity[3];
 	GetEntPropVector(entity, Prop_Data, "m_vecAbsVelocity", velocity);
 
-	Handle trace = TR_TraceRayFilterEx(origin, angles, MASK_SHOT, RayType_Infinite, TEF_ExcludeEntity, entity);
-
-	if (!TR_DidHit(trace))
-	{
-		delete trace;
-		return Plugin_Continue;
-	}
+	TR_TraceRayFilter(origin, angles, MASK_SHOT, RayType_Infinite, TEF_ExcludeEntity, entity);
+	if (!TR_DidHit()) return Plugin_Continue;
 
 	float normal[3];
-	TR_GetPlaneNormal(trace, normal);
-	delete trace;
+	TR_GetPlaneNormal(INVALID_HANDLE, normal);
 
 	float dotProduct = GetVectorDotProduct(normal, velocity);
 	ScaleVector(normal, dotProduct);
 	ScaleVector(normal, 2.0);
 
-	// Pure reflection — v' = v - 2(v·n)n. Magnitude preserved, no artificial
-	// dampening. Matches Oracle DB_Reborn's canonical implementation and the
-	// feel the TFDB community expects.
+	// Canonical elastic reflection: v' = v - 2(v·n)n. Do not scale its
+	// magnitude or reshape its normal/tangent components here. Rejected bounce
+	// experiments and their failure modes are recorded in docs/bounce-design.md.
 	float bounceVec[3];
 	SubtractVectors(velocity, normal, bounceVec);
 
-	// Bounce ceiling — per-class cap on peak bounce arc height (HU above bounce
-	// point). Optional, 0 = disabled. Derivation: under gravity g=800, peak
-	// height h = v_z² / (2g), so max allowed v_z = sqrt(2g · h).
-	// Energy redistribution: if v_z is clamped, boost horizontal components
-	// (X,Y) to preserve total |v|. Rocket keeps speed, excess upward energy
-	// becomes forward energy. Only clamps upward bounces (v_z > 0) so ceiling
-	// hits (rocket bouncing DOWN) are unaffected.
-	int rocketClass = RocketClass[index];
-	float ceiling = RocketClassBounceCeiling[rocketClass];
-	if (ceiling > 0.0 && bounceVec[2] > 0.0)
-	{
-		float maxVz = SquareRoot(2.0 * 800.0 * ceiling);  // g = 800 HU/s² (Source default)
-		if (bounceVec[2] > maxVz)
-		{
-			float origMagSq = bounceVec[0]*bounceVec[0] + bounceVec[1]*bounceVec[1] + bounceVec[2]*bounceVec[2];
-			float newVzSq   = maxVz * maxVz;
-			float origXYSq  = bounceVec[0]*bounceVec[0] + bounceVec[1]*bounceVec[1];
-
-			bounceVec[2] = maxVz;
-
-			// Boost horizontal components to preserve total magnitude.
-			// Skip redistribution on pure-vertical bounces (XY ≈ 0) — would divide by
-			// zero. Rocket just loses speed in that degenerate case (very rare in play).
-			if (origXYSq > 1.0)
-			{
-				float targetXYSq = origMagSq - newVzSq;
-				if (targetXYSq > 0.0)
-				{
-					float xyScale = SquareRoot(targetXYSq / origXYSq);
-					bounceVec[0] *= xyScale;
-					bounceVec[1] *= xyScale;
-				}
-			}
-		}
-	}
+	// Deprecated non-legacy world-up reshaper. Shipped value 0 is a no-op and
+	// keeps canonical reflection; nonzero values intentionally flatten it.
+	ApplyBounceCeiling(bounceVec, RocketClassBounceCeiling[RocketClass[index]]);
 
 	float newAngles[3];
 	GetVectorAngles(bounceVec, newAngles);
@@ -559,10 +672,11 @@ public Action OnTouch(int entity, int other)
 		CopyVectors(bounceVecRef, bounceVec);
 	}
 
-	// Pause homing — rocket flies freely with bounce velocity until
-	// HomingRocketThink re-enables it after per-class "bounce control" ticks.
+	// Pause homing — rocket flies freely with bounce velocity until the shared
+	// legacy grid catches up. Bounce timing stays random even when drag uses the
+	// fixed, consistent eye-angle window.
 	RocketHomingPaused[index]    = true;
-	RocketBounceEventTick[index] = GetGameTickCount();
+	RocketBounceEventBoundary[index] = NextLegacyGridTick(GetGameTime());
 
 	TeleportEntity(entity, NULL_VECTOR, newAngles, bounceVec);
 	RocketBounces[index]++;

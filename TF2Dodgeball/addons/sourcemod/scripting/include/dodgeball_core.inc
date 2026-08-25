@@ -61,7 +61,9 @@ void EnableDodgeBall()
 		HookEventEx("player_team",  OnPlayerTeam,  EventHookMode_Post);
 		HookEventEx("post_inventory_application", OnPlayerInventory, EventHookMode_Post);
 		HookEventEx("teamplay_broadcast_audio", OnBroadcastAudio, EventHookMode_Pre);
-		HookEventEx("object_deflected", OnObjectDeflected);
+		// Post mode is required: drag timing starts after TF2 has committed the new
+		// rocket owner/team, and the later eye-angle read uses that committed owner.
+		HookEventEx("object_deflected", OnObjectDeflected, EventHookMode_Post);
 		EventsHooked = true;
 	}
 
@@ -129,15 +131,26 @@ void EnableDodgeBall()
  */
 void DisableDodgeBall()
 {
-	if (!Enabled) return;
+	// Timer ownership is handle-based, not flag-based. Clean an orphaned timer
+	// even if another lifecycle path already cleared Enabled.
+	if (LogicTimer != null) KillTimer(LogicTimer);
+	LogicTimer = null;
+
+	// Same ownership rule for the setup-unfreeze timer: it repeats, so an
+	// orphan would keep running against a disabled mode.
+	if (UnfreezeTimer != null) KillTimer(UnfreezeTimer);
+	UnfreezeTimer = null;
+
+	if (!Enabled)
+	{
+		RoundStarted = false;
+		return;
+	}
 
 	DestroyRockets();
 	DestroyRocketClasses();
 	DestroySpawners();
 	PresetCount = 0;
-
-	if (LogicTimer != null) KillTimer(LogicTimer);
-	LogicTimer = null;
 
 	Music[Music_RoundStart] =
 	Music[Music_RoundWin]   =
@@ -180,6 +193,21 @@ void DisableDodgeBall()
  */
 public Action OnDodgeBallGameFrame(Handle timer, any data)
 {
+	if (!Enabled || !RoundStarted)
+	{
+		if (timer == LogicTimer) LogicTimer = null;
+		return Plugin_Stop;
+	}
+
+	if (SpawnPointsRedCount == 0 || SpawnPointsBluCount == 0)
+	{
+		LogError("Stopping Dodgeball logic timer: RED spawns=%d, BLU spawns=%d.",
+			SpawnPointsRedCount, SpawnPointsBluCount);
+		if (timer == LogicTimer) LogicTimer = null;
+		RoundStarted = false;
+		return Plugin_Stop;
+	}
+
 	if (!BothTeamsPlaying()) return Plugin_Continue;
 
 	// Rocket Spawning Logic

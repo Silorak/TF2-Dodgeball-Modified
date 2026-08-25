@@ -11,7 +11,7 @@
 #define PLUGIN_NAME        "[TFDB] Votes"
 #define PLUGIN_AUTHOR      "x07x08, Silorak"
 #define PLUGIN_DESCRIPTION "Various rocket votes."
-#define PLUGIN_VERSION     "2.2.0"
+#define PLUGIN_VERSION "2.3.0"
 #define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball"
 
 int SpawnersCount;
@@ -790,9 +790,18 @@ void ParseConfigurations(const char[] configFile)
 	
 	KeyValues kvConfig = new KeyValues("TF2_Dodgeball");
 	
-	if (kvConfig.ImportFromFile(path) == false) SetFailState("[TFDB Votes] Error while parsing configuration file: %s", path);
-	
-	kvConfig.GotoFirstSubKey();
+	if (!kvConfig.ImportFromFile(path))
+	{
+		LogError("[TFDB Votes] Error while parsing configuration file: %s (continuing with defaults)", path);
+		delete kvConfig;
+		return;
+	}
+
+	if (!kvConfig.GotoFirstSubKey())
+	{
+		delete kvConfig;
+		return;
+	}
 	
 	do
 	{
@@ -807,7 +816,7 @@ void ParseConfigurations(const char[] configFile)
 
 void ParseSpawners(KeyValues kvConfig)
 {
-	kvConfig.GotoFirstSubKey();
+	if (!kvConfig.GotoFirstSubKey()) return;
 	
 	do
 	{

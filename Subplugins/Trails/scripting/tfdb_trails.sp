@@ -14,7 +14,7 @@
 #define PLUGIN_NAME        "[TFDB] Rocket trails"
 #define PLUGIN_AUTHOR      "x07x08, Silorak"
 #define PLUGIN_DESCRIPTION "Customizable rocket trails"
-#define PLUGIN_VERSION     "2.2.0"
+#define PLUGIN_VERSION "2.3.0"
 #define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball"
 
 enum ParticleAttachmentType
@@ -40,6 +40,7 @@ int RocketFakeEntity       [MAX_ROCKETS] = {-1, ...};
 // Parallel array of the real rocket entref, used by OnEntityDestroyed to
 // reverse-lookup which fake belongs to a dying rocket.
 int RocketRealEntity       [MAX_ROCKETS] = {-1, ...};
+int RocketSlotByEntity     [2049] = {-1, ...};
 
 // Per-rocket tracking of every info_particle_system / env_spritetrail entity
 // we spawn. When TrailFlag_RemoveParticles is UNSET, the trail entity is
@@ -74,15 +75,8 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
 	LoadTranslations("tfdb.phrases.txt");
-	
-	RegConsoleCmd("sm_rockettrails", CmdHideTrails);
-	RegConsoleCmd("sm_rocketsprites", CmdHideSprites);
 	RegConsoleCmd("sm_hidetrails", CmdHideTrails);
 	RegConsoleCmd("sm_hidesprites", CmdHideSprites);
-	RegConsoleCmd("sm_toggletrails", CmdHideTrails);
-	RegConsoleCmd("sm_togglesprites", CmdHideSprites);
-	
-	RegConsoleCmd("sm_rocketspritetrails", CmdHideSprites);
 	
 	if (!TFDB_IsDodgeballEnabled()) return;
 	
@@ -174,8 +168,6 @@ public void OnMapEnd()
 		delete RocketClassSpriteTrie[index];
 		RocketClassSpriteTrie[index] = null;
 	}
-	RocketClassCount = 0;  // match the post-delete state; prevents stale count on next load.
-
 	// Reap any fake entities still parented to dead rockets. Children of a
 	// dead parent are orphaned (not auto-killed) in Source — without this
 	// pass, prop_dynamic / info_particle_system / env_spritetrail entities
@@ -195,6 +187,10 @@ public void OnMapEnd()
 		KillRocketTrailEntities(i);
 	}
 
+	for (int entity = 0; entity < sizeof(RocketSlotByEntity); entity++)
+	{
+		RocketSlotByEntity[entity] = -1;
+	}
 	RocketClassCount = 0;
 }
 
@@ -219,32 +215,17 @@ public void OnPluginEnd()
 
 public void OnEntityDestroyed(int entity)
 {
-	if (entity < 0) return;
-	int entRef = EntIndexToEntRef(entity);
-	if (entRef == INVALID_ENT_REFERENCE) return;
+	if (entity < 0 || entity >= sizeof(RocketSlotByEntity)) return;
+	int slot = RocketSlotByEntity[entity];
+	RocketSlotByEntity[entity] = -1;
+	if (slot < 0 || slot >= MAX_ROCKETS) return;
+	if (EntRefToEntIndex(RocketRealEntity[slot]) != entity) return;
 
-	// If a tracked rocket just died, kill its fake (prop_dynamic) — trail
-	// and sprite entities are parented to the fake and die with it.
-	for (int i = 0; i < MAX_ROCKETS; i++)
-	{
-		if (RocketRealEntity[i] != entRef) continue;
-
-		int fake = EntRefToEntIndex(RocketFakeEntity[i]);
-		if (fake != -1 && IsValidEntity(fake))
-		{
-			AcceptEntityInput(fake, "Kill");
-		}
-		RocketFakeEntity[i] = -1;
-		RocketRealEntity[i] = -1;
-
-		// Reap any trail/sprite entities we spawned for this rocket. Required
-		// when TrailFlag_RemoveParticles is unset (the trail is parented to
-		// the real rocket, not the fake, so it does not die with the fake).
-		// Redundant for the parented-to-fake case, but IsValidEntity guards
-		// the double-kill.
-		KillRocketTrailEntities(i);
-		break;
-	}
+	int fake = EntRefToEntIndex(RocketFakeEntity[slot]);
+	if (fake != -1 && IsValidEntity(fake)) AcceptEntityInput(fake, "Kill");
+	RocketFakeEntity[slot] = -1;
+	RocketRealEntity[slot] = -1;
+	KillRocketTrailEntities(slot);
 }
 
 // Kills every tracked trail/sprite entity for the given rocket slot and
@@ -355,7 +336,10 @@ public void TFDB_OnRocketCreated(int index, int entity)
 {
 	// Remember the real rocket so OnEntityDestroyed can reap the fake when
 	// the rocket dies — Source does not cascade-delete SetParent children.
+	int previousEntity = EntRefToEntIndex(RocketRealEntity[index]);
+	if (previousEntity > 0 && previousEntity < sizeof(RocketSlotByEntity)) RocketSlotByEntity[previousEntity] = -1;
 	RocketRealEntity[index] = EntIndexToEntRef(entity);
+	if (entity > 0 && entity < sizeof(RocketSlotByEntity)) RocketSlotByEntity[entity] = index;
 
 	int classIndex = TFDB_GetRocketClass(index);
 	if (classIndex < 0 || classIndex >= RocketClassCount) return;
@@ -619,9 +603,18 @@ void ParseConfigurations(const char[] configFile)
 	
 	KeyValues kvConfig = new KeyValues("TF2_Dodgeball");
 	
-	if (kvConfig.ImportFromFile(path) == false) SetFailState("[TFDB Trails] Error while parsing configuration file: %s", path);
-	
-	kvConfig.GotoFirstSubKey();
+	if (!kvConfig.ImportFromFile(path))
+	{
+		LogError("[TFDB Trails] Error while parsing configuration file: %s (continuing without trails)", path);
+		delete kvConfig;
+		return;
+	}
+
+	if (!kvConfig.GotoFirstSubKey())
+	{
+		delete kvConfig;
+		return;
+	}
 	
 	do
 	{
@@ -636,7 +629,7 @@ void ParseConfigurations(const char[] configFile)
 
 void ParseClasses(KeyValues kvConfig)
 {
-	kvConfig.GotoFirstSubKey();
+	if (!kvConfig.GotoFirstSubKey()) return;
 	do
 	{
 		if (RocketClassCount >= MAX_ROCKET_CLASSES)
@@ -841,24 +834,26 @@ stock void CreateTempParticle(const char[] particleName,
 public any Native_GetRocketFakeEntity(Handle plugin, int numParams)
 {
 	int index = GetNativeCell(1);
-	
+	if (index < 0 || index >= MAX_ROCKETS)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket index %d out of range [0..%d)", index, MAX_ROCKETS);
 	return RocketFakeEntity[index];
 }
 
 public any Native_SetRocketFakeEntity(Handle plugin, int numParams)
 {
 	int index = GetNativeCell(1);
-	
+	if (index < 0 || index >= MAX_ROCKETS)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket index %d out of range [0..%d)", index, MAX_ROCKETS);
 	int fake = GetNativeCell(2);
-	
 	RocketFakeEntity[index] = fake;
-	
 	return 0;
 }
 
 public any Native_GetRocketClassTrail(Handle plugin, int numParams)
 {
 	int classIndex = GetNativeCell(1);
+	if (classIndex < 0 || classIndex >= RocketClassCount)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket class index %d out of range [0..%d)", classIndex, RocketClassCount);
 	
 	int maxLen = GetNativeCell(3);
 	
@@ -870,6 +865,8 @@ public any Native_GetRocketClassTrail(Handle plugin, int numParams)
 public any Native_SetRocketClassTrail(Handle plugin, int numParams)
 {
 	int classIndex = GetNativeCell(1);
+	if (classIndex < 0 || classIndex >= RocketClassCount)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket class index %d out of range [0..%d)", classIndex, RocketClassCount);
 	
 	int maxLen; GetNativeStringLength(2, maxLen);
 	
@@ -883,6 +880,8 @@ public any Native_SetRocketClassTrail(Handle plugin, int numParams)
 public any Native_GetRocketClassSprite(Handle plugin, int numParams)
 {
 	int classIndex = GetNativeCell(1);
+	if (classIndex < 0 || classIndex >= RocketClassCount)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket class index %d out of range [0..%d)", classIndex, RocketClassCount);
 	
 	int maxLen = GetNativeCell(3);
 	
@@ -894,6 +893,8 @@ public any Native_GetRocketClassSprite(Handle plugin, int numParams)
 public any Native_SetRocketClassSprite(Handle plugin, int numParams)
 {
 	int classIndex = GetNativeCell(1);
+	if (classIndex < 0 || classIndex >= RocketClassCount)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket class index %d out of range [0..%d)", classIndex, RocketClassCount);
 	
 	int maxLen; GetNativeStringLength(2, maxLen);
 	
@@ -907,6 +908,8 @@ public any Native_SetRocketClassSprite(Handle plugin, int numParams)
 public any Native_GetRocketClassSpriteColor(Handle plugin, int numParams)
 {
 	int classIndex = GetNativeCell(1);
+	if (classIndex < 0 || classIndex >= RocketClassCount)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket class index %d out of range [0..%d)", classIndex, RocketClassCount);
 	
 	int maxLen = GetNativeCell(3);
 	
@@ -918,6 +921,8 @@ public any Native_GetRocketClassSpriteColor(Handle plugin, int numParams)
 public any Native_SetRocketClassSpriteColor(Handle plugin, int numParams)
 {
 	int classIndex = GetNativeCell(1);
+	if (classIndex < 0 || classIndex >= RocketClassCount)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket class index %d out of range [0..%d)", classIndex, RocketClassCount);
 	
 	int maxLen; GetNativeStringLength(2, maxLen);
 	
@@ -931,6 +936,8 @@ public any Native_SetRocketClassSpriteColor(Handle plugin, int numParams)
 public any Native_GetRocketClassSpriteLifetime(Handle plugin, int numParams)
 {
 	int classIndex = GetNativeCell(1);
+	if (classIndex < 0 || classIndex >= RocketClassCount)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket class index %d out of range [0..%d)", classIndex, RocketClassCount);
 	
 	return RocketClassSpriteLifetime[classIndex];
 }
@@ -938,6 +945,8 @@ public any Native_GetRocketClassSpriteLifetime(Handle plugin, int numParams)
 public any Native_SetRocketClassSpriteLifetime(Handle plugin, int numParams)
 {
 	int classIndex = GetNativeCell(1);
+	if (classIndex < 0 || classIndex >= RocketClassCount)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket class index %d out of range [0..%d)", classIndex, RocketClassCount);
 	
 	float lifetime = GetNativeCell(2);
 	
@@ -949,6 +958,8 @@ public any Native_SetRocketClassSpriteLifetime(Handle plugin, int numParams)
 public any Native_GetRocketClassSpriteStartWidth(Handle plugin, int numParams)
 {
 	int classIndex = GetNativeCell(1);
+	if (classIndex < 0 || classIndex >= RocketClassCount)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket class index %d out of range [0..%d)", classIndex, RocketClassCount);
 	
 	return RocketClassSpriteStartWidth[classIndex];
 }
@@ -956,6 +967,8 @@ public any Native_GetRocketClassSpriteStartWidth(Handle plugin, int numParams)
 public any Native_SetRocketClassSpriteStartWidth(Handle plugin, int numParams)
 {
 	int classIndex = GetNativeCell(1);
+	if (classIndex < 0 || classIndex >= RocketClassCount)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket class index %d out of range [0..%d)", classIndex, RocketClassCount);
 	
 	float width = GetNativeCell(2);
 	
@@ -967,6 +980,8 @@ public any Native_SetRocketClassSpriteStartWidth(Handle plugin, int numParams)
 public any Native_GetRocketClassSpriteEndWidth(Handle plugin, int numParams)
 {
 	int classIndex = GetNativeCell(1);
+	if (classIndex < 0 || classIndex >= RocketClassCount)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket class index %d out of range [0..%d)", classIndex, RocketClassCount);
 	
 	return RocketClassSpriteEndWidth[classIndex];
 }
@@ -974,6 +989,8 @@ public any Native_GetRocketClassSpriteEndWidth(Handle plugin, int numParams)
 public any Native_SetRocketClassSpriteEndWidth(Handle plugin, int numParams)
 {
 	int classIndex = GetNativeCell(1);
+	if (classIndex < 0 || classIndex >= RocketClassCount)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket class index %d out of range [0..%d)", classIndex, RocketClassCount);
 	
 	float width = GetNativeCell(2);
 	
@@ -985,6 +1002,8 @@ public any Native_SetRocketClassSpriteEndWidth(Handle plugin, int numParams)
 public any Native_GetRocketClassTextureRes(Handle plugin, int numParams)
 {
 	int classIndex = GetNativeCell(1);
+	if (classIndex < 0 || classIndex >= RocketClassCount)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket class index %d out of range [0..%d)", classIndex, RocketClassCount);
 	
 	return RocketClassTextureRes[classIndex];
 }
@@ -992,6 +1011,8 @@ public any Native_GetRocketClassTextureRes(Handle plugin, int numParams)
 public any Native_SetRocketClassTextureRes(Handle plugin, int numParams)
 {
 	int classIndex = GetNativeCell(1);
+	if (classIndex < 0 || classIndex >= RocketClassCount)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket class index %d out of range [0..%d)", classIndex, RocketClassCount);
 	
 	float resolution = GetNativeCell(2);
 	
@@ -1003,6 +1024,8 @@ public any Native_SetRocketClassTextureRes(Handle plugin, int numParams)
 public any Native_GetRocketClassTrailFlags(Handle plugin, int numParams)
 {
 	int classIndex = GetNativeCell(1);
+	if (classIndex < 0 || classIndex >= RocketClassCount)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket class index %d out of range [0..%d)", classIndex, RocketClassCount);
 	
 	return RocketClassTrailFlags[classIndex];
 }
@@ -1010,6 +1033,8 @@ public any Native_GetRocketClassTrailFlags(Handle plugin, int numParams)
 public any Native_SetRocketClassTrailFlags(Handle plugin, int numParams)
 {
 	int classIndex = GetNativeCell(1);
+	if (classIndex < 0 || classIndex >= RocketClassCount)
+		return ThrowNativeError(SP_ERROR_PARAM, "Rocket class index %d out of range [0..%d)", classIndex, RocketClassCount);
 	
 	TrailFlags flags = GetNativeCell(2);
 	

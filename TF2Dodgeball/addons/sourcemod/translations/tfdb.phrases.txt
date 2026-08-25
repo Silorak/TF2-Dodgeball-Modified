@@ -369,18 +369,6 @@
 		"en"		"[{olive}TFDB{default}] Type in chat the new maximum bounces within {darkorange}{1}{default} seconds."
 	}
 	
-	"Menu_SteeringControl"
-	{
-		"#format"	"{1:i}"
-		"en"		"[{olive}TFDB{default}] Type in chat the new steering control (seconds, e.g. 0.045) within {darkorange}{1}{default} seconds."
-	}
-
-	"Menu_BounceControl"
-	{
-		"#format"	"{1:i}"
-		"en"		"[{olive}TFDB{default}] Type in chat the new bounce control (seconds, e.g. 0.045) within {darkorange}{1}{default} seconds."
-	}
-
 	"Menu_ThinkInterval"
 	{
 		"#format"	"{1:i}"
@@ -390,7 +378,7 @@
 	"Menu_BounceCeiling"
 	{
 		"#format"	"{1:i}"
-		"en"		"[{olive}TFDB{default}] Type in chat the new bounce ceiling (HU, 0 = disabled) within {darkorange}{1}{default} seconds."
+		"en"		"[{olive}TFDB{default}] Deprecated non-legacy vertical reshape (0 = canonical). Enter a value within {darkorange}{1}{default} seconds."
 	}
 
 	"Menu_CritGlowStack"
@@ -551,18 +539,6 @@
 		"en"		"[{olive}TFDB{default}] Changed rocket class maximum bounces to {darkorange}{1}{default}."
 	}
 	
-	"Menu_ChangedSteeringControl"
-	{
-		"#format"	"{1:.3f}"
-		"en"		"[{olive}TFDB{default}] Changed rocket class steering control to {darkorange}{1}{default}s."
-	}
-
-	"Menu_ChangedBounceControl"
-	{
-		"#format"	"{1:.3f}"
-		"en"		"[{olive}TFDB{default}] Changed rocket class bounce control to {darkorange}{1}{default}s."
-	}
-
 	"Menu_ChangedThinkInterval"
 	{
 		"#format"	"{1:.3f}"
@@ -572,7 +548,7 @@
 	"Menu_ChangedBounceCeiling"
 	{
 		"#format"	"{1:.0f}"
-		"en"		"[{olive}TFDB{default}] Changed rocket class bounce ceiling to {darkorange}{1}{default} HU."
+		"en"		"[{olive}TFDB{default}] Changed deprecated rocket vertical reshape to {darkorange}{1}{default}."
 	}
 
 	"Menu_ChangedCritGlowStack"
@@ -803,60 +779,15 @@
 
 	// ---- Anti-Cheat subplugin phrases ----
 
-	"AC_Admin_Flagged"
-	{
-		"#format"	"{1:N},{2:i}"
-		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} flagged with suspicion score {red}{2}{default}."
-	}
 
-	"AC_Admin_Kicked"
-	{
-		"#format"	"{1:N},{2:i}"
-		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} was kicked. Score: {red}{2}{default}."
-	}
 
-	"AC_Admin_Banned"
-	{
-		"#format"	"{1:N},{2:i}"
-		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} was banned. Score: {red}{2}{default}."
-	}
 
-	"AC_Kick_Reason"
-	{
-		"en"		"Suspicious activity detected."
-	}
 
-	"AC_Ban_Reason"
-	{
-		"en"		"Auto-airblast cheat detected."
-	}
 
-	"AC_Status_Header"
-	{
-		"en"		"[{olive}TFDB{default}] --- Anti-Cheat Status ---"
-	}
 
-	"AC_Status_Player"
-	{
-		"#format"	"{1:N},{2:i},{3:i},{4:i},{5:i},{6:i},{7:i},{8:i},{9:i}"
-		"en"		"{darkorange}{1}{default} | Score:{red}{2}{default} AA:{3} AF:{4} DS:{5} PT:{6} CT:{7} Str:{8}({9})"
-	}
 
-	"AC_Status_Clean"
-	{
-		"en"		"[{olive}TFDB{default}] All players are clean."
-	}
 
-	"AC_Reset_Done"
-	{
-		"#format"	"{1:N}"
-		"en"		"[{olive}TFDB{default}] Reset anti-cheat counters for {darkorange}{1}{default}."
-	}
 
-	"AC_Reset_Usage"
-	{
-		"en"		"[{olive}TFDB{default}] Usage: sm_ac_reset <target>"
-	}
 
 	// =========================================================================
 	// Player vs Bot (PvB) Subplugin
@@ -874,46 +805,26 @@
 		"en"		"[{olive}TFDB{default}] {darkorange}{1}{default} has left the arena."
 	}
 
-	"PvB_Training_AlreadyActive"
-	{
-		"en"		"[{olive}TFDB{default}] Training mode is already active! Use {darkorange}sm_stoptraining{default} to end."
-	}
-
-	"PvB_Training_Started"
-	{
-		"en"		"[{olive}TFDB{default}] Training mode started! All bot types spawned on both teams."
-	}
-
-	"PvB_Training_Capped"
+	"PvB_DebugStates_Capped"
 	{
 		"#format"	"{1:d},{2:d}"
-		"en"		"[{olive}TFDB{default}] {darkorange}Note:{default} max_training_bots={steelblue}{1}{default} capped training to first {steelblue}{2}{default} classes."
+		"en"		"[{olive}TFDB{default}] {darkorange}Note:{default} max_debug_states_bots={steelblue}{1}{default} capped training to first {steelblue}{2}{default} classes."
 	}
 
-	"PvB_Training_Spawned"
+	"PvB_DebugStates_Spawned"
 	{
 		"#format"	"{1:d},{2:d}"
 		"en"		"[{olive}TFDB{default}] {darkorange}TRAINING MODE:{default} {steelblue}{1}{default} bots spawned ({steelblue}{2}{default} per team). They will learn from each other!"
 	}
 
-	"PvB_Training_HowToStop"
+	"PvB_DebugStates_HowToStop"
 	{
 		"en"		"[{olive}TFDB{default}] Use {darkorange}sm_stoptraining{default} to end training."
 	}
 
-	"PvB_Training_NotActive"
+	"PvB_DebugStates_Ended"
 	{
-		"en"		"[{olive}TFDB{default}] Training mode is not active."
-	}
-
-	"PvB_Training_Ended_Admin"
-	{
-		"en"		"[{olive}TFDB{default}] Training mode ended. All bots kicked."
-	}
-
-	"PvB_Training_Ended"
-	{
-		"en"		"[{olive}TFDB{default}] Training mode ended."
+		"en"		"[{olive}TFDB{default}] Debug-states mode ended."
 	}
 
 	"PvB_ConsoleOnly_Admin"
@@ -945,17 +856,6 @@
 	"PvB_Brain_RequiresRoot"
 	{
 		"en"		"[{olive}TFDB{default}] Brain reset requires ROOT access."
-	}
-
-	"PvB_Brain_ResetAll"
-	{
-		"en"		"[{olive}TFDB{default}] ALL brain data has been reset!"
-	}
-
-	"PvB_Brain_ResetType"
-	{
-		"#format"	"{1:s}"
-		"en"		"[{olive}TFDB{default}] Brain data reset for type: {darkorange}{1}{default}"
 	}
 
 	"PvB_Speech_Toggled"
@@ -1038,12 +938,6 @@
 		"en"		"{darkorange}Total Deaths: {community}{1}"
 	}
 
-	"PvB_Stats_Brain"
-	{
-		"#format"	"{1:d}"
-		"en"		"{darkorange}Brain Entries: {community}{1}"
-	}
-
 	"PvB_Stats_Footer"
 	{
 		"en"		"{olive}========================================="
@@ -1054,9 +948,9 @@
 		"en"		"[{olive}TFDB{default}] A vote is already in progress!"
 	}
 
-	"PvB_Vote_TrainingBlock"
+	"PvB_Vote_DebugStatesBlock"
 	{
-		"en"		"[{olive}TFDB{default}] Cannot vote during training mode. Ask a ROOT admin."
+		"en"		"[{olive}TFDB{default}] Cannot vote during debug-states mode. Ask a ROOT admin."
 	}
 
 	"PvB_Vote_TooManyPlayers"
@@ -1148,21 +1042,6 @@
 		"en"		"[{olive}TFDB{default}] Bot is already disabled!"
 	}
 
-	"Menu_OrbitTightness"
-	{
-		"en"		"[{olive}TFDB{default}] Type new orbit tightness (seconds-like coefficient)."
-	}
-
-	"Menu_MaxSpeed"
-	{
-		"en"		"[{olive}TFDB{default}] Type new max speed (HU/s)."
-	}
-
-	"Menu_MaxDeflections"
-	{
-		"en"		"[{olive}TFDB{default}] Type new max deflections."
-	}
-
 	// ========================================================================
 	//  DeathMatch (NER + Solo)
 	// ========================================================================
@@ -1175,11 +1054,6 @@
 	"DeathMatch_NER_Disabled"
 	{
 		"en"		"[{olive}TFDB{default}] {darkmagenta}DeathMatch{default} is now {red}disabled{default}."
-	}
-
-	"DeathMatch_NER_Disabled_Not_Enough_Players"
-	{
-		"en"		"[{olive}TFDB{default}] {darkmagenta}DeathMatch{default} is now {red}disabled{default} (not enough players)."
 	}
 
 	"DeathMatch_NER_Disabled_Conflict"
@@ -1243,25 +1117,13 @@
 		"en"		"[{olive}TFDB{default}] Your {darkmagenta}solo{default} was {red}disabled{default} — no alive teammates."
 	}
 
-	"DeathMatch_Solo_Not_Possible_NER_Would_End"
-	{
-		"en"		"[{olive}TFDB{default}] Your {darkmagenta}solo{default} was {red}disabled{default} — DeathMatch would have ended otherwise."
-	}
 
 	"DeathMatch_Solo_Disabled_By_Config"
 	{
 		"en"		"[{olive}TFDB{default}] Your {darkmagenta}solo{default} was {red}disabled{default} by a config change."
 	}
 
-	"DeathMatch_Solo_Notify_Not_Respawned"
-	{
-		"en"		"[{olive}TFDB{default}] You'll be respawned at the end of the round ({darkmagenta}solo{default} enabled)."
-	}
 
-	"DeathMatch_Solo_Notify_Not_Respawned_Mid_Round"
-	{
-		"en"		"[{olive}TFDB{default}] You'll be respawned when one team empties ({darkmagenta}solo{default} enabled)."
-	}
 
 	"DeathMatch_Solo_Announce_Soloers"
 	{
@@ -1380,6 +1242,31 @@
 	"FFA_Vote_Menu_Title_Disable"
 	{
 		"en"		"Disable FFA mode?"
+	}
+
+	// AntiCheat admin alerts
+	"Honeypot_AdminHit"
+	{
+		"#format"	"{1:s},{2:.2f},{3:.2f}"
+		"en"		"Suspicious honeypot hit: {1} ({2}/{3})."
+	}
+
+	"Honeypot_AdminThreshold"
+	{
+		"#format"	"{1:s},{2:.2f},{3:.2f}"
+		"en"		"Threshold reached: {1} ({2}/{3}). Review logs."
+	}
+
+	"Honeypot_AdminHitConsole"
+	{
+		"#format"	"{1:s},{2:s},{3:.2f},{4:.2f},{5:.2f}"
+		"en"		"[TFDB AC] Honeypot hit: {1} [{2}], score {3}/{4} (+{5})"
+	}
+
+	"Honeypot_AdminThresholdConsole"
+	{
+		"#format"	"{1:s},{2:s},{3:.2f},{4:.2f},{5:.2f}"
+		"en"		"[TFDB AC] THRESHOLD: {1} [{2}], score {3}/{4} (+{5})"
 	}
 
 }

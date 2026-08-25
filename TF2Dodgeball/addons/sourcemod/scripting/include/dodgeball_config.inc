@@ -48,6 +48,7 @@ void ResetRocketClass(int index)
 	RocketClassDamageIncrement[index]   = 0.0;
 	RocketClassSpeed[index]             = 0.0;
 	RocketClassSpeedIncrement[index]    = 0.0;
+	RocketClassConfiguredSpeedIncrement[index] = 0.0;
 	RocketClassSpeedLimit[index]        = 0.0;
 	RocketClassTurnRate[index]          = 0.0;
 	RocketClassTurnRateIncrement[index] = 0.0;
@@ -64,11 +65,6 @@ void ResetRocketClass(int index)
 	RocketClassCritGlowParticleRed[index][0]     = '\0';  // empty = use default "critical_rocket_red"
 	RocketClassCritGlowParticleBlue[index][0]    = '\0';  // empty = use default "critical_rocket_blue"
 	RocketClassCritGlowParticleNeutral[index][0] = '\0';  // empty = use default "eyeboss_projectile"
-	RocketClassOrbitTightness[index]    = 0.0;
-	RocketClassMaxSpeed[index]          = 0.0;
-	RocketClassMaxDeflections[index]    = 0;
-	RocketClassSteeringControl[index]   = 0;
-	RocketClassBounceControl[index]     = 0;
 	RocketClassThinkInterval[index]     = 0.0;
 
 	RocketClassCmdsOnSpawn[index]     = null;
@@ -198,6 +194,7 @@ void RegisterCommands()
 	RegServerCmd("tf_dodgeball_explosion", CmdExplosion);
 	RegServerCmd("tf_dodgeball_shockwave", CmdShockwave);
 	RegConsoleCmd("sm_ab", CmdTogglePushPrevention, "Toggle airblast push prevention.");
+	RegAdminCmd("sm_tfdb_profile", Cmd_TFDBProfile, ADMFLAG_ROOT, "Profile core hot paths for 1-30 seconds (default 15).");
 }
 
 /**
@@ -305,6 +302,11 @@ public Action CmdShockwave(int args)
 		{
 			finalPush = pushStrength;
 			finalDamage = damage;
+		}
+		else if (radius <= falloffRadius)
+		{
+			finalPush = pushStrength;
+			finalDamage = RoundToFloor(float(damage));
 		}
 		else
 		{
@@ -416,17 +418,17 @@ void ParseConfigurations(char[] configFile = "general.cfg")
 
 	if (!config.GotoFirstSubKey())
 	{
+		LogError("[TFDB] Config file has no top-level sections: %s", path);
 		delete config;
 		return;
 	}
-
 	do
 	{
 		char section[64]; config.GetSectionName(section, sizeof(section));
-		if (StrEqual(section, "general", false))       ParseGeneral(config);
-		else if (StrEqual(section, "classes", false))  ParseClasses(config);
-		else if (StrEqual(section, "spawners", false)) ParseSpawners(config);
-		else if (StrEqual(section, "presets", false))  ParsePresets(config);
+		if (StrEqual(section, "general"))       ParseGeneral(config);
+		else if (StrEqual(section, "classes"))  ParseClasses(config);
+		else if (StrEqual(section, "spawners")) ParseSpawners(config);
+		else if (StrEqual(section, "presets"))  ParsePresets(config);
 	}
 	while (config.GotoNextKey());
 
@@ -438,9 +440,22 @@ void ParseConfigurations(char[] configFile = "general.cfg")
 void ParseGeneral(KeyValues config)
 {
 	// Scaling mode flags (read before music to avoid early return)
-	UseOrbitCoefficient   = view_as<bool>(config.GetNum("orbit coefficient", 0));
-	UseTargetSpeedScaling = view_as<bool>(config.GetNum("target speed scaling", 0));
 	UseSmoothElevation    = view_as<bool>(config.GetNum("smooth elevation", 0));
+
+	// Consistent post-deflection steering window. HomingRocketThink samples the
+	// deflector's eye angles exactly once after this many seconds. 0 selects the
+	// authentic shared-grid path instead (a variable 0-DragGridInterval wait).
+	DragDelay = config.GetFloat("drag delay", 0.045);
+	if (DragDelay < 0.0)  DragDelay = 0.0;
+	if (DragDelay > 0.15) DragDelay = 0.15;
+
+	// Shared legacy grid interval, authored in milliseconds. Bounces always use
+	// this grid; deflections use it only when "drag delay" is 0. Clamped to the
+	// established 10-100ms range.
+	int dragGridMs = config.GetNum("drag grid interval", 100);
+	if (dragGridMs < 10)  dragGridMs = 10;
+	if (dragGridMs > 100) dragGridMs = 100;
+	DragGridInterval = float(dragGridMs) / 1000.0;
 
 	MusicEnabled = view_as<bool>(config.GetNum("music", 0));
 
@@ -450,15 +465,22 @@ void ParseGeneral(KeyValues config)
 	UseNoBlock              = view_as<bool>(config.GetNum("noblock", 1));
 	UseTargetLock           = view_as<bool>(config.GetNum("target lock", 0));
 	UseTargetLockBotOnly    = view_as<bool>(config.GetNum("target lock bot only", 1));
+	UnfreezeDuringSetup     = view_as<bool>(config.GetNum("disable round freeze", 0));
 
-	// Engine-wide projectile speed cap. Ports the Unified fork's feature.
-	// 0 = leave engine default (3500). Any positive value overrides via sv_maxvelocity.
-	// Without this, per-class "speed limit" values above 3500 are silently clamped by engine.
+	// Engine-wide projectile speed cap. 0 leaves the server's current
+	// sv_maxvelocity unchanged. Cache the resulting value so LimitRocketSpeed
+	// clamps BEFORE writing entity velocity; engine-side clamping of a fast
+	// parent otherwise emits SetLocalVelocity warnings for attached particles.
 	float maxVel = config.GetFloat("max velocity", 0.0);
-	if (maxVel > 0.0)
+	ConVar maxVelCvar = FindConVar("sv_maxvelocity");
+	if (maxVelCvar != null)
 	{
-		ConVar maxVelCvar = FindConVar("sv_maxvelocity");
-		if (maxVelCvar != null) maxVelCvar.FloatValue = maxVel;
+		if (maxVel > 0.0) maxVelCvar.FloatValue = maxVel;
+		EngineMaxVelocity = maxVelCvar.FloatValue;
+	}
+	else if (maxVel > 0.0)
+	{
+		EngineMaxVelocity = maxVel;
 	}
 
 	if (!MusicEnabled) return;
@@ -471,11 +493,59 @@ void ParseGeneral(KeyValues config)
 	Music[Music_Gameplay]   = config.GetString("gameplay",         MusicPath[Music_Gameplay],   PLATFORM_MAX_PATH) && MusicPath[Music_Gameplay][0];
 }
 
+bool ClassKeyPresent(KeyValues config, const char[] key)
+{
+	return config.GetDataType(key) != KvData_None;
+}
+
+void SetRocketFlag(RocketFlags flag, bool enabled, RocketFlags &flags)
+{
+	if (enabled) flags |= flag;
+	else flags &= ~flag;
+}
+
+void OverlayRocketFlag(KeyValues config, const char[] key, RocketFlags flag, RocketFlags &flags)
+{
+	if (ClassKeyPresent(config, key)) SetRocketFlag(flag, config.GetNum(key) != 0, flags);
+}
+
+void OverlayRocketString(KeyValues config, const char[] key, char[] value, int valueSize)
+{
+	if (ClassKeyPresent(config, key)) config.GetString(key, value, valueSize);
+}
+
+void OverlayRocketBehaviour(KeyValues config, int index)
+{
+	if (!ClassKeyPresent(config, "behaviour")) return;
+	char value[32];
+	config.GetString("behaviour", value, sizeof(value));
+	if (StrEqual(value, "homing")) RocketClassBehaviour[index] = Behaviour_Homing;
+	else if (StrEqual(value, "legacy homing")) RocketClassBehaviour[index] = Behaviour_LegacyHoming;
+	else RocketClassBehaviour[index] = Behaviour_Unknown;
+}
+
+DataPack OverlayRocketCommands(KeyValues config, const char[] key, DataPack current, RocketFlags flag, RocketFlags &flags)
+{
+	if (!ClassKeyPresent(config, key)) return current;
+	delete current;
+	char value[256];
+	config.GetString(key, value, sizeof(value));
+	current = ParseCommands(value);
+	SetRocketFlag(flag, current != null, flags);
+	return current;
+}
+
+void InitializeNewRocketClass(int index)
+{
+	ResetRocketClass(index);
+	RocketClassBehaviour[index] = Behaviour_Homing;
+	RocketClassBeepInterval[index] = 0.5;
+}
+
 /** Parses the "classes" section of the config (rocket class definitions). */
 void ParseClasses(KeyValues config)
 {
 	char name[64];
-	char buffer[256];
 	if (!config.GotoFirstSubKey()) return;
 	do
 	{
@@ -492,89 +562,61 @@ void ParseClasses(KeyValues config)
 			}
 
 			index = RocketClassCount;
+			InitializeNewRocketClass(index);
 		}
 
-		ResetRocketClass(index);
-		RocketFlags flags = RocketFlag_None;
+		RocketFlags flags = RocketClassFlags[index];
 
 		strcopy(RocketClassName[index], 16, name);
-		config.GetString("name", buffer, sizeof(buffer)); strcopy(RocketClassLongName[index], 32, buffer);
-		
-		if (config.GetString("model", buffer, sizeof(buffer)))
-		{
-			strcopy(RocketClassModel[index], PLATFORM_MAX_PATH, buffer);
-			if (RocketClassModel[index][0])
-			{
-				flags |= RocketFlag_CustomModel;
-				if (config.GetNum("is animated", 0)) flags |= RocketFlag_IsAnimated;
-			}
-		}
+		OverlayRocketString(config, "name", RocketClassLongName[index], 32);
+		OverlayRocketString(config, "model", RocketClassModel[index], PLATFORM_MAX_PATH);
+		SetRocketFlag(RocketFlag_CustomModel, RocketClassModel[index][0] != '\0', flags);
+		OverlayRocketFlag(config, "is animated", RocketFlag_IsAnimated, flags);
+		if (RocketClassModel[index][0] == '\0') SetRocketFlag(RocketFlag_IsAnimated, false, flags);
+		OverlayRocketBehaviour(config, index);
 
-		config.GetString("behaviour", buffer, sizeof(buffer), "homing");
-		if (StrEqual(buffer, "homing", false)) RocketClassBehaviour[index] = Behaviour_Homing;
-		else if (StrEqual(buffer, "legacy homing", false)) RocketClassBehaviour[index] = Behaviour_LegacyHoming;
-		else RocketClassBehaviour[index] = Behaviour_Unknown;
+		OverlayRocketFlag(config, "play spawn sound", RocketFlag_PlaySpawnSound, flags);
+		OverlayRocketString(config, "spawn sound", RocketClassSpawnSound[index], PLATFORM_MAX_PATH);
+		SetRocketFlag(RocketFlag_CustomSpawnSound, RocketClassSpawnSound[index][0] != '\0', flags);
 
-		if (config.GetNum("play spawn sound", 0) == 1)
-		{
-			flags |= RocketFlag_PlaySpawnSound;
-			if (config.GetString("spawn sound", RocketClassSpawnSound[index], PLATFORM_MAX_PATH) && RocketClassSpawnSound[index][0])
-			{
-				flags |= RocketFlag_CustomSpawnSound;
-			}
-		}
+		OverlayRocketFlag(config, "play beep sound", RocketFlag_PlayBeepSound, flags);
+		OverlayRocketString(config, "beep sound", RocketClassBeepSound[index], PLATFORM_MAX_PATH);
+		SetRocketFlag(RocketFlag_CustomBeepSound, RocketClassBeepSound[index][0] != '\0', flags);
 
-		if (config.GetNum("play beep sound", 0) == 1)
-		{
-			flags |= RocketFlag_PlayBeepSound;
-			RocketClassBeepInterval[index] = config.GetFloat("beep interval", 0.5);
-			if (config.GetString("beep sound", RocketClassBeepSound[index], PLATFORM_MAX_PATH) && RocketClassBeepSound[index][0])
-			{
-				flags |= RocketFlag_CustomBeepSound;
-			}
-		}
+		OverlayRocketFlag(config, "play alert sound", RocketFlag_PlayAlertSound, flags);
+		OverlayRocketString(config, "alert sound", RocketClassAlertSound[index], PLATFORM_MAX_PATH);
+		SetRocketFlag(RocketFlag_CustomAlertSound, RocketClassAlertSound[index][0] != '\0', flags);
 
-		if (config.GetNum("play alert sound", 0) == 1)
-		{
-			flags |= RocketFlag_PlayAlertSound;
-			if (config.GetString("alert sound", RocketClassAlertSound[index], PLATFORM_MAX_PATH) && RocketClassAlertSound[index][0])
-			{
-				flags |= RocketFlag_CustomAlertSound;
-			}
-		}
+		OverlayRocketFlag(config, "elevate on deflect", RocketFlag_ElevateOnDeflect, flags);
+		OverlayRocketFlag(config, "neutral rocket", RocketFlag_IsNeutral, flags);
+		OverlayRocketFlag(config, "keep direction", RocketFlag_KeepDirection, flags);
+		OverlayRocketFlag(config, "teamless deflects", RocketFlag_TeamlessHits, flags);
+		OverlayRocketFlag(config, "reset bounces", RocketFlag_ResetBounces, flags);
+		OverlayRocketFlag(config, "can be stolen", RocketFlag_CanBeStolen, flags);
+		OverlayRocketFlag(config, "steal team check", RocketFlag_StealTeamCheck, flags);
 
-		if (config.GetNum("elevate on deflect", 0) == 1) flags |= RocketFlag_ElevateOnDeflect;
-		if (config.GetNum("neutral rocket", 0) == 1)     flags |= RocketFlag_IsNeutral;
-		if (config.GetNum("keep direction", 0) == 1)     flags |= RocketFlag_KeepDirection;
-		if (config.GetNum("teamless deflects", 0) == 1)  flags |= RocketFlag_TeamlessHits;
-		if (config.GetNum("reset bounces", 0) == 1)      flags |= RocketFlag_ResetBounces;
-		if (config.GetNum("can be stolen", 0) == 1)      flags |= RocketFlag_CanBeStolen;
-		if (config.GetNum("steal team check", 0) == 1)   flags |= RocketFlag_StealTeamCheck;
+		RocketClassBeepInterval[index]      = config.GetFloat("beep interval", RocketClassBeepInterval[index]);
+		RocketClassDamage[index]            = config.GetFloat("damage", RocketClassDamage[index]);
+		RocketClassDamageIncrement[index]   = config.GetFloat("damage increment", RocketClassDamageIncrement[index]);
+		RocketClassCritChance[index]        = config.GetFloat("critical chance", RocketClassCritChance[index]);
+		RocketClassSpeed[index]             = config.GetFloat("speed", RocketClassSpeed[index]);
+		RocketClassConfiguredSpeedIncrement[index] = config.GetFloat("speed increment", RocketClassConfiguredSpeedIncrement[index]);
+		RocketClassSpeedIncrement[index]    = RocketClassConfiguredSpeedIncrement[index];
+		RocketClassSpeedLimit[index]        = config.GetFloat("speed limit", RocketClassSpeedLimit[index]);
+		SetRocketFlag(RocketFlag_IsSpeedLimited, RocketClassSpeedLimit[index] != 0.0, flags);
 
-		RocketClassDamage[index]            = config.GetFloat("damage");
-		RocketClassDamageIncrement[index]   = config.GetFloat("damage increment");
-		RocketClassCritChance[index]        = config.GetFloat("critical chance");
-		RocketClassSpeed[index]             = config.GetFloat("speed");
-		RocketClassSpeedIncrement[index]    = config.GetFloat("speed increment");
-		if ((RocketClassSpeedLimit[index] = config.GetFloat("speed limit")) != 0.0)
-		{
-			flags |= RocketFlag_IsSpeedLimited;
-		}
+		RocketClassTurnRate[index]          = config.GetFloat("turn rate", RocketClassTurnRate[index]);
+		RocketClassTurnRateIncrement[index] = config.GetFloat("turn rate increment", RocketClassTurnRateIncrement[index]);
+		RocketClassTurnRateLimit[index]     = config.GetFloat("turn rate limit", RocketClassTurnRateLimit[index]);
+		SetRocketFlag(RocketFlag_IsTRLimited, RocketClassTurnRateLimit[index] != 0.0, flags);
 
-		RocketClassTurnRate[index]          = config.GetFloat("turn rate");
-		RocketClassTurnRateIncrement[index] = config.GetFloat("turn rate increment");
-		if ((RocketClassTurnRateLimit[index] = config.GetFloat("turn rate limit")) != 0.0)
-		{
-			flags |= RocketFlag_IsTRLimited;
-		}
-
-		RocketClassElevationRate[index]     = config.GetFloat("elevation rate");
-		RocketClassElevationLimit[index]    = config.GetFloat("elevation limit");
-		RocketClassControlDelay[index]      = config.GetFloat("control delay");
-		RocketClassMaxBounces[index]        = config.GetNum("max bounces");
-		RocketClassBounceCeiling[index]     = config.GetFloat("bounce ceiling", 0.0);
+		RocketClassElevationRate[index]     = config.GetFloat("elevation rate", RocketClassElevationRate[index]);
+		RocketClassElevationLimit[index]    = config.GetFloat("elevation limit", RocketClassElevationLimit[index]);
+		RocketClassControlDelay[index]      = config.GetFloat("control delay", RocketClassControlDelay[index]);
+		RocketClassMaxBounces[index]        = config.GetNum("max bounces", RocketClassMaxBounces[index]);
+		RocketClassBounceCeiling[index]     = config.GetFloat("bounce ceiling", RocketClassBounceCeiling[index]);
 		if (RocketClassBounceCeiling[index] < 0.0) RocketClassBounceCeiling[index] = 0.0;
-		RocketClassCritGlowStack[index]     = config.GetNum("crit glow stack", 1);
+		RocketClassCritGlowStack[index]     = config.GetNum("crit glow stack", RocketClassCritGlowStack[index]);
 		if (RocketClassCritGlowStack[index] < 1)              RocketClassCritGlowStack[index] = 1;
 		if (RocketClassCritGlowStack[index] > MAX_CRIT_STACK) RocketClassCritGlowStack[index] = MAX_CRIT_STACK;
 
@@ -582,64 +624,22 @@ void ParseClasses(KeyValues config)
 		// engine default for that team (red/blue/neutral; see UpdateCritGlow).
 		// Particle name MUST exist in the ParticleEffectNames string table or it
 		// renders nothing — use stock TF2 particle names.
-		config.GetString("crit glow particle red",     RocketClassCritGlowParticleRed[index],     32, "");
-		config.GetString("crit glow particle blue",    RocketClassCritGlowParticleBlue[index],    32, "");
-		config.GetString("crit glow particle neutral", RocketClassCritGlowParticleNeutral[index], 32, "");
-		RocketClassPlayerModifier[index]    = config.GetFloat("no. players modifier");
-		RocketClassRocketsModifier[index]   = config.GetFloat("no. rockets modifier");
-		RocketClassTargetWeight[index]      = config.GetFloat("direction to target weight");
+		OverlayRocketString(config, "crit glow particle red", RocketClassCritGlowParticleRed[index], 32);
+		OverlayRocketString(config, "crit glow particle blue", RocketClassCritGlowParticleBlue[index], 32);
+		OverlayRocketString(config, "crit glow particle neutral", RocketClassCritGlowParticleNeutral[index], 32);
+		RocketClassPlayerModifier[index]  = config.GetFloat("no. players modifier", RocketClassPlayerModifier[index]);
+		RocketClassRocketsModifier[index] = config.GetFloat("no. rockets modifier", RocketClassRocketsModifier[index]);
+		RocketClassTargetWeight[index]    = config.GetFloat("direction to target weight", RocketClassTargetWeight[index]);
 
-		// Scaling mode: orbit coefficient
-		RocketClassOrbitTightness[index]    = config.GetFloat("orbit tightness", 0.0);
-
-		// Scaling mode: target speed
-		RocketClassMaxSpeed[index]          = config.GetFloat("max speed", 0.0);
-		RocketClassMaxDeflections[index]    = config.GetNum("max deflections", 0);
-		if (UseTargetSpeedScaling && RocketClassMaxDeflections[index] > 0)
-		{
-			RocketClassSpeedIncrement[index] = (RocketClassMaxSpeed[index] - RocketClassSpeed[index]) / float(RocketClassMaxDeflections[index]);
-		}
-
-		// Steering control: drag window between object_deflected and eye-angle read.
-		// Cfg value is seconds. Converted to real ticks so the window is identical
-		// in real time across 66/100/128-tick servers. Default 0.045 = master-like.
-		float cfgSteering = config.GetFloat("steering control", 0.045);
-		if (cfgSteering < 0.0) cfgSteering = 0.0;
-		RocketClassSteeringControl[index] = SecondsToTicks(cfgSteering);
-
-		// Bounce control: post-bounce blind window before homing resumes.
-		// Cfg value is seconds. Default 0.045 = master-like.
-		float cfgBounce = config.GetFloat("bounce control", 0.045);
-		if (cfgBounce < 0.0) cfgBounce = 0.0;
-		RocketClassBounceControl[index] = SecondsToTicks(cfgBounce);
-
-		// Think interval (seconds): how often the homing lerp runs.
-		// 0    = per-tick (default, current smooth behavior)
-		// 0.05 = 20 Hz (authentic YADB/Damizean lerp cadence)
-		// 0.1  = 10 Hz (chunky, matches 2.2.0 legacy timer)
-		// When >0: turn rate applies RAW per fire (no tick-scale compensation) — matches Damizean's
-		// math semantic, which means Damizean-era turn rate values (e.g. 0.233) just work.
-		RocketClassThinkInterval[index] = config.GetFloat("think interval", 0.0);
+		RocketClassThinkInterval[index] = config.GetFloat("think interval", RocketClassThinkInterval[index]);
 		if (RocketClassThinkInterval[index] < 0.0) RocketClassThinkInterval[index] = 0.0;
 
-		DataPack cmds = null;
-		config.GetString("on spawn", buffer, sizeof(buffer));
-		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnSpawnCmd; RocketClassCmdsOnSpawn[index] = cmds; }
-		
-		config.GetString("on deflect", buffer, sizeof(buffer));
-		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnDeflectCmd; RocketClassCmdsOnDeflect[index] = cmds; }
-
-		config.GetString("on kill", buffer, sizeof(buffer));
-		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnKillCmd; RocketClassCmdsOnKill[index] = cmds; }
-
-		config.GetString("on spawn kill", buffer, sizeof(buffer));
-		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnSpawnKillCmd; RocketClassCmdsOnSpawnKill[index] = cmds; }
-
-		config.GetString("on explode", buffer, sizeof(buffer));
-		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnExplodeCmd; RocketClassCmdsOnExplode[index] = cmds; }
-
-		config.GetString("on no target", buffer, sizeof(buffer));
-		if ((cmds = ParseCommands(buffer)) != null) { flags |= RocketFlag_OnNoTargetCmd; RocketClassCmdsOnNoTarget[index] = cmds; }
+		RocketClassCmdsOnSpawn[index] = OverlayRocketCommands(config, "on spawn", RocketClassCmdsOnSpawn[index], RocketFlag_OnSpawnCmd, flags);
+		RocketClassCmdsOnDeflect[index] = OverlayRocketCommands(config, "on deflect", RocketClassCmdsOnDeflect[index], RocketFlag_OnDeflectCmd, flags);
+		RocketClassCmdsOnKill[index] = OverlayRocketCommands(config, "on kill", RocketClassCmdsOnKill[index], RocketFlag_OnKillCmd, flags);
+		RocketClassCmdsOnSpawnKill[index] = OverlayRocketCommands(config, "on spawn kill", RocketClassCmdsOnSpawnKill[index], RocketFlag_OnSpawnKillCmd, flags);
+		RocketClassCmdsOnExplode[index] = OverlayRocketCommands(config, "on explode", RocketClassCmdsOnExplode[index], RocketFlag_OnExplodeCmd, flags);
+		RocketClassCmdsOnNoTarget[index] = OverlayRocketCommands(config, "on no target", RocketClassCmdsOnNoTarget[index], RocketFlag_OnNoTargetCmd, flags);
 
 		RocketClassFlags[index] = flags;
 		if (newClass) RocketClassCount++;
@@ -732,35 +732,22 @@ DataPack ParseCommands(char[] line)
     TrimString(line);
     if (!line[0]) return null;
 
-    // Use static array to avoid heap allocation on each call
-    // This prevents "Not enough space on the heap" when parsing many rocket classes
     static char parts[32][256];
-    int numParts = ExplodeString(line, ";", parts, 32, 256);
-    
-    ArrayList commands = new ArrayList(ByteCountToCells(256));
-    char buffer[256];
+    int numParts = ExplodeString(line, ";", parts, sizeof(parts), sizeof(parts[]));
+    int numCommands = 0;
 
     for (int i = 0; i < numParts; i++)
     {
         TrimString(parts[i]);
-        if (parts[i][0]) commands.PushString(parts[i]);
+        if (parts[i][0]) numCommands++;
     }
-    
-    int numCommands = commands.Length;
-    if (numCommands == 0)
-    {
-        delete commands;
-        return null;
-    }
+    if (numCommands == 0) return null;
 
     DataPack dataPack = new DataPack();
     dataPack.WriteCell(numCommands);
-    for (int i = 0; i < numCommands; i++)
+    for (int i = 0; i < numParts; i++)
     {
-        commands.GetString(i, buffer, sizeof(buffer));
-        dataPack.WriteString(buffer);
+        if (parts[i][0]) dataPack.WriteString(parts[i]);
     }
-
-    delete commands;
     return dataPack;
 }

@@ -12,12 +12,12 @@
 native bool TFDB_IsPvBActive();
 
 /**
- * Returns whether PvB training mode is currently active
+ * Returns whether PvB debug-states mode is currently active
  * (bots on both teams, humans in spectator).
  *
- * @return True if PvB training mode is active, false otherwise.
+ * @return True if PvB debug-states mode is active, false otherwise.
  */
-native bool TFDB_IsPvBTraining();
+native bool TFDB_IsPvBDebugStates();
 
 public SharedPlugin __pl_tfdb_pvb =
 {
@@ -34,6 +34,6 @@ public SharedPlugin __pl_tfdb_pvb =
 public void __pl_tfdb_pvb_SetNTVOptional()
 {
     MarkNativeAsOptional("TFDB_IsPvBActive");
-    MarkNativeAsOptional("TFDB_IsPvBTraining");
+    MarkNativeAsOptional("TFDB_IsPvBDebugStates");
 }
 #endif

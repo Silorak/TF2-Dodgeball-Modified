@@ -14,7 +14,7 @@
 #define PLUGIN_NAME        "[TFDB] Anti-Sniping & Anti-Teamkilling"
 #define PLUGIN_AUTHOR      "x07x08, Silorak"
 #define PLUGIN_DESCRIPTION "Blocks snipes and teamkills."
-#define PLUGIN_VERSION     "2.2.0"
+#define PLUGIN_VERSION "2.3.0"
 #define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball"
 
 ConVar CvarHookDamage;

@@ -8,7 +8,7 @@
 #define PLUGIN_NAME        "[TFDB] Print & replace client indexes"
 #define PLUGIN_AUTHOR      "x07x08 & Silorak"
 #define PLUGIN_DESCRIPTION "Does what it says"
-#define PLUGIN_VERSION     "2.2.0"
+#define PLUGIN_VERSION "2.3.0"
 #define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball"
 
 char CmdBuffer[255];
@@ -112,7 +112,7 @@ public Action CmdPrintMessageClient(int client, int cmdArgs)
 		}
 	}
 	
-	ImplodeStrings(ExplodeBuffer, numStrings, "", CmdBuffer[length], sizeof(CmdBuffer));
+	ImplodeStrings(ExplodeBuffer, numStrings, "", CmdBuffer[length], sizeof(CmdBuffer) - length);
 	
 	if ((target >= 1) && (target <= MaxClients) && IsClientInGame(target))
 	{

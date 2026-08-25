@@ -23,14 +23,11 @@
 // core. ThrowNativeError raises a script exception in the calling subplugin
 // instead of corrupting our state. (Audit finding 2026-04-28.)
 //
-// All TFDB rocket-instance arrays are sized [MAX_ROCKETS] (see dodgeball.sp).
-// Class arrays use a separate set of natives that have their own bounds path.
-//
 // Example: TFDB_NATIVE_GET(Native_GetRocketSpeed, RocketSpeed)
 #define TFDB_NATIVE_GET(%1,%2) \
 	public any %1(Handle plugin, int numParams) { \
 		int idx = GetNativeCell(1); \
-		if (idx < 0 || idx >= MAX_ROCKETS) return ThrowNativeError(SP_ERROR_PARAM, "Rocket index %d out of range [0..%d)", idx, MAX_ROCKETS); \
+		if (!ValidateNativeIndex(idx, sizeof(%2), "Array")) return 0; \
 		return view_as<any>(%2[idx]); \
 	}
 
@@ -39,7 +36,7 @@
 #define TFDB_NATIVE_SET(%1,%2) \
 	public any %1(Handle plugin, int numParams) { \
 		int idx = GetNativeCell(1); \
-		if (idx < 0 || idx >= MAX_ROCKETS) return ThrowNativeError(SP_ERROR_PARAM, "Rocket index %d out of range [0..%d)", idx, MAX_ROCKETS); \
+		if (!ValidateNativeIndex(idx, sizeof(%2), "Array")) return 0; \
 		%2[idx] = GetNativeCell(2); \
 		return 0; \
 	}
@@ -49,10 +46,57 @@
 #define TFDB_NATIVE_SET_CAST(%1,%2,%3) \
 	public any %1(Handle plugin, int numParams) { \
 		int idx = GetNativeCell(1); \
-		if (idx < 0 || idx >= MAX_ROCKETS) return ThrowNativeError(SP_ERROR_PARAM, "Rocket index %d out of range [0..%d)", idx, MAX_ROCKETS); \
+		if (!ValidateNativeIndex(idx, sizeof(%2), "Array")) return 0; \
 		%2[idx] = view_as<%3>(GetNativeCell(2)); \
 		return 0; \
 	}
+
+#define TFDB_NATIVE_DATAPACK_GET(%1,%2) \
+	public any %1(Handle plugin, int numParams) { \
+		int idx = GetNativeCell(1); \
+		if (!ValidateNativeIndex(idx, sizeof(%2), "Rocket class")) return 0; \
+		return CloneHandle(%2[idx], plugin); \
+	}
+
+#define TFDB_NATIVE_DATAPACK_SET(%1,%2) \
+	public any %1(Handle plugin, int numParams) { \
+		int idx = GetNativeCell(1); \
+		if (!ValidateNativeIndex(idx, sizeof(%2), "Rocket class")) return 0; \
+		DataPack source = view_as<DataPack>(GetNativeCell(2)); \
+		DataPack clone = view_as<DataPack>(CloneHandle(source, GetMyHandle())); \
+		delete %2[idx]; \
+		%2[idx] = clone; \
+		return 0; \
+	}
+
+bool ValidateNativeIndex(int index, int limit, const char[] type)
+{
+	if (index >= 0 && index < limit) return true;
+	ThrowNativeError(SP_ERROR_PARAM, "%s index %d out of range [0..%d)", type, index, limit);
+	return false;
+}
+
+bool ValidateNativeCount(int count, int limit, const char[] type)
+{
+	if (count >= 0 && count <= limit) return true;
+	ThrowNativeError(SP_ERROR_PARAM, "%s count %d out of range [0..%d]", type, count, limit);
+	return false;
+}
+
+bool ValidateNativeCursor(int cursor, int count, const char[] type)
+{
+	if (cursor >= 0 && (cursor < count || (count == 0 && cursor == 0))) return true;
+	ThrowNativeError(SP_ERROR_PARAM, "%s cursor %d out of range for count %d", type, cursor, count);
+	return false;
+}
+
+bool IsSupportedRocketEntity(int entity)
+{
+	if (entity <= MaxClients || !IsValidEntity(entity)) return false;
+	char classname[32];
+	if (!GetEntityClassname(entity, classname, sizeof(classname))) return false;
+	return StrEqual(classname, "tf_projectile_rocket") || StrEqual(classname, "tf_projectile_sentryrocket");
+}
 
 // *********************************************************************************
 // NATIVES - GENERAL & STATE
@@ -70,17 +114,39 @@ public any Native_IsDodgeballEnabled(Handle plugin, int numParams) {
 	return Enabled;
 }
 
+public any Native_RecountAlive(Handle plugin, int numParams) {
+	RecountAlive();
+	return 0;
+}
+
 // *********************************************************************************
 // NATIVES - ROCKET GETTERS/SETTERS
 // *********************************************************************************
 
 public any Native_GetRocketEntity(Handle plugin, int numParams) {
-	return EntRefToEntIndex(RocketEntity[GetNativeCell(1)]);
+	int index = GetNativeCell(1);
+	if (!ValidateNativeIndex(index, sizeof(RocketEntity), "Rocket")) return 0;
+	return EntRefToEntIndex(RocketEntity[index]);
 }
 
 public any Native_SetRocketEntity(Handle plugin, int numParams) {
-	RocketEntity[GetNativeCell(1)] = EntIndexToEntRef(GetNativeCell(2));
-	return 0;
+	int index = GetNativeCell(1);
+	int entity = GetNativeCell(2);
+	if (!ValidateNativeIndex(index, sizeof(RocketEntity), "Rocket")) return 0;
+	if (!RocketIsValid[index]) return ThrowNativeError(SP_ERROR_PARAM, "Cannot rebind inactive rocket slot %d", index);
+	if (!IsSupportedRocketEntity(entity)) return ThrowNativeError(SP_ERROR_PARAM, "Invalid rocket entity %d", entity);
+	int oldEntity = EntRefToEntIndex(RocketEntity[index]);
+	if (oldEntity == entity) return 0;
+	if (!RebindRocketEntity(index, entity)) return ThrowNativeError(SP_ERROR_PARAM, "Rocket entity %d is already bound", entity);
+	if (AttachRocketHooks(entity)) return 0;
+
+	if (oldEntity != -1) RebindRocketEntity(index, oldEntity);
+	else
+	{
+		ClearRocketEntityMapping(index);
+		RocketEntity[index] = INVALID_ENT_REFERENCE;
+	}
+	return ThrowNativeError(SP_ERROR_NATIVE, "SDKHookEx failed for rocket entity %d", entity);
 }
 
 TFDB_NATIVE_GET(     Native_GetRocketFlags,              RocketInstanceFlags)
@@ -88,16 +154,23 @@ TFDB_NATIVE_SET_CAST(Native_SetRocketFlags,              RocketInstanceFlags, Ro
 
 // Ent-ref round-trip — kept explicit because of the EntIndexToEntRef wrapping.
 public any Native_GetRocketTarget(Handle plugin, int numParams) {
-	return EntRefToEntIndex(RocketTarget[GetNativeCell(1)]);
+	int index = GetNativeCell(1);
+	if (!ValidateNativeIndex(index, sizeof(RocketTarget), "Rocket")) return 0;
+	return EntRefToEntIndex(RocketTarget[index]);
 }
 public any Native_SetRocketTarget(Handle plugin, int numParams) {
-	RocketTarget[GetNativeCell(1)] = EntIndexToEntRef(GetNativeCell(2));
+	int index = GetNativeCell(1);
+	int target = GetNativeCell(2);
+	if (!ValidateNativeIndex(index, sizeof(RocketTarget), "Rocket")) return 0;
+	if (!IsValidClient(target, true)) return ThrowNativeError(SP_ERROR_PARAM, "Invalid rocket target %d", target);
+	RocketTarget[index] = EntIndexToEntRef(target);
 	return 0;
 }
 
 // Derived — owner is read from an entity prop, not a rocket-class array.
 public any Native_GetRocketOwner(Handle plugin, int numParams) {
 	int index = GetNativeCell(1);
+	if (!ValidateNativeIndex(index, sizeof(RocketEntity), "Rocket")) return 0;
 	if (!RocketIsValid[index]) return -1;
 	int entity = EntRefToEntIndex(RocketEntity[index]);
 	if (entity == -1) return -1;
@@ -109,21 +182,33 @@ TFDB_NATIVE_SET(Native_SetRocketEventDeflections,    RocketEventDeflections)
 TFDB_NATIVE_GET(Native_GetRocketDeflections,         RocketDeflections)
 TFDB_NATIVE_SET(Native_SetRocketDeflections,         RocketDeflections)
 TFDB_NATIVE_GET(Native_GetRocketClass,               RocketClass)
-TFDB_NATIVE_SET(Native_SetRocketClass,               RocketClass)
+public any Native_SetRocketClass(Handle plugin, int numParams) {
+	int index = GetNativeCell(1);
+	int rocketClass = GetNativeCell(2);
+	if (!ValidateNativeIndex(index, sizeof(RocketClass), "Rocket")) return 0;
+	if (!ValidateNativeIndex(rocketClass, RocketClassCount, "Rocket class")) return 0;
+	RocketClass[index] = rocketClass;
+	return 0;
+}
 TFDB_NATIVE_GET(Native_GetRocketSpeed,               RocketSpeed)
 TFDB_NATIVE_SET(Native_SetRocketSpeed,               RocketSpeed)
 TFDB_NATIVE_GET(Native_GetRocketMphSpeed,            RocketMphSpeed)
+TFDB_NATIVE_GET(Native_GetRocketRawMphSpeed,          RocketRawMphSpeed)
 TFDB_NATIVE_SET(Native_SetRocketMphSpeed,            RocketMphSpeed)
 
 // Vector get/set — needs SetNativeArray / GetNativeArray. Kept explicit.
 public any Native_GetRocketDirection(Handle plugin, int numParams) {
-	SetNativeArray(2, RocketDirection[GetNativeCell(1)], 3);
+	int index = GetNativeCell(1);
+	if (!ValidateNativeIndex(index, sizeof(RocketDirection), "Rocket")) return 0;
+	SetNativeArray(2, RocketDirection[index], 3);
 	return 0;
 }
 public any Native_SetRocketDirection(Handle plugin, int numParams) {
+	int index = GetNativeCell(1);
+	if (!ValidateNativeIndex(index, sizeof(RocketDirection), "Rocket")) return 0;
 	float direction[3];
 	GetNativeArray(2, direction, sizeof(direction));
-	CopyVectors(direction, RocketDirection[GetNativeCell(1)]);
+	CopyVectors(direction, RocketDirection[index]);
 	return 0;
 }
 
@@ -140,20 +225,28 @@ public any Native_GetRocketCount(Handle plugin, int numParams) {
 TFDB_NATIVE_GET(Native_GetLastSpawnTime,             LastSpawnTime)
 
 public any Native_GetRocketBounces(Handle plugin, int numParams) {
-	return RocketBounces[GetNativeCell(1)];
+	int index = GetNativeCell(1);
+	if (!ValidateNativeIndex(index, sizeof(RocketBounces), "Rocket")) return 0;
+	return RocketBounces[index];
 }
 
 public any Native_SetRocketBounces(Handle plugin, int numParams) {
-	RocketBounces[GetNativeCell(1)] = GetNativeCell(2);
+	int index = GetNativeCell(1);
+	if (!ValidateNativeIndex(index, sizeof(RocketBounces), "Rocket")) return 0;
+	RocketBounces[index] = GetNativeCell(2);
 	return 0;
 }
 
 public any Native_GetRocketState(Handle plugin, int numParams) {
-	return RocketInstanceState[GetNativeCell(1)];
+	int index = GetNativeCell(1);
+	if (!ValidateNativeIndex(index, sizeof(RocketInstanceState), "Rocket")) return 0;
+	return RocketInstanceState[index];
 }
 
 public any Native_SetRocketState(Handle plugin, int numParams) {
-	Internal_SetRocketState(GetNativeCell(1), view_as<RocketState>(GetNativeCell(2)));
+	int index = GetNativeCell(1);
+	if (!ValidateNativeIndex(index, sizeof(RocketInstanceState), "Rocket")) return 0;
+	Internal_SetRocketState(index, view_as<RocketState>(GetNativeCell(2)));
 	return 0;
 }
 
@@ -166,7 +259,9 @@ public any Native_GetRocketClassCount(Handle plugin, int numParams) {
 }
 
 public any Native_SetRocketClassCount(Handle plugin, int numParams) {
-	RocketClassCount = GetNativeCell(1);
+	int count = GetNativeCell(1);
+	if (!ValidateNativeCount(count, MAX_ROCKET_CLASSES, "Rocket class")) return 0;
+	RocketClassCount = count;
 	return 0;
 }
 
@@ -182,7 +277,14 @@ TFDB_NATIVE_SET(Native_SetRocketClassDamageIncrement,       RocketClassDamageInc
 TFDB_NATIVE_GET(Native_GetRocketClassSpeed,                 RocketClassSpeed)
 TFDB_NATIVE_SET(Native_SetRocketClassSpeed,                 RocketClassSpeed)
 TFDB_NATIVE_GET(Native_GetRocketClassSpeedIncrement,        RocketClassSpeedIncrement)
-TFDB_NATIVE_SET(Native_SetRocketClassSpeedIncrement,        RocketClassSpeedIncrement)
+public any Native_SetRocketClassSpeedIncrement(Handle plugin, int numParams) {
+	int index = GetNativeCell(1);
+	if (!ValidateNativeIndex(index, sizeof(RocketClassSpeedIncrement), "Rocket class")) return 0;
+	float value = view_as<float>(GetNativeCell(2));
+	RocketClassConfiguredSpeedIncrement[index] = value;
+	RocketClassSpeedIncrement[index] = value;
+	return 0;
+}
 TFDB_NATIVE_GET(Native_GetRocketClassSpeedLimit,            RocketClassSpeedLimit)
 TFDB_NATIVE_SET(Native_SetRocketClassSpeedLimit,            RocketClassSpeedLimit)
 TFDB_NATIVE_GET(Native_GetRocketClassTurnRate,              RocketClassTurnRate)
@@ -205,47 +307,44 @@ TFDB_NATIVE_GET(Native_GetRocketClassMaxBounces,            RocketClassMaxBounce
 TFDB_NATIVE_SET(Native_SetRocketClassMaxBounces,            RocketClassMaxBounces)
 
 public any Native_GetRocketClassName(Handle plugin, int numParams) {
-	SetNativeString(2, RocketClassName[GetNativeCell(1)], GetNativeCell(3));
+	int rocketClass = GetNativeCell(1);
+	if (!ValidateNativeIndex(rocketClass, sizeof(RocketClassName), "Rocket class")) return 0;
+	SetNativeString(2, RocketClassName[rocketClass], GetNativeCell(3));
 	return 0;
 }
 
 public any Native_SetRocketClassName(Handle plugin, int numParams) {
 	int rocketClass = GetNativeCell(1);
-	int maxLen;
-	GetNativeStringLength(2, maxLen);
-	char[] buffer = new char[maxLen + 1];
-	GetNativeString(2, buffer, maxLen + 1);
-	strcopy(RocketClassName[rocketClass], sizeof(RocketClassName[]), buffer);
+	if (!ValidateNativeIndex(rocketClass, sizeof(RocketClassName), "Rocket class")) return 0;
+	GetNativeString(2, RocketClassName[rocketClass], sizeof(RocketClassName[]));
 	return 0;
 }
 
 public any Native_GetRocketClassLongName(Handle plugin, int numParams) {
-	SetNativeString(2, RocketClassLongName[GetNativeCell(1)], GetNativeCell(3));
+	int rocketClass = GetNativeCell(1);
+	if (!ValidateNativeIndex(rocketClass, sizeof(RocketClassLongName), "Rocket class")) return 0;
+	SetNativeString(2, RocketClassLongName[rocketClass], GetNativeCell(3));
 	return 0;
 }
 
 public any Native_SetRocketClassLongName(Handle plugin, int numParams) {
 	int rocketClass = GetNativeCell(1);
-	int maxLen;
-	GetNativeStringLength(2, maxLen);
-	char[] buffer = new char[maxLen + 1];
-	GetNativeString(2, buffer, maxLen + 1);
-	strcopy(RocketClassLongName[rocketClass], sizeof(RocketClassLongName[]), buffer);
+	if (!ValidateNativeIndex(rocketClass, sizeof(RocketClassLongName), "Rocket class")) return 0;
+	GetNativeString(2, RocketClassLongName[rocketClass], sizeof(RocketClassLongName[]));
 	return 0;
 }
 
 public any Native_GetRocketClassModel(Handle plugin, int numParams) {
-	SetNativeString(2, RocketClassModel[GetNativeCell(1)], GetNativeCell(3));
+	int rocketClass = GetNativeCell(1);
+	if (!ValidateNativeIndex(rocketClass, sizeof(RocketClassModel), "Rocket class")) return 0;
+	SetNativeString(2, RocketClassModel[rocketClass], GetNativeCell(3));
 	return 0;
 }
 
 public any Native_SetRocketClassModel(Handle plugin, int numParams) {
 	int rocketClass = GetNativeCell(1);
-	int maxLen;
-	GetNativeStringLength(2, maxLen);
-	char[] buffer = new char[maxLen + 1];
-	GetNativeString(2, buffer, maxLen + 1);
-	strcopy(RocketClassModel[rocketClass], sizeof(RocketClassModel[]), buffer);
+	if (!ValidateNativeIndex(rocketClass, sizeof(RocketClassModel), "Rocket class")) return 0;
+	GetNativeString(2, RocketClassModel[rocketClass], sizeof(RocketClassModel[]));
 	return 0;
 }
 
@@ -253,47 +352,44 @@ TFDB_NATIVE_GET(Native_GetRocketClassBeepInterval,          RocketClassBeepInter
 TFDB_NATIVE_SET(Native_SetRocketClassBeepInterval,          RocketClassBeepInterval)
 
 public any Native_GetRocketClassSpawnSound(Handle plugin, int numParams) {
-	SetNativeString(2, RocketClassSpawnSound[GetNativeCell(1)], GetNativeCell(3));
+	int rocketClass = GetNativeCell(1);
+	if (!ValidateNativeIndex(rocketClass, sizeof(RocketClassSpawnSound), "Rocket class")) return 0;
+	SetNativeString(2, RocketClassSpawnSound[rocketClass], GetNativeCell(3));
 	return 0;
 }
 
 public any Native_SetRocketClassSpawnSound(Handle plugin, int numParams) {
 	int rocketClass = GetNativeCell(1);
-	int maxLen;
-	GetNativeStringLength(2, maxLen);
-	char[] buffer = new char[maxLen + 1];
-	GetNativeString(2, buffer, maxLen + 1);
-	strcopy(RocketClassSpawnSound[rocketClass], sizeof(RocketClassSpawnSound[]), buffer);
+	if (!ValidateNativeIndex(rocketClass, sizeof(RocketClassSpawnSound), "Rocket class")) return 0;
+	GetNativeString(2, RocketClassSpawnSound[rocketClass], sizeof(RocketClassSpawnSound[]));
 	return 0;
 }
 
 public any Native_GetRocketClassBeepSound(Handle plugin, int numParams) {
-	SetNativeString(2, RocketClassBeepSound[GetNativeCell(1)], GetNativeCell(3));
+	int rocketClass = GetNativeCell(1);
+	if (!ValidateNativeIndex(rocketClass, sizeof(RocketClassBeepSound), "Rocket class")) return 0;
+	SetNativeString(2, RocketClassBeepSound[rocketClass], GetNativeCell(3));
 	return 0;
 }
 
 public any Native_SetRocketClassBeepSound(Handle plugin, int numParams) {
 	int rocketClass = GetNativeCell(1);
-	int maxLen;
-	GetNativeStringLength(2, maxLen);
-	char[] buffer = new char[maxLen + 1];
-	GetNativeString(2, buffer, maxLen + 1);
-	strcopy(RocketClassBeepSound[rocketClass], sizeof(RocketClassBeepSound[]), buffer);
+	if (!ValidateNativeIndex(rocketClass, sizeof(RocketClassBeepSound), "Rocket class")) return 0;
+	GetNativeString(2, RocketClassBeepSound[rocketClass], sizeof(RocketClassBeepSound[]));
 	return 0;
 }
 
 public any Native_GetRocketClassAlertSound(Handle plugin, int numParams) {
-	SetNativeString(2, RocketClassAlertSound[GetNativeCell(1)], GetNativeCell(3));
+	int rocketClass = GetNativeCell(1);
+	if (!ValidateNativeIndex(rocketClass, sizeof(RocketClassAlertSound), "Rocket class")) return 0;
+	SetNativeString(2, RocketClassAlertSound[rocketClass], GetNativeCell(3));
 	return 0;
 }
 
 public any Native_SetRocketClassAlertSound(Handle plugin, int numParams) {
 	int rocketClass = GetNativeCell(1);
-	int maxLen;
-	GetNativeStringLength(2, maxLen);
-	char[] buffer = new char[maxLen + 1];
-	GetNativeString(2, buffer, maxLen + 1);
-	strcopy(RocketClassAlertSound[rocketClass], sizeof(RocketClassAlertSound[]), buffer);
+	if (!ValidateNativeIndex(rocketClass, sizeof(RocketClassAlertSound), "Rocket class")) return 0;
+	GetNativeString(2, RocketClassAlertSound[rocketClass], sizeof(RocketClassAlertSound[]));
 	return 0;
 }
 
@@ -301,12 +397,6 @@ TFDB_NATIVE_GET(Native_GetRocketClassCritChance,            RocketClassCritChanc
 TFDB_NATIVE_SET(Native_SetRocketClassCritChance,            RocketClassCritChance)
 TFDB_NATIVE_GET(Native_GetRocketClassTargetWeight,          RocketClassTargetWeight)
 TFDB_NATIVE_SET(Native_SetRocketClassTargetWeight,          RocketClassTargetWeight)
-TFDB_NATIVE_GET(Native_GetRocketClassOrbitTightness,        RocketClassOrbitTightness)
-TFDB_NATIVE_SET(Native_SetRocketClassOrbitTightness,        RocketClassOrbitTightness)
-TFDB_NATIVE_GET(Native_GetRocketClassMaxSpeed,              RocketClassMaxSpeed)
-TFDB_NATIVE_SET(Native_SetRocketClassMaxSpeed,              RocketClassMaxSpeed)
-TFDB_NATIVE_GET(Native_GetRocketClassMaxDeflections,        RocketClassMaxDeflections)
-TFDB_NATIVE_SET(Native_SetRocketClassMaxDeflections,        RocketClassMaxDeflections)
 TFDB_NATIVE_GET(Native_GetRocketClassBounceCeiling,         RocketClassBounceCeiling)
 TFDB_NATIVE_SET(Native_SetRocketClassBounceCeiling,         RocketClassBounceCeiling)
 TFDB_NATIVE_GET(Native_GetRocketClassCritGlowStack,         RocketClassCritGlowStack)
@@ -356,36 +446,15 @@ public any Native_SetRocketClassCritGlowParticle(Handle plugin, int numParams) {
 	return 0;
 }
 
-public any Native_GetRocketClassSteeringControl(Handle plugin, int numParams) {
-	return RocketClassSteeringControl[GetNativeCell(1)];
-}
-
-public any Native_SetRocketClassSteeringControl(Handle plugin, int numParams) {
-	int rocketClass = GetNativeCell(1);
-	int ticks = GetNativeCell(2);
-	if (ticks < 0) ticks = 0;
-	RocketClassSteeringControl[rocketClass] = ticks;
-	return 0;
-}
-
-public any Native_GetRocketClassBounceControl(Handle plugin, int numParams) {
-	return RocketClassBounceControl[GetNativeCell(1)];
-}
-
-public any Native_SetRocketClassBounceControl(Handle plugin, int numParams) {
-	int rocketClass = GetNativeCell(1);
-	int ticks = GetNativeCell(2);
-	if (ticks < 0) ticks = 0;
-	RocketClassBounceControl[rocketClass] = ticks;
-	return 0;
-}
-
 public any Native_GetRocketClassThinkInterval(Handle plugin, int numParams) {
-	return view_as<any>(RocketClassThinkInterval[GetNativeCell(1)]);
+	int rocketClass = GetNativeCell(1);
+	if (!ValidateNativeIndex(rocketClass, sizeof(RocketClassThinkInterval), "Rocket class")) return 0;
+	return view_as<any>(RocketClassThinkInterval[rocketClass]);
 }
 
 public any Native_SetRocketClassThinkInterval(Handle plugin, int numParams) {
 	int rocketClass = GetNativeCell(1);
+	if (!ValidateNativeIndex(rocketClass, sizeof(RocketClassThinkInterval), "Rocket class")) return 0;
 	float seconds = view_as<float>(GetNativeCell(2));
 	if (seconds < 0.0) seconds = 0.0;
 	RocketClassThinkInterval[rocketClass] = seconds;
@@ -397,17 +466,16 @@ public any Native_SetRocketClassThinkInterval(Handle plugin, int numParams) {
 // *********************************************************************************
 
 public any Native_GetSpawnersName(Handle plugin, int numParams) {
-	SetNativeString(2, SpawnersName[GetNativeCell(1)], GetNativeCell(3));
+	int spawnerClass = GetNativeCell(1);
+	if (!ValidateNativeIndex(spawnerClass, sizeof(SpawnersName), "Spawner")) return 0;
+	SetNativeString(2, SpawnersName[spawnerClass], GetNativeCell(3));
 	return 0;
 }
 
 public any Native_SetSpawnersName(Handle plugin, int numParams) {
 	int spawnerClass = GetNativeCell(1);
-	int maxLen;
-	GetNativeStringLength(2, maxLen);
-	char[] buffer = new char[maxLen + 1];
-	GetNativeString(2, buffer, maxLen + 1);
-	strcopy(SpawnersName[spawnerClass], sizeof(SpawnersName[]), buffer);
+	if (!ValidateNativeIndex(spawnerClass, sizeof(SpawnersName), "Spawner")) return 0;
+	GetNativeString(2, SpawnersName[spawnerClass], sizeof(SpawnersName[]));
 	return 0;
 }
 
@@ -417,11 +485,14 @@ TFDB_NATIVE_GET(Native_GetSpawnersInterval,   SpawnersInterval)
 TFDB_NATIVE_SET(Native_SetSpawnersInterval,   SpawnersInterval)
 
 public any Native_GetSpawnersChancesTable(Handle plugin, int numParams) {
-	return CloneHandle(SpawnersChancesTable[GetNativeCell(1)], plugin);
+	int spawnerClass = GetNativeCell(1);
+	if (!ValidateNativeIndex(spawnerClass, sizeof(SpawnersChancesTable), "Spawner")) return 0;
+	return CloneHandle(SpawnersChancesTable[spawnerClass], plugin);
 }
 
 public any Native_SetSpawnersChancesTable(Handle plugin, int numParams) {
 	int spawnerClass = GetNativeCell(1);
+	if (!ValidateNativeIndex(spawnerClass, sizeof(SpawnersChancesTable), "Spawner")) return 0;
 	ArrayList table = view_as<ArrayList>(GetNativeCell(2));
 	ArrayList clonedTable = view_as<ArrayList>(CloneHandle(table, GetMyHandle()));
 	delete SpawnersChancesTable[spawnerClass];
@@ -434,7 +505,9 @@ public any Native_GetSpawnersCount(Handle plugin, int numParams) {
 }
 
 public any Native_SetSpawnersCount(Handle plugin, int numParams) {
-	SpawnersCount = GetNativeCell(1);
+	int count = GetNativeCell(1);
+	if (!ValidateNativeCount(count, MAX_SPAWNER_CLASSES, "Spawner")) return 0;
+	SpawnersCount = count;
 	return 0;
 }
 
@@ -447,7 +520,9 @@ public any Native_GetCurrentRedSpawn(Handle plugin, int numParams) {
 }
 
 public any Native_SetCurrentRedSpawn(Handle plugin, int numParams) {
-	CurrentRedSpawn = GetNativeCell(1);
+	int cursor = GetNativeCell(1);
+	if (!ValidateNativeCursor(cursor, SpawnPointsRedCount, "RED spawn")) return 0;
+	CurrentRedSpawn = cursor;
 	return 0;
 }
 
@@ -456,21 +531,40 @@ public any Native_GetSpawnPointsRedCount(Handle plugin, int numParams) {
 }
 
 public any Native_SetSpawnPointsRedCount(Handle plugin, int numParams) {
-	SpawnPointsRedCount = GetNativeCell(1);
+	int count = GetNativeCell(1);
+	if (!ValidateNativeCount(count, MAX_SPAWN_POINTS, "RED spawn point")) return 0;
+	SpawnPointsRedCount = count;
+	if (CurrentRedSpawn >= count) CurrentRedSpawn = 0;
 	return 0;
 }
 
 TFDB_NATIVE_GET(Native_GetSpawnPointsRedClass,  SpawnPointsRedClass)
-TFDB_NATIVE_SET(Native_SetSpawnPointsRedClass,  SpawnPointsRedClass)
+public any Native_SetSpawnPointsRedClass(Handle plugin, int numParams) {
+	int index = GetNativeCell(1);
+	int spawnerClass = GetNativeCell(2);
+	if (!ValidateNativeIndex(index, sizeof(SpawnPointsRedClass), "RED spawn point")) return 0;
+	if (!ValidateNativeIndex(spawnerClass, SpawnersCount, "Spawner class")) return 0;
+	SpawnPointsRedClass[index] = spawnerClass;
+	return 0;
+}
 TFDB_NATIVE_GET(Native_GetSpawnPointsRedEntity, SpawnPointsRedEntity)
-TFDB_NATIVE_SET(Native_SetSpawnPointsRedEntity, SpawnPointsRedEntity)
+public any Native_SetSpawnPointsRedEntity(Handle plugin, int numParams) {
+	int index = GetNativeCell(1);
+	int entity = GetNativeCell(2);
+	if (!ValidateNativeIndex(index, sizeof(SpawnPointsRedEntity), "RED spawn point")) return 0;
+	if (entity <= MaxClients || !IsValidEntity(entity)) return ThrowNativeError(SP_ERROR_PARAM, "Invalid RED spawn entity %d", entity);
+	SpawnPointsRedEntity[index] = entity;
+	return 0;
+}
 
 public any Native_GetCurrentBluSpawn(Handle plugin, int numParams) {
 	return CurrentBluSpawn;
 }
 
 public any Native_SetCurrentBluSpawn(Handle plugin, int numParams) {
-	CurrentBluSpawn = GetNativeCell(1);
+	int cursor = GetNativeCell(1);
+	if (!ValidateNativeCursor(cursor, SpawnPointsBluCount, "BLU spawn")) return 0;
+	CurrentBluSpawn = cursor;
 	return 0;
 }
 
@@ -479,14 +573,31 @@ public any Native_GetSpawnPointsBluCount(Handle plugin, int numParams) {
 }
 
 public any Native_SetSpawnPointsBluCount(Handle plugin, int numParams) {
-	SpawnPointsBluCount = GetNativeCell(1);
+	int count = GetNativeCell(1);
+	if (!ValidateNativeCount(count, MAX_SPAWN_POINTS, "BLU spawn point")) return 0;
+	SpawnPointsBluCount = count;
+	if (CurrentBluSpawn >= count) CurrentBluSpawn = 0;
 	return 0;
 }
 
 TFDB_NATIVE_GET(Native_GetSpawnPointsBluClass,  SpawnPointsBluClass)
-TFDB_NATIVE_SET(Native_SetSpawnPointsBluClass,  SpawnPointsBluClass)
+public any Native_SetSpawnPointsBluClass(Handle plugin, int numParams) {
+	int index = GetNativeCell(1);
+	int spawnerClass = GetNativeCell(2);
+	if (!ValidateNativeIndex(index, sizeof(SpawnPointsBluClass), "BLU spawn point")) return 0;
+	if (!ValidateNativeIndex(spawnerClass, SpawnersCount, "Spawner class")) return 0;
+	SpawnPointsBluClass[index] = spawnerClass;
+	return 0;
+}
 TFDB_NATIVE_GET(Native_GetSpawnPointsBluEntity, SpawnPointsBluEntity)
-TFDB_NATIVE_SET(Native_SetSpawnPointsBluEntity, SpawnPointsBluEntity)
+public any Native_SetSpawnPointsBluEntity(Handle plugin, int numParams) {
+	int index = GetNativeCell(1);
+	int entity = GetNativeCell(2);
+	if (!ValidateNativeIndex(index, sizeof(SpawnPointsBluEntity), "BLU spawn point")) return 0;
+	if (entity <= MaxClients || !IsValidEntity(entity)) return ThrowNativeError(SP_ERROR_PARAM, "Invalid BLU spawn entity %d", entity);
+	SpawnPointsBluEntity[index] = entity;
+	return 0;
+}
 
 // *********************************************************************************
 // NATIVES - GAMEPLAY GETTERS/SETTERS
@@ -549,95 +660,40 @@ public any Native_SetStealInfo(Handle plugin, int numParams) {
 // NATIVES - DATAPACK-BASED GETTERS/SETTERS
 // *********************************************************************************
 
-public any Native_GetRocketClassCmdsOnSpawn(Handle plugin, int numParams) {
-	return CloneHandle(RocketClassCmdsOnSpawn[GetNativeCell(1)], plugin);
-}
-
-public any Native_SetRocketClassCmdsOnSpawn(Handle plugin, int numParams) {
-	int rocketClass = GetNativeCell(1);
-	DataPack cmds = view_as<DataPack>(GetNativeCell(2));
-	DataPack clonedPack = view_as<DataPack>(CloneHandle(cmds, GetMyHandle()));
-	delete RocketClassCmdsOnSpawn[rocketClass];
-	RocketClassCmdsOnSpawn[rocketClass] = clonedPack;
-	return 0;
-}
-
-public any Native_GetRocketClassCmdsOnDeflect(Handle plugin, int numParams) {
-	return CloneHandle(RocketClassCmdsOnDeflect[GetNativeCell(1)], plugin);
-}
-
-public any Native_SetRocketClassCmdsOnDeflect(Handle plugin, int numParams) {
-	int rocketClass = GetNativeCell(1);
-	DataPack cmds = view_as<DataPack>(GetNativeCell(2));
-	DataPack clonedPack = view_as<DataPack>(CloneHandle(cmds, GetMyHandle()));
-	delete RocketClassCmdsOnDeflect[rocketClass];
-	RocketClassCmdsOnDeflect[rocketClass] = clonedPack;
-	return 0;
-}
-
-public any Native_GetRocketClassCmdsOnKill(Handle plugin, int numParams) {
-	return CloneHandle(RocketClassCmdsOnKill[GetNativeCell(1)], plugin);
-}
-
-public any Native_SetRocketClassCmdsOnKill(Handle plugin, int numParams) {
-	int rocketClass = GetNativeCell(1);
-	DataPack cmds = view_as<DataPack>(GetNativeCell(2));
-	DataPack clonedPack = view_as<DataPack>(CloneHandle(cmds, GetMyHandle()));
-	delete RocketClassCmdsOnKill[rocketClass];
-	RocketClassCmdsOnKill[rocketClass] = clonedPack;
-	return 0;
-}
-
-public any Native_GetRocketClassCmdsOnSpawnKill(Handle plugin, int numParams) {
-	return CloneHandle(RocketClassCmdsOnSpawnKill[GetNativeCell(1)], plugin);
-}
-
-public any Native_SetRocketClassCmdsOnSpawnKill(Handle plugin, int numParams) {
-	int rocketClass = GetNativeCell(1);
-	DataPack cmds = view_as<DataPack>(GetNativeCell(2));
-	DataPack clonedPack = view_as<DataPack>(CloneHandle(cmds, GetMyHandle()));
-	delete RocketClassCmdsOnSpawnKill[rocketClass];
-	RocketClassCmdsOnSpawnKill[rocketClass] = clonedPack;
-	return 0;
-}
-
-public any Native_GetRocketClassCmdsOnExplode(Handle plugin, int numParams) {
-	return CloneHandle(RocketClassCmdsOnExplode[GetNativeCell(1)], plugin);
-}
-
-public any Native_SetRocketClassCmdsOnExplode(Handle plugin, int numParams) {
-	int rocketClass = GetNativeCell(1);
-	DataPack cmds = view_as<DataPack>(GetNativeCell(2));
-	DataPack clonedPack = view_as<DataPack>(CloneHandle(cmds, GetMyHandle()));
-	delete RocketClassCmdsOnExplode[rocketClass];
-	RocketClassCmdsOnExplode[rocketClass] = clonedPack;
-	return 0;
-}
-
-public any Native_GetRocketClassCmdsOnNoTarget(Handle plugin, int numParams) {
-	return CloneHandle(RocketClassCmdsOnNoTarget[GetNativeCell(1)], plugin);
-}
-
-public any Native_SetRocketClassCmdsOnNoTarget(Handle plugin, int numParams) {
-	int rocketClass = GetNativeCell(1);
-	DataPack cmds = view_as<DataPack>(GetNativeCell(2));
-	DataPack clonedPack = view_as<DataPack>(CloneHandle(cmds, GetMyHandle()));
-	delete RocketClassCmdsOnNoTarget[rocketClass];
-	RocketClassCmdsOnNoTarget[rocketClass] = clonedPack;
-	return 0;
-}
+TFDB_NATIVE_DATAPACK_GET(Native_GetRocketClassCmdsOnSpawn,     RocketClassCmdsOnSpawn)
+TFDB_NATIVE_DATAPACK_SET(Native_SetRocketClassCmdsOnSpawn,     RocketClassCmdsOnSpawn)
+TFDB_NATIVE_DATAPACK_GET(Native_GetRocketClassCmdsOnDeflect,   RocketClassCmdsOnDeflect)
+TFDB_NATIVE_DATAPACK_SET(Native_SetRocketClassCmdsOnDeflect,   RocketClassCmdsOnDeflect)
+TFDB_NATIVE_DATAPACK_GET(Native_GetRocketClassCmdsOnKill,      RocketClassCmdsOnKill)
+TFDB_NATIVE_DATAPACK_SET(Native_SetRocketClassCmdsOnKill,      RocketClassCmdsOnKill)
+TFDB_NATIVE_DATAPACK_GET(Native_GetRocketClassCmdsOnSpawnKill, RocketClassCmdsOnSpawnKill)
+TFDB_NATIVE_DATAPACK_SET(Native_SetRocketClassCmdsOnSpawnKill, RocketClassCmdsOnSpawnKill)
+TFDB_NATIVE_DATAPACK_GET(Native_GetRocketClassCmdsOnExplode,   RocketClassCmdsOnExplode)
+TFDB_NATIVE_DATAPACK_SET(Native_SetRocketClassCmdsOnExplode,   RocketClassCmdsOnExplode)
+TFDB_NATIVE_DATAPACK_GET(Native_GetRocketClassCmdsOnNoTarget,  RocketClassCmdsOnNoTarget)
+TFDB_NATIVE_DATAPACK_SET(Native_SetRocketClassCmdsOnNoTarget,  RocketClassCmdsOnNoTarget)
 
 // *********************************************************************************
 // NATIVES - ACTION FUNCTIONS
 // *********************************************************************************
 
 public any Native_CreateRocket(Handle plugin, int numParams) {
-	CreateRocket(GetNativeCell(1), GetNativeCell(2), GetNativeCell(3), GetNativeCell(4));
+	int spawnerEntity = GetNativeCell(1);
+	int spawnerClass = GetNativeCell(2);
+	int team = GetNativeCell(3);
+	int rocketClass = GetNativeCell(4);
+	if (spawnerEntity <= MaxClients || !IsValidEntity(spawnerEntity)) return ThrowNativeError(SP_ERROR_PARAM, "Invalid spawner entity %d", spawnerEntity);
+	if (!ValidateNativeIndex(spawnerClass, SpawnersCount, "Spawner")) return 0;
+	if (team != view_as<int>(TFTeam_Red) && team != view_as<int>(TFTeam_Blue)) return ThrowNativeError(SP_ERROR_PARAM, "Invalid rocket team %d", team);
+	if (rocketClass < -1 || rocketClass >= RocketClassCount) return ThrowNativeError(SP_ERROR_PARAM, "Invalid rocket class %d", rocketClass);
+	CreateRocket(spawnerEntity, spawnerClass, team, rocketClass);
 	return 0;
 }
 
 public any Native_DestroyRocket(Handle plugin, int numParams) {
-	DestroyRocket(GetNativeCell(1));
+	int index = GetNativeCell(1);
+	if (!ValidateNativeIndex(index, MAX_ROCKETS, "Rocket")) return 0;
+	DestroyRocket(index);
 	return 0;
 }
 
@@ -657,10 +713,8 @@ public any Native_DestroySpawners(Handle plugin, int numParams) {
 }
 
 public any Native_ParseConfigurations(Handle plugin, int numParams) {
-	int maxLen;
-	GetNativeStringLength(1, maxLen);
-	char[] buffer = new char[maxLen + 1];
-	GetNativeString(1, buffer, maxLen + 1);
+	char buffer[PLATFORM_MAX_PATH];
+	GetNativeString(1, buffer, sizeof(buffer));
 	ParseConfigurations(buffer);
 	return 0;
 }
@@ -671,12 +725,16 @@ public any Native_PopulateSpawnPoints(Handle plugin, int numParams) {
 }
 
 public any Native_HomingRocketThink(Handle plugin, int numParams) {
-	HomingRocketThink(GetNativeCell(1));
+	int index = GetNativeCell(1);
+	if (!ValidateNativeIndex(index, MAX_ROCKETS, "Rocket")) return 0;
+	HomingRocketThink(index);
 	return 0;
 }
 
 public any Native_RocketLegacyThink(Handle plugin, int numParams) {
-	RocketLegacyThink(GetNativeCell(1));
+	int index = GetNativeCell(1);
+	if (!ValidateNativeIndex(index, MAX_ROCKETS, "Rocket")) return 0;
+	RocketLegacyThink(index);
 	return 0;
 }
 
@@ -690,6 +748,7 @@ public any Native_GetPresetCount(Handle plugin, int numParams) {
 
 public any Native_GetPresetName(Handle plugin, int numParams) {
 	int preset = GetNativeCell(1);
+	if (!ValidateNativeIndex(preset, PresetCount, "Preset")) return 0;
 	int maxLen = GetNativeCell(3);
 	SetNativeString(2, PresetName[preset], maxLen);
 	return 0;
@@ -737,4 +796,9 @@ public any Native_ApplyPreset(Handle plugin, int numParams) {
 	}
 
 	return true;
+}
+
+public any Native_GetVersion(Handle plugin, int numParams)
+{
+	return TFDB_API_VERSION;
 }

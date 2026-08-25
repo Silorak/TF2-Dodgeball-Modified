@@ -3,6 +3,10 @@
 #endif
 #define _tfdb_included
 
+/** API version — bumped when the native surface changes. Subplugins can call
+ *  TFDB_GetVersion() at AskPluginLoad2 to verify compatibility. */
+#define TFDB_API_VERSION 2
+
 // ---- General settings -----------------------------------------------------------
 //
 //   Timer rate vs OnGameFrame:
@@ -81,7 +85,7 @@ enum RocketFlags
 	RocketFlag_OnNoTargetCmd    = 1 << 21,  /**< Execute commands when no target */
 	RocketFlag_CanBeStolen      = 1 << 22,  /**< Rocket can be stolen by other players */
 	RocketFlag_StealTeamCheck   = 1 << 23,  /**< Only teammates can steal */
-	RocketFlag_OnSpawnKillCmd   = 1 << 24   /**< Execute commands on spawn kill (deflections == 0) */
+	RocketFlag_OnSpawnKillCmd   = 1 << 24,  /**< Execute commands on spawn kill (deflections == 0) */
 };
 
 /**
@@ -266,6 +270,19 @@ native int TFDB_FindRocketByEntity(int iEntity);
 native bool TFDB_IsDodgeballEnabled();
 
 /**
+ * Forces an authoritative recount of the cached per-team alive counters
+ * (g_AliveCount) that BothTeamsPlaying()/SelectTarget()/rocket-spawn gating
+ * read. Subplugins that move a client between teams via raw m_lifeState
+ * manipulation + ChangeClientTeam() (rather than a real death/TF2_RespawnPlayer
+ * cycle) can leave the cached counters stale, since the player_team event
+ * that triggers the core's incremental recount fires while lifeState is still
+ * spoofed as dead. Call this once the client's true alive state is restored.
+ *
+ * @noreturn
+ */
+native void TFDB_RecountAlive();
+
+/**
  * Gets the entity index of a rocket.
  *
  * @param iIndex    The rocket's internal index.
@@ -309,7 +326,7 @@ native int TFDB_GetRocketOwner(int iIndex);
  * Sets the target of a rocket.
  *
  * @param iIndex    The rocket's internal index.
- * @param iTarget   The new target client index (as entity reference).
+ * @param iTarget   The new live target client index. The core stores its entref internally.
  */
 native void TFDB_SetRocketTarget(int iIndex, int iTarget);
 
@@ -604,6 +621,7 @@ native void TFDB_SetRocketSpeed(int iIndex, float fSpeed);
 
 /** Gets the current speed of a rocket in MPH. */
 native float TFDB_GetRocketMphSpeed(int iIndex);
+native float TFDB_GetRocketRawMphSpeed(int iIndex);  // Uncapped MPH (before sv_maxvelocity limit)
 
 /** Sets the current speed of a rocket in MPH. */
 native void TFDB_SetRocketMphSpeed(int iIndex, float fSpeed);
@@ -682,10 +700,10 @@ native void TFDB_GetRocketClassAlertSound(int iClass, char[] strBuffer, int iMax
 /** Sets the alert sound path. */
 native void TFDB_SetRocketClassAlertSound(int iClass, const char[] strPath);
 
-/** Gets the critical hit chance (0.0 to 1.0). */
+/** Gets the critical hit chance as a percentage (0.0 to 100.0). */
 native float TFDB_GetRocketClassCritChance(int iClass);
 
-/** Sets the critical hit chance (0.0 to 1.0). */
+/** Sets the critical hit chance as a percentage (0.0 to 100.0). */
 native void TFDB_SetRocketClassCritChance(int iClass, float fChance);
 
 /** Gets the target weight for target selection. */
@@ -750,30 +768,14 @@ native DataPack TFDB_GetRocketClassCmdsOnNoTarget(int iClass);
 /** Sets the commands to execute when rocket has no target. */
 native void TFDB_SetRocketClassCmdsOnNoTarget(int iClass, DataPack hCmds);
 
-/** Gets the orbit coefficient used when orbit scaling mode is enabled. */
-native float TFDB_GetRocketClassOrbitTightness(int iClass);
-
-/** Sets the orbit coefficient used when orbit scaling mode is enabled. */
-native void TFDB_SetRocketClassOrbitTightness(int iClass, float fTightness);
-
-/** Gets class max speed used by target speed scaling mode. */
-native float TFDB_GetRocketClassMaxSpeed(int iClass);
-
-/** Sets class max speed used by target speed scaling mode. */
-native void TFDB_SetRocketClassMaxSpeed(int iClass, float fMaxSpeed);
-
-/** Gets class max deflections used by target speed scaling mode. */
-native int TFDB_GetRocketClassMaxDeflections(int iClass);
-
-/** Sets class max deflections used by target speed scaling mode. */
-native void TFDB_SetRocketClassMaxDeflections(int iClass, int iMaxDeflections);
-
-/** Gets the per-class bounce arc height ceiling in HU. 0 = no clamp. */
+/** Gets the deprecated per-class upward-velocity reshaper. 0 = canonical.
+ *  @note The native name is retained for API compatibility. TF rockets have
+ *  zero gravity, so the value is not a physical arc height. */
 native float TFDB_GetRocketClassBounceCeiling(int iClass);
 
-/** Sets the per-class bounce arc height ceiling in HU. 0 = no clamp.
- *  When >0, upward bounces are clamped so the peak height never exceeds this
- *  value. Horizontal components are boosted to preserve total speed. */
+/** Sets the deprecated upward-velocity reshaper. 0 = canonical/authentic.
+ *  Nonzero values flatten upward reflections and redirect magnitude into XY;
+ *  they do not impose a physical height ceiling. */
 native void TFDB_SetRocketClassBounceCeiling(int iClass, float fCeiling);
 
 /** Gets the per-class crit glow stack count (1..MAX_CRIT_STACK). Default 1. */
@@ -813,18 +815,6 @@ native void TFDB_GetRocketClassCritGlowParticle(int iClass, int iTeam, char[] st
  */
 native void TFDB_SetRocketClassCritGlowParticle(int iClass, int iTeam, const char[] strBuffer);
 
-/** Gets per-class steering control in REAL server ticks (already scaled for this server's tickrate). */
-native int TFDB_GetRocketClassSteeringControl(int iClass);
-
-/** Sets per-class steering control in REAL server ticks (not baseline-66 cfg ticks). */
-native void TFDB_SetRocketClassSteeringControl(int iClass, int iTicks);
-
-/** Gets per-class bounce control in REAL server ticks (already scaled for this server's tickrate). */
-native int TFDB_GetRocketClassBounceControl(int iClass);
-
-/** Sets per-class bounce control in REAL server ticks (not baseline-66 cfg ticks). */
-native void TFDB_SetRocketClassBounceControl(int iClass, int iTicks);
-
 /** Gets per-class homing think interval in seconds. 0 = per-tick (default). 0.05 = 20 Hz Damizean-authentic cadence. */
 native float TFDB_GetRocketClassThinkInterval(int iClass);
 
@@ -836,10 +826,11 @@ native void TFDB_SetRocketClassThinkInterval(int iClass, float fSeconds);
 /**
  * Creates and spawns a new rocket.
  *
- * @param iSpawnerEntity    The spawner entity to spawn from.
- * @param iSpawnerClass     The spawner class index.
- * @param iTeam             The team the rocket belongs to.
- * @param iClass            Optional rocket class (-1 for random from spawner chances).
+ * @param iSpawnerEntity    Valid non-client entity to spawn from.
+ * @param iSpawnerClass     Configured spawner class index.
+ * @param iTeam             TFTeam_Red or TFTeam_Blue.
+ * @param iClass            Configured rocket class, or -1 for weighted random selection.
+ * @error                   Invalid entity, spawner, team, or rocket class.
  */
 native void TFDB_CreateRocket(int iSpawnerEntity, int iSpawnerClass, int iTeam, int iClass = -1);
 
@@ -921,6 +912,11 @@ native void TFDB_GetPresetName(int iPreset, char[] buffer, int maxlen);
  * @return          True if applied successfully, false if invalid preset or class not found.
  */
 native bool TFDB_ApplyPreset(int iPreset);
+
+/** Returns the API version of the loaded TFDB core. Subplugins can call this
+ *  in AskPluginLoad2 to verify they were compiled against a compatible API.
+ *  @return         API version (see TFDB_API_VERSION in tfdb.inc). */
+native int TFDB_GetVersion();
 
 public SharedPlugin __pl_TFDB =
 {
@@ -1024,6 +1020,7 @@ public void __pl_TFDB_SetNTVOptional()
 	MarkNativeAsOptional("TFDB_GetRocketSpeed");
 	MarkNativeAsOptional("TFDB_SetRocketSpeed");
 	MarkNativeAsOptional("TFDB_GetRocketMphSpeed");
+	MarkNativeAsOptional("TFDB_GetRocketRawMphSpeed");
 	MarkNativeAsOptional("TFDB_SetRocketMphSpeed");
 	MarkNativeAsOptional("TFDB_GetRocketDirection");
 	MarkNativeAsOptional("TFDB_SetRocketDirection");
@@ -1063,24 +1060,14 @@ public void __pl_TFDB_SetNTVOptional()
 	MarkNativeAsOptional("TFDB_SetRocketClassCmdsOnSpawnKill");
 	MarkNativeAsOptional("TFDB_GetRocketClassCmdsOnExplode");
 	MarkNativeAsOptional("TFDB_SetRocketClassCmdsOnExplode");
-	MarkNativeAsOptional("TFDB_GetRocketClassCmdsOnNoTarget");
+				MarkNativeAsOptional("TFDB_GetRocketClassCmdsOnNoTarget");
 	MarkNativeAsOptional("TFDB_SetRocketClassCmdsOnNoTarget");
-	MarkNativeAsOptional("TFDB_GetRocketClassOrbitTightness");
-	MarkNativeAsOptional("TFDB_SetRocketClassOrbitTightness");
-	MarkNativeAsOptional("TFDB_GetRocketClassMaxSpeed");
-	MarkNativeAsOptional("TFDB_SetRocketClassMaxSpeed");
-	MarkNativeAsOptional("TFDB_GetRocketClassMaxDeflections");
-	MarkNativeAsOptional("TFDB_SetRocketClassMaxDeflections");
 	MarkNativeAsOptional("TFDB_GetRocketClassBounceCeiling");
 	MarkNativeAsOptional("TFDB_SetRocketClassBounceCeiling");
 	MarkNativeAsOptional("TFDB_GetRocketClassCritGlowStack");
 	MarkNativeAsOptional("TFDB_SetRocketClassCritGlowStack");
 	MarkNativeAsOptional("TFDB_GetRocketClassCritGlowParticle");
 	MarkNativeAsOptional("TFDB_SetRocketClassCritGlowParticle");
-	MarkNativeAsOptional("TFDB_GetRocketClassSteeringControl");
-	MarkNativeAsOptional("TFDB_SetRocketClassSteeringControl");
-	MarkNativeAsOptional("TFDB_GetRocketClassBounceControl");
-	MarkNativeAsOptional("TFDB_SetRocketClassBounceControl");
 	MarkNativeAsOptional("TFDB_GetRocketClassThinkInterval");
 	MarkNativeAsOptional("TFDB_SetRocketClassThinkInterval");
 	MarkNativeAsOptional("TFDB_CreateRocket");
@@ -1099,5 +1086,6 @@ public void __pl_TFDB_SetNTVOptional()
 	MarkNativeAsOptional("TFDB_GetPresetCount");
 	MarkNativeAsOptional("TFDB_GetPresetName");
 	MarkNativeAsOptional("TFDB_ApplyPreset");
+	MarkNativeAsOptional("TFDB_GetVersion");
 }
 #endif

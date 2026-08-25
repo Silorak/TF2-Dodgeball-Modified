@@ -1,12 +1,9 @@
-// === UNIVERSAL KILL LINES ===
-// configs/dodgeball/speech_universal_kill.txt
-Get deflected, #playername.
-#deflects deflects and counting. You're next.
+// Universal — confident, adaptable, friendly but skilled.
+Get deflected, #playername. Clean rally.
 That rocket had your name on it, #playername.
-Better luck next time, #playername.
-#playername, you should have moved.
-Another one bites the dust.
-That's #deflects deflects this round, #playername. Keep up.
+#deflects deflects this round. Keeping up?
 Not bad for a bot, right #playername?
-Calculated.
-#playername got caught sleeping.
+Calculated. #deflects and done.
+Better luck next round, #playername.
+That's #deflects deflects. You're getting closer though.
+Nice try, #playername. Next one might be different.

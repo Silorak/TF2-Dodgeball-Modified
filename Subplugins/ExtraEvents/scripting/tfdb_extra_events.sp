@@ -10,7 +10,7 @@
 #define PLUGIN_NAME        "[TFDB] Extra events"
 #define PLUGIN_AUTHOR      "x07x08, Silorak"
 #define PLUGIN_DESCRIPTION "Adds more events for use with external commands."
-#define PLUGIN_VERSION     "2.2.0"
+#define PLUGIN_VERSION "2.3.0"
 #define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball"
 
 int RocketClassCount;
@@ -97,9 +97,18 @@ void ParseConfigurations(const char[] configFile)
 	
 	KeyValues kvConfig = new KeyValues("TF2_Dodgeball");
 	
-	if (kvConfig.ImportFromFile(path) == false) SetFailState("[TFDB ExtraEvents] Error while parsing configuration file: %s", path);
-	
-	kvConfig.GotoFirstSubKey();
+	if (!kvConfig.ImportFromFile(path))
+	{
+		LogError("[TFDB ExtraEvents] Error while parsing configuration file: %s (continuing without extra events)", path);
+		delete kvConfig;
+		return;
+	}
+
+	if (!kvConfig.GotoFirstSubKey())
+	{
+		delete kvConfig;
+		return;
+	}
 	
 	do
 	{
@@ -116,7 +125,7 @@ void ParseClasses(KeyValues kvConfig)
 {
 	char buffer[256];
 	
-	kvConfig.GotoFirstSubKey();
+	if (!kvConfig.GotoFirstSubKey()) return;
 	do
 	{
 		if (RocketClassCount >= MAX_ROCKET_CLASSES)
@@ -197,7 +206,10 @@ void ExecuteCommands(DataPack dataPack,
 
 public void TFDB_OnRocketCreated(int index, int entity)
 {
-	SDKHook(entity, SDKHook_Touch, OnTouch);
+	if (IsValidEntity(entity))
+	{
+		SDKHook(entity, SDKHook_Touch, OnTouch);
+	}
 }
 
 public Action OnTouch(int entity, int other)

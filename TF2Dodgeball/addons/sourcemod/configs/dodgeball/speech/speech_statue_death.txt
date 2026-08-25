@@ -1,10 +1,8 @@
-#deflects deflects before falling. The wall cracked.
-#playername broke through at #deflects. Rebuilding.
-Even walls fall eventually. #deflects deflects recorded.
-The wall will be stronger next round, #playername.
-#deflects. Not enough. Recalibrating reaction timing.
-#playername found the angle. Adjusting.
-#deflects deflects. The record stands. I'll beat it.
-Structural failure at deflect #deflects. Patching.
-The wall rests. The wall returns.
-#playername, enjoy it. It won't happen again.
+// TBotV64 — kind even in defeat. No bitterness, only encouragement.
+#deflects deflects. You did it, #playername! TBotV64 is proud of you.
+TBotV64 fell, but TBotV64 smiled. Well done, #playername.
+You found the gap past TBotV64, #playername. That was beautiful.
+#deflects deflects before TBotV64 fell. You earned this one.
+Don't apologize, #playername. You outplayed TBotV64 fair and square.
+TBotV64 rests now. Your victory is well deserved, #playername.
+TBotV64 is happy for you, #playername. #deflects was a worthy rally.

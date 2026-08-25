@@ -9,7 +9,7 @@
 #include <multicolors> // Include for colored chat and translations
 #include <tfdb_clientcheck>
 
-#define PLUGIN_VERSION "2.2.0"
+#define PLUGIN_VERSION "2.3.0"
 
 public Plugin myinfo =
 {
@@ -75,6 +75,12 @@ public void OnPluginEnd()
 {
 	// Clean up the timer when the plugin unloads.
 	StopDisplayTimer();
+}
+
+public void OnClientDisconnect(int client)
+{
+	IsHudVisible[client] = false;
+	HudEnabledForClient[client] = false;
 }
 
 public void OnMapStart()
@@ -202,61 +208,82 @@ void StopDisplayTimer()
 /**
  * Timer callback that runs continuously to update the HUD for all players.
  */
+void ClearHudForClient(int client)
+{
+	if (!IsClientInGame(client) || !IsHudVisible[client]) return;
+	SetHudTextParams(0.0, 0.0, 0.1, 255, 255, 255, 0, 0, 0.0, 0.0, 0.0);
+	ShowHudText(client, 4, " ");
+	IsHudVisible[client] = false;
+}
+
+void ClearAllHud()
+{
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		ClearHudForClient(client);
+	}
+}
+
 public Action DisplayHud(Handle timer)
 {
-	// Only run if the main Dodgeball plugin is enabled and the cvar is on.
 	if (!CvarHudEnabled.BoolValue || !TFDB_IsDodgeballEnabled())
 	{
-		// Self-terminate: set handle to null and return Plugin_Stop.
-		// Do NOT call KillTimer/StopDisplayTimer from inside the callback.
 		DisplayTimer = null;
-
-		// Clear the HUD for any player who might still have it open.
-		for (int i = 1; i <= MaxClients; i++)
-		{
-			if (IsClientInGame(i) && IsHudVisible[i])
-			{
-				SetHudTextParams(0.0, 0.0, 0.1, 255, 255, 255, 0, 0, 0.0, 0.0, 0.0);
-				ShowHudText(i, 4, " ");
-				IsHudVisible[i] = false;
-			}
-		}
-
+		ClearAllHud();
 		return Plugin_Stop;
 	}
 
-	// --- Collect and sort active rockets ---
-	int rocketIndices[MAX_ROCKETS];
-	float rocketSpeeds[MAX_ROCKETS];
-	int rocketCount = 0;
-
-	for (int i = 0; i < MAX_ROCKETS; i++)
+	if (TFDB_GetRocketCount() <= 0)
 	{
-		if (TFDB_IsValidRocket(i))
-		{
-			rocketIndices[rocketCount] = i;
-			rocketSpeeds[rocketCount] = TFDB_GetRocketMphSpeed(i);
-			rocketCount++;
-		}
+		ClearAllHud();
+		return Plugin_Continue;
 	}
 
-	// --- Display logic based on rocket count ---
-	if (rocketCount == 0)
+	// Keep only the five fastest rockets; a full sort is unnecessary.
+	int rocketIndices[5];
+	float rocketSpeeds[5];
+	int rocketCount = 0;
+	int topCount = 0;
+
+	for (int index = 0; index < MAX_ROCKETS; index++)
 	{
-		// No rockets are active, clear the HUD for anyone who has it visible.
-		for (int i = 1; i <= MaxClients; i++)
+		if (!TFDB_IsValidRocket(index)) continue;
+		rocketCount++;
+
+		float speed = TFDB_GetRocketMphSpeed(index);
+		// Show uncapped MPH if available (keeps stacking past sv_maxvelocity)
+		if (GetFeatureStatus(FeatureType_Native, "TFDB_GetRocketRawMphSpeed") == FeatureStatus_Available)
+			speed = TFDB_GetRocketRawMphSpeed(index);
+		int insertAt = topCount;
+		for (int rank = 0; rank < topCount; rank++)
 		{
-			if (IsHudVisible[i] && IsClientInGame(i))
+			if (speed > rocketSpeeds[rank])
 			{
-				SetHudTextParams(0.0, 0.0, 0.1, 255, 255, 255, 0, 0, 0.0, 0.0, 0.0);
-				ShowHudText(i, 4, " ");
-				IsHudVisible[i] = false;
+				insertAt = rank;
+				break;
 			}
 		}
+		if (insertAt >= 5) continue;
+
+		int last = topCount < 5 ? topCount : 4;
+		for (int rank = last; rank > insertAt; rank--)
+		{
+			rocketSpeeds[rank] = rocketSpeeds[rank - 1];
+			rocketIndices[rank] = rocketIndices[rank - 1];
+		}
+		rocketSpeeds[insertAt] = speed;
+		rocketIndices[insertAt] = index;
+		if (topCount < 5) topCount++;
 	}
-	else if (rocketCount == 1)
+
+	if (rocketCount == 0)
 	{
-		// Single rocket: Display in the center.
+		ClearAllHud();
+		return Plugin_Continue;
+	}
+
+	if (rocketCount == 1)
+	{
 		int rocketIndex = rocketIndices[0];
 		float mphSpeed = rocketSpeeds[0];
 		float huSpeed = TFDB_GetRocketSpeed(rocketIndex);
@@ -264,95 +291,53 @@ public Action DisplayHud(Handle timer)
 		int rocketClass = TFDB_GetRocketClass(rocketIndex);
 		char className[64];
 		TFDB_GetRocketClassLongName(rocketClass, className, sizeof(className));
-		
+
 		char hudMessage[256];
-		// Format the string first to avoid issues with ShowHudText.
 		FormatEx(hudMessage, sizeof(hudMessage), "%t", "Hud_Speedometer", mphSpeed, huSpeed, deflections, rocketIndex + 1, className);
 
-		for (int i = 1; i <= MaxClients; i++)
+		for (int client = 1; client <= MaxClients; client++)
 		{
-			if (IsClientInGame(i) && !IsFakeClient(i))
+			if (!IsClientInGame(client) || IsFakeClient(client)) continue;
+			if (!HudEnabledForClient[client])
 			{
-				if (HudEnabledForClient[i])
-				{
-					SetHudTextParams(-1.0, 0.85, 0.15, 100, 255, 100, 255, 0, 0.0, 0.0, 0.15);
-					ShowHudText(i, 4, hudMessage);
-					IsHudVisible[i] = true;
-				}
-				else if (IsHudVisible[i])
-				{
-					SetHudTextParams(0.0, 0.0, 0.1, 255, 255, 255, 0, 0, 0.0, 0.0, 0.0);
-					ShowHudText(i, 4, " ");
-					IsHudVisible[i] = false;
-				}
+				ClearHudForClient(client);
+				continue;
 			}
+			SetHudTextParams(-1.0, 0.85, 0.15, 100, 255, 100, 255, 0, 0.0, 0.0, 0.15);
+			ShowHudText(client, 4, hudMessage);
+			IsHudVisible[client] = true;
 		}
+		return Plugin_Continue;
 	}
-	else // Multiple rockets
+
+	char hudMessage[1024];
+	for (int rank = 0; rank < topCount; rank++)
 	{
-		// Sort rockets by speed (descending) using a simple bubble sort.
-		for (int i = 0; i < rocketCount - 1; i++)
+		int rocketIndex = rocketIndices[rank];
+		float mphSpeed = rocketSpeeds[rank];
+		float huSpeed = TFDB_GetRocketSpeed(rocketIndex);
+		int deflections = TFDB_GetRocketDeflections(rocketIndex);
+		int rocketClass = TFDB_GetRocketClass(rocketIndex);
+		char className[64];
+		TFDB_GetRocketClassLongName(rocketClass, className, sizeof(className));
+
+		char line[256];
+		Format(line, sizeof(line), "%t\n", "Hud_SpeedometerEx", mphSpeed, huSpeed, deflections, rank + 1, className);
+		if (rank == 0) strcopy(hudMessage, sizeof(hudMessage), line);
+		else StrCat(hudMessage, sizeof(hudMessage), line);
+	}
+
+	for (int client = 1; client <= MaxClients; client++)
+	{
+		if (!IsClientInGame(client) || IsFakeClient(client)) continue;
+		if (!HudEnabledForClient[client])
 		{
-			for (int j = 0; j < rocketCount - i - 1; j++)
-			{
-				if (rocketSpeeds[j] < rocketSpeeds[j + 1])
-				{
-					// Swap speeds
-					float tempSpeed = rocketSpeeds[j];
-					rocketSpeeds[j] = rocketSpeeds[j + 1];
-					rocketSpeeds[j + 1] = tempSpeed;
-					// Swap indices
-					int tempIndex = rocketIndices[j];
-					rocketIndices[j] = rocketIndices[j + 1];
-					rocketIndices[j + 1] = tempIndex;
-				}
-			}
+			ClearHudForClient(client);
+			continue;
 		}
-
-		// Build the multi-line HUD message.
-		char hudMessage[1024];
-		int maxRocketsToShow = 5; // Limit to prevent screen clutter.
-		int numToShow = rocketCount < maxRocketsToShow ? rocketCount : maxRocketsToShow;
-
-		for (int i = 0; i < numToShow; i++)
-		{
-			int rocketIndex = rocketIndices[i];
-			float mphSpeed = rocketSpeeds[i];
-			float huSpeed = TFDB_GetRocketSpeed(rocketIndex);
-			int deflections = TFDB_GetRocketDeflections(rocketIndex);
-			int rocketClass = TFDB_GetRocketClass(rocketIndex);
-			char className[64];
-			TFDB_GetRocketClassLongName(rocketClass, className, sizeof(className));
-
-			char line[256];
-			// Pass the floats directly, the translation file will format them.
-			Format(line, sizeof(line), "%t\n", "Hud_SpeedometerEx", mphSpeed, huSpeed, deflections, i + 1, className);
-			
-			if (i == 0)
-				strcopy(hudMessage, sizeof(hudMessage), line);
-			else
-				StrCat(hudMessage, sizeof(hudMessage), line);
-		}
-
-		// Display the list on the left side for all players.
-		for (int i = 1; i <= MaxClients; i++)
-		{
-			if (IsClientInGame(i) && !IsFakeClient(i))
-			{
-				if (HudEnabledForClient[i])
-				{
-					SetHudTextParams(0.05, 0.4, 0.15, 100, 255, 100, 255, 0, 0.0, 0.0, 0.15);
-					ShowHudText(i, 4, hudMessage);
-					IsHudVisible[i] = true;
-				}
-				else if (IsHudVisible[i])
-				{
-					SetHudTextParams(0.0, 0.0, 0.1, 255, 255, 255, 0, 0, 0.0, 0.0, 0.0);
-					ShowHudText(i, 4, " ");
-					IsHudVisible[i] = false;
-				}
-			}
-		}
+		SetHudTextParams(0.05, 0.4, 0.15, 100, 255, 100, 255, 0, 0.0, 0.0, 0.15);
+		ShowHudText(client, 4, hudMessage);
+		IsHudVisible[client] = true;
 	}
 	return Plugin_Continue;
 }

@@ -1,15 +1,10 @@
-#deflects. That is all.
-I didn't even move, #playername.
-Standing still. Still won. #deflects deflects.
-#playername ran into my wall.
-The wall does not move. The wall does not miss.
-#deflects deflects this round. Come try again.
-You cannot break what does not move, #playername.
-Immovable. #deflects and rising.
-#playername, I reflected that without a single step.
-Rally count: #rounddeflects. Your count: 0.
-Stand still. Reflect. Repeat. Goodbye #playername.
-#deflects. A new personal best? We'll see.
-I am the wall, #playername. The wall always wins.
-No movement required. #deflects deflects.
-Another round, another record attempt. #deflects so far.
+// TBotV64 — kind, immobile, gentle. Wins with grace. Refers to himself as TBotV64.
+Nice try, #playername. TBotV64 remembers your effort.
+#deflects deflects. You're getting better at this, TBotV64 can tell.
+Don't be discouraged, #playername. You'll find a way past TBotV64.
+TBotV64 admires your persistence, #playername. #deflects and still you try.
+TBotV64 stands so you can grow stronger, #playername.
+#deflects deflects. TBotV64 hopes you're learning from our rallies.
+You're improving, #playername. TBotV64 sees it in your angles.
+Good rally, #playername. TBotV64 appreciates good company.
+#deflects deflects. TBotV64 believes in you — try again.

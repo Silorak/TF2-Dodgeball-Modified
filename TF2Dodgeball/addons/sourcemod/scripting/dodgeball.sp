@@ -14,13 +14,14 @@
 
 #include <tfdb>
 #include <tfdb_clientcheck>
+#include <tfdb_profiling>
 
 // *********************************************************************************
 // CONSTANTS
 // *********************************************************************************
 #define PLUGIN_NAME             "[TF2] Dodgeball"
 #define PLUGIN_AUTHOR           "Damizean, x07x08 continued by Silorak"
-#define PLUGIN_VERSION          "2.2.0"
+#define PLUGIN_VERSION "2.3.0"
 #define PLUGIN_CONTACT          "https://github.com/Silorak/TF2-Dodgeball"
 
 enum Musics
@@ -70,6 +71,10 @@ bool UsePushPreventionToggle;
 bool UseNoBlock;
 bool UseTargetLock;
 bool UseTargetLockBotOnly;
+// Arena's pre-round freeze locks players in place until the round goes live.
+// Optional here because removing it changes how every round opens, and a
+// server that likes the countdown shouldn't have that taken away silently.
+bool UnfreezeDuringSetup;
 
 
 
@@ -79,11 +84,17 @@ bool   RoundStarted;
 int    RoundCount;
 int    RocketsFired;
 Handle LogicTimer;
+Handle UnfreezeTimer;
 float  NextSpawnTime;
 int    LastDeadTeam;
 int    LastDeadClient;
 int    PlayerCount;
 int    LastStealer;
+
+// -----<<< Bounded profiling >>>-----
+TFDBProfileWindow g_CoreProfileWindow;
+int g_CoreProfileFrames;
+int g_CoreProfileRockets;
 
 // Cached SendProp offset for rocket damage (m_iDeflected + 4).
 // Looked up once at plugin start instead of calling FindSendPropInfo every frame.
@@ -103,9 +114,29 @@ int LockedTarget[MAXPLAYERS + 1];
 
 // -----<<< Configuration >>>-----
 bool MusicEnabled;
-bool UseOrbitCoefficient;
-bool UseTargetSpeedScaling;
 bool UseSmoothElevation;
+
+// Fixed seconds between object_deflected and the modern homing path's one-shot eye-angle read.
+// This is the player's drag window: the rocket commits to wherever the
+// deflector is looking when this deadline expires. A fixed default makes the
+// same flick reproducible instead of giving it an arbitrary 0-100ms window.
+// Set to 0.0 to opt back into the shared legacy grid for drag processing.
+float DragDelay = 0.045;
+
+// Interval of the shared legacy grid used by every bounce, and by deflections
+// only when DragDelay is 0.0. Authored in general.cfg as milliseconds. This is
+// deliberately separate from FPS_LOGIC_INTERVAL, which still drives spawner
+// and shared secondary logic. At 0.1s, bounces fly blind for roughly 0-100ms
+// before homing resumes, preserving the original timer-driven randomness.
+float DragGridInterval = 0.1;
+float TickScaleConst = 1.0;
+
+// Cached effective sv_maxvelocity. Every internally calculated rocket speed is
+// capped before it is written to m_vecAbsVelocity; relying on the engine to
+// clamp an oversized parent also produces SetLocalVelocity warnings on its
+// attached info_particle_system children.
+float EngineMaxVelocity = 3500.0;
+
 bool Music[view_as<int>(SizeOfMusicsArray)];
 char MusicPath[view_as<int>(SizeOfMusicsArray)][PLATFORM_MAX_PATH];
 bool UseWebPlayer;
@@ -125,6 +156,7 @@ RocketFlags RocketInstanceFlags[MAX_ROCKETS];
 RocketState RocketInstanceState[MAX_ROCKETS];
 float       RocketSpeed[MAX_ROCKETS];
 float       RocketMphSpeed[MAX_ROCKETS];
+float       RocketRawMphSpeed[MAX_ROCKETS];  // Uncapped MPH — what speed WOULD be without sv_maxvelocity limit
 float       RocketDirection[MAX_ROCKETS][3];
 int         RocketDeflections[MAX_ROCKETS];
 int         RocketEventDeflections[MAX_ROCKETS];
@@ -132,9 +164,9 @@ float       RocketLastDeflectionTime[MAX_ROCKETS];
 float       RocketLastBeepTime[MAX_ROCKETS];
 float       LastSpawnTime[MAX_ROCKETS];
 int         RocketBounces[MAX_ROCKETS];
-bool        RocketHomingPaused[MAX_ROCKETS];     // true between OnTouch bounce and HomingRocketThink bounce-control unpause
-int         RocketDragEventTick[MAX_ROCKETS];     // GetGameTickCount() when object_deflected fired; read by HomingRocketThink after steering-control ticks
-int         RocketBounceEventTick[MAX_ROCKETS];   // GetGameTickCount() when OnTouch bounce happened; unpause after bounce-control ticks
+bool        RocketHomingPaused[MAX_ROCKETS];     // true between OnTouch bounce and HomingRocketThink bounce unpause
+float       RocketDragEventBoundary[MAX_ROCKETS]; // fixed drag deadline, or next legacy-grid tick when DragDelay is 0
+float       RocketBounceEventBoundary[MAX_ROCKETS]; // next shared legacy-grid tick after the bounce — see NextLegacyGridTick
 float       RocketNextHomingThink[MAX_ROCKETS];   // GetGameTime() when the homing-lerp block is next eligible. Only gated when class sets "think interval" > 0.
 float       RocketLastLogicThink[MAX_ROCKETS];    // GetGameTime() of last shared/legacy-think call (10 Hz gate inside OnRocketThink)
 int         RocketCritGlow[MAX_ROCKETS][MAX_CRIT_STACK];  // Stacked entity refs for server-managed crit glow particles (per-class "crit glow stack")
@@ -157,6 +189,7 @@ float          RocketClassDamage[MAX_ROCKET_CLASSES];
 float          RocketClassDamageIncrement[MAX_ROCKET_CLASSES];
 float          RocketClassSpeed[MAX_ROCKET_CLASSES];
 float          RocketClassSpeedIncrement[MAX_ROCKET_CLASSES];
+float          RocketClassConfiguredSpeedIncrement[MAX_ROCKET_CLASSES]; // Pre-scaling config value retained across map overlays.
 float          RocketClassSpeedLimit[MAX_ROCKET_CLASSES];
 float          RocketClassTurnRate[MAX_ROCKET_CLASSES];
 float          RocketClassTurnRateIncrement[MAX_ROCKET_CLASSES];
@@ -174,16 +207,11 @@ DataPack       RocketClassCmdsOnSpawnKill[MAX_ROCKET_CLASSES];  // Cmds fired wh
 DataPack       RocketClassCmdsOnExplode[MAX_ROCKET_CLASSES];
 DataPack       RocketClassCmdsOnNoTarget[MAX_ROCKET_CLASSES];
 int            RocketClassMaxBounces[MAX_ROCKET_CLASSES];
-float          RocketClassBounceCeiling[MAX_ROCKET_CLASSES];  // Max bounce arc height in HU. 0 = no clamp. See physics/bounce-ceiling.
+float          RocketClassBounceCeiling[MAX_ROCKET_CLASSES];  // Deprecated pseudo-height vertical reshaper. 0 = canonical/authentic.
 int            RocketClassCritGlowStack[MAX_ROCKET_CLASSES];  // How many crit glow particles stack on rocket (1-MAX_CRIT_STACK). 1 = default.
 char           RocketClassCritGlowParticleRed[MAX_ROCKET_CLASSES][32];     // Per-class crit glow particle name for RED rocket. Empty = default "critical_rocket_red".
 char           RocketClassCritGlowParticleBlue[MAX_ROCKET_CLASSES][32];    // Per-class crit glow particle name for BLU rocket. Empty = default "critical_rocket_blue".
 char           RocketClassCritGlowParticleNeutral[MAX_ROCKET_CLASSES][32]; // Per-class crit glow particle name for neutral rocket. Empty = default "eyeboss_projectile".
-float          RocketClassOrbitTightness[MAX_ROCKET_CLASSES];
-float          RocketClassMaxSpeed[MAX_ROCKET_CLASSES];
-int            RocketClassMaxDeflections[MAX_ROCKET_CLASSES];
-int            RocketClassSteeringControl[MAX_ROCKET_CLASSES]; // ticks between object_deflected and eye-angle read (the drag window)
-int            RocketClassBounceControl[MAX_ROCKET_CLASSES];   // ticks between OnTouch bounce and homing resume (the post-bounce blind window)
 float          RocketClassThinkInterval[MAX_ROCKET_CLASSES];    // seconds between homing-lerp applications. 0 = per-tick (default). 0.05 = 20 Hz (Damizean authentic).
 int            RocketClassCount;
 
@@ -233,6 +261,7 @@ GlobalForward ForwardOnRocketStateChanged;
 // *********************************************************************************
 #include "dodgeball_utilities.inc"
 #include "dodgeball_config.inc"
+#include "dodgeball_profile.inc"
 #include "dodgeball_rockets.inc"
 #include "dodgeball_events.inc"
 #include "dodgeball_core.inc"
@@ -256,6 +285,7 @@ public void OnPluginStart()
 	if (!StrEqual(modName, "tf")) SetFailState("This plugin is only for Team Fortress 2.");
 
 	LoadTranslations("tfdb.phrases.txt");
+	TickScaleConst = GetTickInterval() / TICK_BASE_INTERVAL;
 
 	CreateConVar("tf_dodgeball_version", PLUGIN_VERSION, PLUGIN_NAME, FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_SPONLY|FCVAR_DONTRECORD);
 	CvarEnabled = CreateConVar("tf_dodgeball_enabled", "1", "Enable Dodgeball on TFDB maps?", _, true, 0.0, true, 1.0);
@@ -313,9 +343,11 @@ public void OnCachedCvarChanged(ConVar cvar, const char[] oldVal, const char[] n
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 {
+	TFDB_MarkProfilerNativesOptional();
 	CreateNative("TFDB_IsValidRocket", Native_IsValidRocket);
 	CreateNative("TFDB_FindRocketByEntity", Native_FindRocketByEntity);
 	CreateNative("TFDB_IsDodgeballEnabled", Native_IsDodgeballEnabled);
+	CreateNative("TFDB_RecountAlive", Native_RecountAlive);
 	CreateNative("TFDB_GetRocketEntity", Native_GetRocketEntity);
 	CreateNative("TFDB_GetRocketFlags", Native_GetRocketFlags);
 	CreateNative("TFDB_SetRocketFlags", Native_SetRocketFlags);
@@ -401,6 +433,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 	CreateNative("TFDB_GetRocketSpeed", Native_GetRocketSpeed);
 	CreateNative("TFDB_SetRocketSpeed", Native_SetRocketSpeed);
 	CreateNative("TFDB_GetRocketMphSpeed", Native_GetRocketMphSpeed);
+	CreateNative("TFDB_GetRocketRawMphSpeed", Native_GetRocketRawMphSpeed);
 	CreateNative("TFDB_SetRocketMphSpeed", Native_SetRocketMphSpeed);
 	CreateNative("TFDB_GetRocketDirection", Native_GetRocketDirection);
 	CreateNative("TFDB_SetRocketDirection", Native_SetRocketDirection);
@@ -442,22 +475,12 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 	CreateNative("TFDB_SetRocketClassCmdsOnExplode", Native_SetRocketClassCmdsOnExplode);
 	CreateNative("TFDB_GetRocketClassCmdsOnNoTarget", Native_GetRocketClassCmdsOnNoTarget);
 	CreateNative("TFDB_SetRocketClassCmdsOnNoTarget", Native_SetRocketClassCmdsOnNoTarget);
-	CreateNative("TFDB_GetRocketClassOrbitTightness", Native_GetRocketClassOrbitTightness);
-	CreateNative("TFDB_SetRocketClassOrbitTightness", Native_SetRocketClassOrbitTightness);
-	CreateNative("TFDB_GetRocketClassMaxSpeed", Native_GetRocketClassMaxSpeed);
-	CreateNative("TFDB_SetRocketClassMaxSpeed", Native_SetRocketClassMaxSpeed);
-	CreateNative("TFDB_GetRocketClassMaxDeflections", Native_GetRocketClassMaxDeflections);
-	CreateNative("TFDB_SetRocketClassMaxDeflections", Native_SetRocketClassMaxDeflections);
 	CreateNative("TFDB_GetRocketClassBounceCeiling",  Native_GetRocketClassBounceCeiling);
 	CreateNative("TFDB_SetRocketClassBounceCeiling",  Native_SetRocketClassBounceCeiling);
 	CreateNative("TFDB_GetRocketClassCritGlowStack",     Native_GetRocketClassCritGlowStack);
 	CreateNative("TFDB_SetRocketClassCritGlowStack",     Native_SetRocketClassCritGlowStack);
 	CreateNative("TFDB_GetRocketClassCritGlowParticle",  Native_GetRocketClassCritGlowParticle);
 	CreateNative("TFDB_SetRocketClassCritGlowParticle",  Native_SetRocketClassCritGlowParticle);
-	CreateNative("TFDB_GetRocketClassSteeringControl", Native_GetRocketClassSteeringControl);
-	CreateNative("TFDB_SetRocketClassSteeringControl", Native_SetRocketClassSteeringControl);
-	CreateNative("TFDB_GetRocketClassBounceControl",   Native_GetRocketClassBounceControl);
-	CreateNative("TFDB_SetRocketClassBounceControl",   Native_SetRocketClassBounceControl);
 	CreateNative("TFDB_GetRocketClassThinkInterval",   Native_GetRocketClassThinkInterval);
 	CreateNative("TFDB_SetRocketClassThinkInterval",   Native_SetRocketClassThinkInterval);
 	CreateNative("TFDB_CreateRocket", Native_CreateRocket);
@@ -476,6 +499,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int errMax)
 	CreateNative("TFDB_GetPresetCount", Native_GetPresetCount);
 	CreateNative("TFDB_GetPresetName", Native_GetPresetName);
 	CreateNative("TFDB_ApplyPreset", Native_ApplyPreset);
+	CreateNative("TFDB_GetVersion", Native_GetVersion);
 
 	SetupForwards();
 
@@ -508,7 +532,13 @@ public void OnConfigsExecuted()
 
 public void OnMapEnd()
 {
+	if (g_CoreProfileWindow.active) StopTFDBProfile();
 	DisableDodgeBall();
+}
+
+public void OnPluginEnd()
+{
+	if (g_CoreProfileWindow.active) StopTFDBProfile();
 }
 
 void Forward_OnRocketCreated(int index, int entity)

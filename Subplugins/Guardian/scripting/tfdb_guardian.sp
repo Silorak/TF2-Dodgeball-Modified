@@ -21,7 +21,7 @@
 #define PLUGIN_NAME        "[TFDB] Guardian"
 #define PLUGIN_AUTHOR      "Silorak"
 #define PLUGIN_DESCRIPTION "Guardian mode for dodgeball - one powered player vs all"
-#define PLUGIN_VERSION     "2.2.0"
+#define PLUGIN_VERSION "2.3.0"
 #define PLUGIN_URL         "https://github.com/Silorak/TF2-Dodgeball"
 
 #define MAX_GUARDIAN_CLASSES   16
@@ -252,8 +252,8 @@ public void OnPluginStart()
 	debugBossState = -1;
 
 	RegAdminCmd("sm_forceguardian",  Command_ForceGuardian,  ADMFLAG_CONFIG, "Force a player as Guardian next round. Usage: sm_forceguardian <player> [class]");
-	RegAdminCmd("sm_guardianclass",  Command_GuardianClass,  ADMFLAG_CONFIG, "Set guardian class for next round. Usage: sm_guardianclass <class>");
-	RegAdminCmd("sm_removeguardian", Command_RemoveGuardian, ADMFLAG_CONFIG, "Remove the current Guardian mid-round.");
+	RegAdminCmd("sm_gclass",  Command_GuardianClass,  ADMFLAG_CONFIG, "Set guardian class for next round. Usage: sm_guardianclass <class>");
+	RegAdminCmd("sm_rguard", Command_RemoveGuardian, ADMFLAG_CONFIG, "Remove the current Guardian mid-round.");
 
 	hudSync = CreateHudSynchronizer();
 
@@ -264,8 +264,8 @@ public void OnPluginStart()
 	HookEventEx("player_spawn",         OnPlayerSpawn);
 	HookEventEx("player_team",          OnPlayerTeamChange, EventHookMode_Pre);
 
-	RegAdminCmd("sm_tfdb_bossstate", Command_BossState, ADMFLAG_ROOT); // Hidden debug
-	RegAdminCmd("sm_dguardian", Command_DebugGuardian, ADMFLAG_ROOT, "Toggle guardian debug output.");
+	RegAdminCmd("sm_gboss", Command_BossState, ADMFLAG_ROOT); // Hidden debug
+	RegAdminCmd("sm_gdebug", Command_DebugGuardian, ADMFLAG_ROOT, "Toggle guardian debug output.");
 	RegConsoleCmd("sm_guardian",  Command_GuardianOptOut, "Toggle opt-out from being selected as Guardian.");
 	
 
@@ -531,6 +531,16 @@ public Action OnPlayerTakeDamage(int victim, int &attacker, int &inflictor,
 	int target = TFDB_GetRocketTarget(rocketIdx);
 	if (target == victim) return Plugin_Continue;
 
+	// Only block splash to players on the SAME team as the rocket.
+	// Spawn rockets are team-coloured: a RED rocket targets BLU, and its
+	// splash should never damage RED teammates anyway. Blocking all
+	// non-target damage regardless of team could accidentally protect the
+	// Guardian from an enemy spawn rocket whose target hasn't been set yet
+	// (race condition between TFDB target assignment and the damage event).
+	int rocketTeam = GetEntProp(inflictor, Prop_Send, "m_iTeamNum", 1);
+	int victimTeam = GetClientTeam(victim);
+	if (rocketTeam == victimTeam) return Plugin_Handled;
+
 	// Block AOE splash damage to non-target players from spawn rockets
 	if (debugMode)
 	{
@@ -617,118 +627,7 @@ void GetButtonLabel(int buttonBit, char[] buffer, int maxLen)
 	else                              strcopy(buffer, maxLen, "(none)");
 }
 
-void ParseAbilityConfig(KeyValues kv, GuardianAbility ability)
-{
-	kv.GetString("type", ability.Type, sizeof(ability.Type), "none");
 
-	char buttonStr[32];
-	kv.GetString("button", buttonStr, sizeof(buttonStr), "");
-
-	if (StrEqual(buttonStr, "RELOAD", false)) ability.Button = IN_RELOAD;
-	else if (StrEqual(buttonStr, "ATTACK3", false)) ability.Button = IN_ATTACK3;
-	else if (StrEqual(buttonStr, "USE", false)) ability.Button = IN_USE;
-	else if (StrEqual(buttonStr, "TAUNT", false)) ability.Button = 1000000;
-	else ability.Button = 0;
-
-	ability.Cooldown = kv.GetFloat("cooldown", 0.0);
-	ability.Duration = kv.GetFloat("duration", 0.0);
-	ability.Arg1 = kv.GetFloat("arg1", 0.0);
-	ability.Arg2 = kv.GetFloat("arg2", 0.0);
-	kv.GetString("particle", ability.Particle, sizeof(ability.Particle), "");
-}
-
-void ParseGuardianConfig()
-{
-	char path[PLATFORM_MAX_PATH];
-	BuildPath(Path_SM, path, sizeof(path), "configs/dodgeball/guardian.cfg");
-
-	if (!FileExists(path, true))
-	{
-		LogError("[Guardian] Config not found: %s", path);
-		return;
-	}
-
-	KeyValues kv = new KeyValues("TF2_Dodgeball");
-
-	if (!kv.ImportFromFile(path))
-	{
-		LogError("[Guardian] Failed to parse: %s", path);
-		delete kv;
-		return;
-	}
-
-	// Shared settings
-	if (kv.JumpToKey("guardian"))
-	{
-		enabled         = kv.GetNum("enabled", 1) != 0;
-		selectionChance = kv.GetNum("selection chance", 25);
-		optOutMinPlayers = kv.GetNum("opt out min players", 0);
-		hudX            = kv.GetFloat("hud x", -1.0);
-		hudY            = kv.GetFloat("hud y", 0.92);
-
-		char colorStr[32];
-		kv.GetString("hud color", colorStr, sizeof(colorStr), "255 50 50");
-
-		char parts[3][8];
-		ExplodeString(colorStr, " ", parts, sizeof(parts), sizeof(parts[]));
-		hudColor[0] = StringToInt(parts[0]);
-		hudColor[1] = StringToInt(parts[1]);
-		hudColor[2] = StringToInt(parts[2]);
-
-		kv.GoBack();
-	}
-
-	if (selectionChance < 0) selectionChance = 0;
-	if (selectionChance > 100) selectionChance = 100;
-
-	// Guardian classes
-	if (kv.JumpToKey("guardian_classes"))
-	{
-		if (kv.GotoFirstSubKey())
-		{
-			do
-			{
-				if (guardianClassCount >= MAX_GUARDIAN_CLASSES)
-				{
-					LogError("[Guardian] Max classes reached (%d)", MAX_GUARDIAN_CLASSES);
-					break;
-				}
-
-				int idx = guardianClassCount;
-
-				kv.GetSectionName(guardianClasses[idx].Name, sizeof(guardianClasses[].Name));
-				kv.GetString("name", guardianClasses[idx].DisplayName, sizeof(guardianClasses[].DisplayName), guardianClasses[idx].Name);
-
-				guardianClasses[idx].Health = kv.GetNum("health", 5000);
-				guardianClasses[idx].Weight = kv.GetNum("weight", 100);
-
-				if (kv.JumpToKey("ability_1"))
-				{
-					ParseAbilityConfig(kv, guardianClasses[idx].PrimaryAbility);
-					kv.GoBack();
-				}
-
-				if (kv.JumpToKey("ability_2"))
-				{
-					ParseAbilityConfig(kv, guardianClasses[idx].SecondaryAbility);
-					kv.GoBack();
-				}
-
-				guardianClassCount++;
-			}
-			while (kv.GotoNextKey());
-
-			kv.GoBack();
-		}
-
-		kv.GoBack();
-	}
-
-	delete kv;
-
-	LogMessage("[Guardian] Loaded %d class(es). Enabled: %s, Chance: %d%%",
-		guardianClassCount, enabled ? "yes" : "no", selectionChance);
-}
 
 // ============================================================================
 //  Safety Checks
@@ -1323,22 +1222,6 @@ public void OnPlayerSpawn(Event event, const char[] name, bool dontBroadcast)
 	}
 }
 
-void Frame_ApplyGuardianHealth(int userId)
-{
-	int client = GetClientOfUserId(userId);
-	if (client <= 0 || !IsClientInGame(client) || !IsPlayerAlive(client)) return;
-	if (!guardianActive || client != guardianClient) return;
-
-	// Read what the engine set HP to before we override it
-	int engineHP  = GetClientHealth(client);
-	int engineMax = GetEntProp(client, Prop_Data, "m_iMaxHealth");
-	if (debugMode)
-	{
-		GuardianDebugLog("[GUARDIAN DBG] " ... "Frame_ApplyGuardianHealth - BEFORE apply: engineHP=%d engineMax=%d", engineHP, engineMax);
-	}
-
-	ApplyGuardianHealth();
-}
 
 public Action OnPlayerTeamChange(Event event, const char[] name, bool dontBroadcast)
 {
@@ -1757,58 +1640,12 @@ public Action Command_DebugGuardian(int client, int args)
 //  Health System
 // ============================================================================
 
-void ApplyGuardianHealth()
-{
-	if (!guardianActive || !IsClientInGame(guardianClient) || !IsPlayerAlive(guardianClient)) return;
-
-	int client = guardianClient;
-	int baseHP = guardianMaxHP;
-
-	if (debugMode)
-	{
-		GuardianDebugLog("[GUARDIAN DBG] " ... "ApplyGuardianHealth - client=%d maxHP=%d currentHP=%d", client, baseHP, guardianCurrentHP);
-	}
-
-	// TF2 recomputes max health from class base + attributes every frame.
-	// m_iMaxHealth via Prop_Data does not stick. The correct approach (same as VSH/FF2)
-	// is to use the "max health additive bonus" player attribute. Remove then re-add it
-	// so stale values from a previous spawn never accumulate.
-	TF2Attrib_RemoveByName(client, "max health additive bonus");
-
-	// The attribute value is additive on top of the Pyro base (175 HP).
-	// We want the final max to equal guardianMaxHP, so: bonus = guardianMaxHP - 175.
-	int bonus = baseHP - 175;
-	if (bonus > 0)
-		TF2Attrib_SetByName(client, "max health additive bonus", float(bonus));
-
-	if (debugMode)
-	{
-		GuardianDebugLog("[GUARDIAN DBG] " ... "ApplyGuardianHealth - attribute bonus set to %d (base 175 + %d = %d)", bonus, bonus, 175 + bonus);
-	}
-
-	SetEntityHealth(client, guardianCurrentHP);
-
-	// Verify what the engine actually sees after the call
-	int liveHP  = GetClientHealth(client);
-	int liveMax = GetEntProp(client, Prop_Data, "m_iMaxHealth");
-	if (debugMode)
-	{
-		GuardianDebugLog("[GUARDIAN DBG] " ... "ApplyGuardianHealth - POST: liveHP=%d liveMax(DataProp)=%d wanted=%d", liveHP, liveMax, guardianCurrentHP);
-	}
-}
 
 /**
  * SDKHook_GetMaxHealth callback - tells the engine the Guardian's true max health.
  * The attribute handles the engine's own drain logic; this hook covers any edge cases
  * where the engine queries max health before the attribute has been evaluated.
  */
-public Action OnGetGuardianMaxHealth(int client, int &maxhealth)
-{
-	if (!guardianActive || client != guardianClient) return Plugin_Continue;
-
-	maxhealth = guardianMaxHP;
-	return Plugin_Changed;
-}
 
 // ============================================================================
 //  Ability Input Detection
@@ -1870,525 +1707,29 @@ public void TF2_OnConditionAdded(int client, TFCond condition)
 //  Modular Ability Execution
 // ============================================================================
 
-void ActivateAbility(GuardianAbility ability, int slotIdx)
-{
-	if (!guardianActive || !IsClientInGame(guardianClient)) return;
 
-	float now = GetGameTime();
-	
-	if (slotIdx == 1)
-	{
-		primaryActive = true;
-		primaryExpireTime = now + ability.Duration;
-		primaryParticleRef = AttachParticle(guardianClient, ability.Particle);
-	}
-	else
-	{
-		secondaryActive = true;
-		secondaryExpireTime = now + ability.Duration;
-		secondaryParticleRef = AttachParticle(guardianClient, ability.Particle);
-	}
 
-	EmitSoundToAll(SOUND_ACTIVATE);
 
-	if (StrEqual(ability.Type, "rage", false)) CPrintToChatAll("%t", "Guardian_RageActivated", guardianClient);
-	else if (StrEqual(ability.Type, "sprint", false)) CPrintToChatAll("%t", "Guardian_SprintActivated", guardianClient);
-	else if (StrEqual(ability.Type, "pounce", false)) CPrintToChatAll("%t", "Guardian_PounceActivated", guardianClient);
-	else if (StrEqual(ability.Type, "charge", false)) CPrintToChatAll("%t", "Guardian_ChargeActivated", guardianClient);
-	else if (StrEqual(ability.Type, "scare", false) || StrEqual(ability.Type, "slow", false)) CPrintToChatAll("%t", "Guardian_SlowActivated", guardianClient);
 
-	if (StrEqual(ability.Type, "rage", false))
-	{
-		int weapon = GetPlayerWeaponSlot(guardianClient, 0);
-		if (weapon != -1 && IsValidEntity(weapon))
-		{
-			TF2Attrib_SetByName(weapon, "mult airblast refire time", ability.Arg1 > 0.0 ? ability.Arg1 : 0.5);
-			TF2Attrib_SetByName(weapon, "airblast pushback scale", ability.Arg2 > 0.0 ? ability.Arg2 : 1.5);
-		}
-	}
-	else if (StrEqual(ability.Type, "sprint", false) || StrEqual(ability.Type, "charge", false))
-	{
-		TF2_AddCondition(guardianClient, TFCond_SpeedBuffAlly, ability.Duration);
-	}
-	else if (StrEqual(ability.Type, "pounce", false))
-	{
-		float vVel[3], vAng[3];
-		GetClientEyeAngles(guardianClient, vAng);
-		vAng[0] = 0.0;
-		GetAngleVectors(vAng, vVel, NULL_VECTOR, NULL_VECTOR);
-		
-		float forceFwd = ability.Arg1 > 0.0 ? ability.Arg1 : 1000.0;
-		float forceUp  = ability.Arg2 > 0.0 ? ability.Arg2 : 500.0;
-		ScaleVector(vVel, forceFwd);
-		vVel[2] = forceUp;
-		
-		TeleportEntity(guardianClient, NULL_VECTOR, NULL_VECTOR, vVel);
-	}
-	else if (StrEqual(ability.Type, "scare", false) || StrEqual(ability.Type, "slow", false))
-	{
-		// Start pulsating slow timer
-		if (slotIdx == 1)
-		{
-			delete primarySlowPulseTimer;
-			DataPack pack;
-			primarySlowPulseTimer = CreateDataTimer(0.2, Timer_SlowPulse, pack, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-			if (pack != null)
-			{
-				pack.WriteCell(activeClassIndex);
-				pack.WriteCell(1); 
-			}
-		}
-		else
-		{
-			delete secondarySlowPulseTimer;
-			DataPack pack;
-			secondarySlowPulseTimer = CreateDataTimer(0.2, Timer_SlowPulse, pack, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-			if (pack != null)
-			{
-				pack.WriteCell(activeClassIndex);
-				pack.WriteCell(2);
-			}
-		}
 
-		// Initial application
-		TriggerSlowPulse(activeClassIndex, (slotIdx == 1 ? true : false));
-	}
 
-	DataPack pack;
-	if (slotIdx == 1)
-	{
-		delete primaryTimer; // defensive: prevent handle leak if timer already exists
-		primaryTimer = CreateDataTimer(ability.Duration, Timer_PrimaryExpire, pack, TIMER_FLAG_NO_MAPCHANGE);
-	}
-	else
-	{
-		delete secondaryTimer;
-		secondaryTimer = CreateDataTimer(ability.Duration, Timer_SecondaryExpire, pack, TIMER_FLAG_NO_MAPCHANGE);
-	}
-	if (pack != null) pack.WriteCell(GetClientUserId(guardianClient));
-}
 
-void DeactivatePrimary()
-{
-	if (!primaryActive) return;
-
-	if (primaryTimer != null)
-	{
-		delete primaryTimer;
-		primaryTimer = null;
-	}
-
-	primaryActive = false;
-	primaryNextUseTime = GetGameTime() + guardianClasses[activeClassIndex].PrimaryAbility.Cooldown;
-
-	RestoreAbilityState(guardianClasses[activeClassIndex].PrimaryAbility);
-	DestroyParticle(primaryParticleRef);
-	primaryParticleRef = INVALID_ENT_REFERENCE;
-
-	// Stop slow pulse if this was the slow ability
-	char type[32];
-	strcopy(type, sizeof(type), guardianClasses[activeClassIndex].PrimaryAbility.Type);
-	if (StrEqual(type, "slow", false) || StrEqual(type, "scare", false))
-	{
-		delete primarySlowPulseTimer;
-		primarySlowPulseTimer = null;
-	}
-}
-
-void DeactivateSecondary()
-{
-	if (!secondaryActive) return;
-
-	if (secondaryTimer != null)
-	{
-		delete secondaryTimer;
-		secondaryTimer = null;
-	}
-
-	secondaryActive = false;
-	secondaryNextUseTime = GetGameTime() + guardianClasses[activeClassIndex].SecondaryAbility.Cooldown;
-
-	RestoreAbilityState(guardianClasses[activeClassIndex].SecondaryAbility);
-	DestroyParticle(secondaryParticleRef);
-	secondaryParticleRef = INVALID_ENT_REFERENCE;
-
-	// Stop slow pulse if this was the slow ability
-	char type[32];
-	strcopy(type, sizeof(type), guardianClasses[activeClassIndex].SecondaryAbility.Type);
-	if (StrEqual(type, "slow", false) || StrEqual(type, "scare", false))
-	{
-		delete secondarySlowPulseTimer;
-		secondarySlowPulseTimer = null;
-	}
-}
-
-void RestoreAbilityState(GuardianAbility ability)
-{
-	if (!IsClientInGame(guardianClient) || !IsPlayerAlive(guardianClient)) return;
-
-	if (StrEqual(ability.Type, "rage", false))
-	{
-		int weapon = GetPlayerWeaponSlot(guardianClient, 0);
-		if (weapon != -1 && IsValidEntity(weapon))
-		{
-			TF2Attrib_RemoveByName(weapon, "mult airblast refire time");
-			TF2Attrib_RemoveByName(weapon, "airblast pushback scale");
-		}
-	}
-	else if (StrEqual(ability.Type, "sprint", false) || StrEqual(ability.Type, "charge", false))
-	{
-		TF2_RemoveCondition(guardianClient, TFCond_SpeedBuffAlly);
-	}
-}
-
-public Action Timer_PrimaryExpire(Handle timer, DataPack pack)
-{
-	primaryTimer = null;
-	pack.Reset();
-	int client = GetClientOfUserId(pack.ReadCell());
-	
-	DeactivatePrimary();
-	if (client && guardianActive && client == guardianClient) EmitSoundToClient(client, SOUND_READY);
-	return Plugin_Stop;
-}
-
-public Action Timer_SecondaryExpire(Handle timer, DataPack pack)
-{
-	secondaryTimer = null;
-	pack.Reset();
-	int client = GetClientOfUserId(pack.ReadCell());
-	
-	DeactivateSecondary();
-	if (client && guardianActive && client == guardianClient) EmitSoundToClient(client, SOUND_READY);
-	return Plugin_Stop;
-}
-
-public Action Timer_SlowPulse(Handle timer, DataPack pack)
-{
-	if (!guardianActive || !IsClientInGame(guardianClient) || !IsPlayerAlive(guardianClient))
-	{
-		// One of these handles IS the timer currently executing - only null it.
-		// Plugin_Stop tells the engine to destroy it. Delete the other one safely.
-		if (timer == primarySlowPulseTimer)
-		{
-			primarySlowPulseTimer = null;
-			delete secondarySlowPulseTimer;
-		}
-		else
-		{
-			secondarySlowPulseTimer = null;
-			delete primarySlowPulseTimer;
-		}
-		return Plugin_Stop;
-	}
-
-	pack.Reset();
-	int classIdx = pack.ReadCell();
-	int slot     = pack.ReadCell();
-
-	bool isPrimary = (slot == 1);
-	
-	// Check if still active
-	if (isPrimary && (!primaryActive || primarySlowPulseTimer == null)) { primarySlowPulseTimer = null; return Plugin_Stop; }
-	if (!isPrimary && (!secondaryActive || secondarySlowPulseTimer == null)) { secondarySlowPulseTimer = null; return Plugin_Stop; }
-
-	TriggerSlowPulse(classIdx, isPrimary);
-	
-	return Plugin_Continue;
-}
-
-void TriggerSlowPulse(int classIdx, bool isPrimary)
-{
-	float radius = isPrimary ? guardianClasses[classIdx].PrimaryAbility.Arg1 : guardianClasses[classIdx].SecondaryAbility.Arg1;
-	float speed  = isPrimary ? guardianClasses[classIdx].PrimaryAbility.Arg2 : guardianClasses[classIdx].SecondaryAbility.Arg2;
-
-	if (radius <= 0.0) radius = 500.0;
-	if (speed <= 0.0)  speed = 50.0;
-	
-	speed /= 100.0; // Converted to percentage (0.5 for 50%)
-	
-	float origin[3], otherOrigin[3];
-	GetClientAbsOrigin(guardianClient, origin);
-	origin[2] += 10.0; // Slightly above ground for ring
-
-	// Draw Visual Ring
-	int color[4] = {100, 150, 255, 128}; // Transparent Blue
-	TE_SetupBeamRingPoint(origin, 10.0, radius, beamModelIndex, haloModelIndex, 0, 15, 0.4, 3.0, 0.0, color, 10, 0); // Reduced duration to 0.4 for higher pulse rate
-	TE_SendToAll();
-
-	for (int i = 1; i <= MaxClients; i++)
-	{
-		if (IsClientInGame(i) && IsPlayerAlive(i) && i != guardianClient && GetClientTeam(i) != GetClientTeam(guardianClient))
-		{
-			GetClientAbsOrigin(i, otherOrigin);
-			if (GetVectorDistance(origin, otherOrigin) <= radius)
-			{
-				// Apply very short stun that refreshes next pulse
-				TF2_StunPlayer(i, 0.3, speed, TF_STUNFLAG_SLOWDOWN, guardianClient);
-			}
-		}
-	}
-}
 
 // ============================================================================
 //  HUD + Boss Health Bar
 // ============================================================================
 
-void StartUpdateTimer()
-{
-	StopUpdateTimer();
-	updateTimer = CreateTimer(HUD_UPDATE_INTERVAL, Timer_Update, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-}
 
-void StopUpdateTimer()
-{
-	delete updateTimer;
-	updateTimer = null;
-}
 
-public Action Timer_Update(Handle timer)
-{
-	if (!guardianActive || !IsClientInGame(guardianClient))
-	{
-		updateTimer = null;
-		return Plugin_Stop;
-	}
 
-	float now = GetGameTime();
 
-	// Check ability expiration
-	if (primaryActive && now >= primaryExpireTime) DeactivatePrimary();
-	if (secondaryActive && now >= secondaryExpireTime) DeactivateSecondary();
 
-	// Bot join check - disable Guardian if a bot appeared mid-round (skip in debugMode).
-	// g_ActiveBotCount is event-driven (OnClientPostAdminCheck / OnClientDisconnect /
-	// OnPlayerTeamChange) so we avoid the per-tick MaxClients loop.
-	if (g_ActiveBotCount > 0 && !debugMode)
-	{
-		GuardianLog("Timer_Update - bot detected mid-round, cleaning up guardian and moving bots to spectator");
-		CPrintToChatAll("%t", "Guardian_BotJoined");
-		CleanupGuardian(true);
-		// Move all active-team bots to spectator so they don't block future rounds
-		for (int i = 1; i <= MaxClients; i++)
-		{
-			if (IsClientInGame(i) && IsFakeClient(i) && GetClientTeam(i) > view_as<int>(TFTeam_Spectator))
-			{
-				GuardianLog("Timer_Update - moving bot %d from team=%d to spectator", i, GetClientTeam(i));
-				ChangeClientTeam(i, view_as<int>(TFTeam_Spectator));
-			}
-		}
-		updateTimer = null;
-		return Plugin_Stop;
-	}
-
-	// FFA check - disable Guardian if FFA was enabled mid-round.
-	// g_FFAActiveCached is refreshed by OnLibraryAdded / OnLibraryRemoved /
-	// round_start, so per-tick we read a plain bool.
-	if (g_FFAActiveCached)
-	{
-		CPrintToChatAll("%t", "Guardian_BlockedFFA");
-		CleanupGuardian(true);
-		updateTimer = null;
-		return Plugin_Stop;
-	}
-
-	// --- Guardian HUD (guardian only) ---
-	// Static strings (display name, uppercased ability names, button labels) are
-	// cached at activation. Safety net: if we somehow lost the cache mid-round,
-	// rebuild before reading.
-	if (!g_CachedHudReady) RebuildGuardianHudCache();
-
-	char status1[80];
-	char status2[80];
-
-	if (primaryActive)
-	{
-		float remaining = primaryExpireTime - now;
-		FormatEx(status1, sizeof(status1), "[%s] %s [ACTIVE %.1fs]", g_CachedKey1, g_CachedName1, remaining);
-	}
-	else if (now < primaryNextUseTime)
-	{
-		float cooldown = primaryNextUseTime - now;
-		FormatEx(status1, sizeof(status1), "[%s] %s [CD %.1fs]", g_CachedKey1, g_CachedName1, cooldown);
-	}
-	else
-	{
-		FormatEx(status1, sizeof(status1), "[%s] %s [READY]", g_CachedKey1, g_CachedName1);
-	}
-
-	if (secondaryActive)
-	{
-		float remaining = secondaryExpireTime - now;
-		FormatEx(status2, sizeof(status2), "[%s] %s [ACTIVE %.1fs]", g_CachedKey2, g_CachedName2, remaining);
-	}
-	else if (now < secondaryNextUseTime)
-	{
-		float cooldown = secondaryNextUseTime - now;
-		FormatEx(status2, sizeof(status2), "[%s] %s [CD %.1fs]", g_CachedKey2, g_CachedName2, cooldown);
-	}
-	else
-	{
-		FormatEx(status2, sizeof(status2), "[%s] %s [READY]", g_CachedKey2, g_CachedName2);
-	}
-
-	SetHudTextParams(hudX, hudY, HUD_UPDATE_INTERVAL + 0.05, hudColor[0], hudColor[1], hudColor[2], 255, 0, 0.0, 0.0, 0.0);
-	ShowSyncHudText(guardianClient, hudSync,
-		"[ %s ]\n%s\n%s",
-		g_CachedDisplayName,
-		status1,
-		status2);
-
-	UpdateBossHealthBar();
-
-	return Plugin_Continue;
-}
-
-void UpdateBossHealthBar()
-{
-	// monsterResource is stored as an EntRef (via EntIndexToEntRef). Must resolve
-	// it back to a raw entity index before calling IsValidEntity/SetEntProp — those
-	// natives expect edict indices, not EntRefs.
-	int resourceEntity = EntRefToEntIndex(monsterResource);
-	if (resourceEntity == INVALID_ENT_REFERENCE || !IsValidEntity(resourceEntity)) return;
-
-	if (!guardianActive || guardianMaxHP <= 0)
-	{
-		HideBossHealthBar();
-		return;
-	}
-
-	if (IsClientInGame(guardianClient) && IsPlayerAlive(guardianClient))
-	{
-		guardianCurrentHP = GetClientHealth(guardianClient);
-	}
-	else
-	{
-		guardianCurrentHP = 0;
-	}
-
-	int byte = RoundToFloor((float(guardianCurrentHP) / float(guardianMaxHP)) * 255.0);
-
-	if (byte < 0)   byte = 0;
-	if (byte > 255)  byte = 255;
-
-	SetEntProp(resourceEntity, Prop_Send, "m_iBossHealthPercentageByte", byte);
-
-	int bossState = 0;
-	if (debugBossState >= 0 && debugBossState <= 4)
-	{
-		bossState = debugBossState;
-	}
-	else
-	{
-		// Safety: invalid debug values should never leak into live HUD state.
-		debugBossState = -1;
-	}
-
-	// Known practical states from community usage:
-	// 0 = default, 1 = healing/green, 3 = victory/blue, 4 = loss/gray.
-	SetEntProp(resourceEntity, Prop_Send, "m_iBossState", bossState);
-}
-
-void HideBossHealthBar()
-{
-	int resourceEntity = EntRefToEntIndex(monsterResource);
-	if (resourceEntity != INVALID_ENT_REFERENCE && IsValidEntity(resourceEntity))
-	{
-		SetEntProp(resourceEntity, Prop_Send, "m_iBossHealthPercentageByte", 0);
-		SetEntProp(resourceEntity, Prop_Send, "m_iBossState", 0);
-	}
-}
-
-public Action Command_BossState(int client, int args)
-{
-	if (args < 1)
-	{
-		ReplyToCommand(client, "[TFDB] Usage: sm_tfdb_bossstate <-1|0-4> (-1 disables override)");
-		return Plugin_Handled;
-	}
-
-	char arg[10];
-	GetCmdArg(1, arg, sizeof(arg));
-	int value = StringToInt(arg);
-	if (value < -1 || value > 4)
-	{
-		ReplyToCommand(client, "[TFDB] Invalid boss state %d. Use -1 or 0-4.", value);
-		return Plugin_Handled;
-	}
-
-	debugBossState = value;
-	ReplyToCommand(client, "[TFDB] Boss state override set to: %d", debugBossState);
-	return Plugin_Handled;
-}
 
 // ============================================================================
 //  Particle Helpers
 // ============================================================================
 
-int AttachParticle(int client, const char[] particleName)
-{
-	if (particleName[0] == '\0') return INVALID_ENT_REFERENCE;
 
-	int particle = CreateEntityByName("info_particle_system");
-
-	if (!IsValidEntity(particle)) return INVALID_ENT_REFERENCE;
-
-	float pos[3];
-	GetClientAbsOrigin(client, pos);
-
-	char tName[64];
-	GetEntPropString(client, Prop_Data, "m_iName", tName, sizeof(tName));
-
-	if (tName[0] == '\0')
-	{
-		Format(tName, sizeof(tName), "target%i", client);
-		DispatchKeyValue(client, "targetname", tName);
-	}
-
-	DispatchKeyValue(particle, "effect_name", particleName);
-	DispatchKeyValueVector(particle, "origin", pos);
-	DispatchKeyValue(particle, "cpoint1", tName); // Assign Control Point 1 to the player targetname
-
-	DispatchSpawn(particle);
-	ActivateEntity(particle);
-	AcceptEntityInput(particle, "Start");
-
-	SetVariantString(tName);
-	AcceptEntityInput(particle, "SetParent", client, particle, 0);
-
-	// Attachment logic refinement:
-	// If it's an unusual taunt (utaunt_), we attach to "flag" (head/back area) 
-	// UNLESS it's hands, which look better at feet/origin.
-	if (StrContains(particleName, "utaunt_", false) != -1)
-	{
-		if (StrContains(particleName, "hands", false) == -1) // Not hands? Move to flag!
-		{
-			SetVariantString("flag");
-			AcceptEntityInput(particle, "SetParentAttachment", client, particle, 0);
-		}
-	}
-	else
-	{
-		// Generic particles also go to flag
-		SetVariantString("flag");
-		AcceptEntityInput(particle, "SetParentAttachment", client, particle, 0); // Fixed parent argument
-	}
-
-	return EntIndexToEntRef(particle);
-}
-
-void DestroyParticle(int ref)
-{
-	if (ref == INVALID_ENT_REFERENCE) return;
-
-	int entity = EntRefToEntIndex(ref);
-
-	if (entity != -1 && IsValidEntity(entity))
-	{
-		AcceptEntityInput(entity, "Stop");
-		AcceptEntityInput(entity, "Kill");
-	}
-}
 
 // ============================================================================
 //  Selection Helpers
@@ -2478,15 +1819,9 @@ int SelectWeightedClass()
 	return 0;
 }
 
-int FindGuardianClassByName(const char[] className)
-{
-	for (int i = 0; i < guardianClassCount; i++)
-	{
-		if (StrEqual(guardianClasses[i].Name, className, false))
-		{
-			return i;
-		}
-	}
 
-	return -1;
-}
+
+// === LOCAL INCLUDES ===
+#include "include/tfdb_guardian_config.inc"
+#include "include/tfdb_guardian_abilities.inc"
+#include "include/tfdb_guardian_hud.inc"

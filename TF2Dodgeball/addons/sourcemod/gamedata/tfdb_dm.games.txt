@@ -1,0 +1,64 @@
+"Games"
+{
+    "tf"
+    {
+        // Symbols verified against TF2 Linux server binaries: the 32-bit
+        // tf/bin/server_srv.so and 64-bit tf/bin/linux64/server_srv.so keep
+        // identical Itanium-ABI mangled names. Format mirrors tf2.attributes.txt
+        // (Signatures carry the "@symbol"; Addresses reference the signature —
+        // GameConfGetAddress only reads Addresses).
+        "Signatures"
+        {
+            "CTFGameRules::SetWinningTeam"    // (int,int,bool,bool,bool,bool)
+            {
+                "library"   "server"
+                "linux"     "@_ZN12CTFGameRules14SetWinningTeamEiibbbb"
+                "linux64"   "@_ZN12CTFGameRules14SetWinningTeamEiibbbb"
+                "mac"       "@_ZN12CTFGameRules14SetWinningTeamEiibbbb"
+            }
+            // Candidate: renamed signature on some server builds
+            "CTFGameRules::SetWinningTeam.v2"
+            {
+                "library"   "server"
+                "linux"     "@_ZN12CTFGameRules14SetWinningTeamEiibbb"
+                "linux64"   "@_ZN12CTFGameRules14SetWinningTeamEiibbb"
+                "mac"       "@_ZN12CTFGameRules14SetWinningTeamEiibbb"
+            }
+            "CTFGameRules::SetStalemate"      // (int,bool,bool)
+            {
+                "library"   "server"
+                "linux"     "@_ZN12CTFGameRules12SetStalemateEibb"
+                "linux64"   "@_ZN12CTFGameRules12SetStalemateEibb"
+                "mac"       "@_ZN12CTFGameRules12SetStalemateEibb"
+            }
+            // Candidate: renamed signature on some server builds
+            "CTFGameRules::SetStalemate.v2"
+            {
+                "library"   "server"
+                "linux"     "@_ZN12CTFGameRules12SetStalemateEibbb"
+                "linux64"   "@_ZN12CTFGameRules12SetStalemateEibbb"
+                "mac"       "@_ZN12CTFGameRules12SetStalemateEibbb"
+            }
+        }
+
+        "Addresses"
+        {
+            "CTFGameRules::SetWinningTeam"
+            {
+                "signature" "CTFGameRules::SetWinningTeam"
+            }
+            "CTFGameRules::SetWinningTeam.v2"
+            {
+                "signature" "CTFGameRules::SetWinningTeam.v2"
+            }
+            "CTFGameRules::SetStalemate"
+            {
+                "signature" "CTFGameRules::SetStalemate"
+            }
+            "CTFGameRules::SetStalemate.v2"
+            {
+                "signature" "CTFGameRules::SetStalemate.v2"
+            }
+        }
+    }
+}
