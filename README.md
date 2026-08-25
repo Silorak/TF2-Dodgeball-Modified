@@ -20,10 +20,10 @@ One required core plugin plus 12 optional modules. Install only what you want.
 
 | Plugin | What it does |
 |---|---|
-| **Core** (`dodgeball.smx`) | The game itself — rockets, airblast, deflection, bouncing. **Required.** |
-| **Guardian** | One player becomes a boss with extra HP and special abilities. Everyone else fights them. **Beta — framework solid, design not fully fleshed out.** |
-| **PlayerVsBot** | A game-states bot — config-driven state machine (not AI, no learning/persistence). Fight it 1-vs-1 or spawn a test squad to watch it fight itself. |
-| **DeathMatch** | Never-Ending Rounds (NER) — round never ends; deaths stick, sides reshuffle. Uses gamedata detours to block round-end at the engine level. |
+| **Core** (`dodgeball.smx`) | The game itself - rockets, airblast, deflection, bouncing. **Required.** |
+| **Guardian** | One player becomes a boss with extra HP and special abilities. Everyone else fights them. **Beta - framework solid, design not fully fleshed out.** |
+| **PlayerVsBot** | A game-states bot - config-driven state machine (not AI, no learning/persistence). Fight it 1-vs-1 or spawn a test squad to watch it fight itself. |
+| **DeathMatch** | Never-Ending Rounds (NER) - round never ends; deaths stick, sides reshuffle. Uses gamedata detours to block round-end at the engine level. |
 | **AntiCheat** | Catches obvious public-tier cheats. **Beta.** |
 | **FFA** | Free-for-all mode. Friendly fire on. Coexists with DeathMatch. |
 | **Votes** | Players can vote to toggle bouncing rockets, change rocket class, etc. |
@@ -34,25 +34,22 @@ One required core plugin plus 12 optional modules. Install only what you want.
 | **ExtraEvents** | Adds `on destroyed` event for rockets that explode without killing. |
 | **AntiSnipe** | Stops players from interfering with rockets at long range. |
 
-Anything you don't want? Just don't install its `.smx` file — or move it to `plugins/disabled/`.
+Anything you don't want? Just don't install its `.smx` file - or move it to `plugins/disabled/`.
 
 ---
 
-## What 2.3.0 brings
+## What's new in 2.3.0
 
-- **4 new modes**: Guardian, PlayerVsBot, DeathMatch and a Honeypot-based cheat detector.
-- **NER v3 (DeathMatch)**: Round never ends — gamedata detours block `CTFGameRules::SetWinningTeam` and `SetStalemate` at the engine level. Deaths stick; when a side empties, dead players are reshuffled and respawned. No more death-tick races or team-swap cascades.
-- **HoneypotAC**: Replaces the old timing-based anti-cheat. Spawns invisible fake rockets that only cheaters can hit. Ping-aware weight reduction + score decay prevents false positives from high-latency players.
-- **PvB state machine**: 10 bot states (Idle, Deflect, Evade, Orbit, SweetSpot, Move, Chase, Panic, Counter, Bait) with priority-based transitions. NavCache uses flat 128×128 arrays (zero string hashing).
+- **Guardian, PlayerVsBot, DeathMatch, AntiCheat** - four new optional subplugins.
+- **DeathMatch (NER)**: rounds never end. Deaths stick, sides reshuffle. Keeps small servers alive.
+- **AntiCheat**: honeypot-based detection. Catches obvious public-tier cheats.
+- **PlayerVsBot**: a game-states bot with 10 states. Config-driven, no learning. Fight it 1v1 or spawn a test squad.
 - **Rockets feel more consistent across server tickrates** (66 / 100 / 128).
-- **Bouncing simplified** — pure physics reflection plus an optional height clamp.
-- **Crit glow customization** — stack 1-10 fake-crit particles per class. Override the particle name per team.
-- **Speedometer uncapped** — shows true rally MPH (not engine-capped).
-- **Modes don't fight each other** — Guardian / PvB / DeathMatch refuse to run together. FFA coexists with DeathMatch.
+- **Bouncing simplified** - pure physics reflection plus an optional height clamp.
+- **Crit glow customization** - stack 1-10 fake-crit particles per class. Override the particle name per team.
+- **Speedometer** - shows true rally MPH (not engine-capped).
+- **Modes don't fight each other** - Guardian / PvB / DeathMatch refuse to run together. FFA coexists with DeathMatch.
 - **Three old plugins built into the core** (Airblast Prevention, Anti-Switch, NoBlock). Same settings, just live in `general.cfg` now.
-- **Cold-path hardening**: Config parsers gracefully handle broken files (LogError instead of SetFailState). Case-insensitive class name lookups. GotoFirstSubKey return checks.
-- **Developer docs**: `docs/CODING_GUIDE.md`, `docs/ARCHITECTURE.md`, `docs/BUGFIX_HISTORY.md`, `docs/OPTIMIZATION_GUIDE.md`, `docs/TRIALS_AND_ERRORS.md`.
-- **20 contract tests** (was 19) — added cold-path structural checks.
 
 ---
 
@@ -82,7 +79,7 @@ Move its `.smx` file to `addons/sourcemod/plugins/disabled/`. Nothing else needs
 
 ## Configuration basics
 
-Most servers don't need to touch the configs — defaults are reasonable. If you want to customize:
+Most servers don't need to touch the configs - defaults are reasonable. If you want to customize:
 
 ### `configs/dodgeball/general.cfg`
 Defines rocket classes (speed, damage, turn rate, bouncing). Has built-in features for push prevention, target lock and noblock. The shipped file is commented and organized top-down by how often you'd change a setting.
@@ -114,13 +111,13 @@ The default window is 15 seconds; values are clamped to 1-30 seconds. Each compo
 Click a section to expand details.
 
 <details>
-<summary><b>Guardian</b> — 1-vs-all boss mode</summary>
+<summary><b>Guardian</b> - 1-vs-all boss mode</summary>
 
 One player per round becomes the Guardian. They get extra HP, a boss health bar, a glow effect and two special abilities you pick from a list. Everyone else fights them.
 
 The Guardian gets picked at random each round, weighted by class. Players can opt out of being chosen with `sm_guardian`. Guardian rounds skip when bots are on the server, when FFA is active or when fewer than 2 players qualify.
 
-> **⚠️ Beta — working but not finished.**
+> **⚠️ Beta - working but not finished.**
 >
 > The framework is solid (selection, abilities, opt-out, mutex with other modes) but the design isn't fully fleshed out. Class balance is rough, the ability set is short (5 types) and there's no late-round catch-up logic if the Guardian falls behind. Plays well as a "occasional change of pace" round but isn't tuned for competitive league use yet. Expect class tuning and ability additions in future releases.
 
@@ -178,9 +175,9 @@ The Guardian gets picked at random each round, weighted by class. Players can op
 </details>
 
 <details>
-<summary><b>PlayerVsBot (PvB)</b> — a game-states bot (state machine, not AI)</summary>
+<summary><b>PlayerVsBot (PvB)</b> - a game-states bot (state machine, not AI)</summary>
 
-A Pyro dodgeball bot. It's not learning or AI in any real sense — it's a config-driven state machine (perception → state selection → one movement/combat leaf per tick, the same kind of decision tree real-time game bots have used for decades), tuned by hand through `pvb.cfg`, not by anything the bot infers on its own. It doesn't remember individual players or adapt between sessions; there's no persistent storage of any kind. What it does have: a per-map walkable-area scan (built once so it knows where real edges/walls are) and a small amount of per-life state (current target, CQC positioning, wall-slide/evade commitment) that resets every round.
+A Pyro dodgeball bot. It's not learning or AI in any real sense - it's a config-driven state machine (perception → state selection → one movement/combat leaf per tick, the same kind of decision tree real-time game bots have used for decades), tuned by hand through `pvb.cfg`, not by anything the bot infers on its own. It doesn't remember individual players or adapt between sessions; there's no persistent storage of any kind. What it does have: a per-map walkable-area scan (built once so it knows where real edges/walls are) and a small amount of per-life state (current target, CQC positioning, wall-slide/evade commitment) that resets every round.
 
 Ships with 4 default classes: Universal, Statue, Midrange, Aggressive. Players can vote which one they want to fight via `sm_votepvb`. Solo players get an instant pick menu when they're alone with the bot.
 
@@ -189,7 +186,7 @@ Ships with 4 default classes: Universal, Statue, Midrange, Aggressive. Players c
 | Command | Permission | What it does |
 |---|---|---|
 | `sm_votepvb` / `sm_votepvb` / `sm_votepvb` | Public | Vote for a bot type or vote to disable the bot |
-| `sm_botmenu` | Public | Open info menu — stats and current bot |
+| `sm_botmenu` | Public | Open info menu - stats and current bot |
 | `sm_botstats` | Public | Print current bot stats in chat |
 | `sm_pvb` / `sm_pvb` | KICK | Admin force-toggle (skips the vote) |
 | `sm_botadmin` | KICK | Open the bot administration menu |
@@ -198,7 +195,7 @@ Ships with 4 default classes: Universal, Statue, Midrange, Aggressive. Players c
 | `sm_bot_test <squad\|stop\|list>` | ROOT | Spawn a named developer test squad (`default`, `statue_v_world`, `gang_test`, `all_moves`, `orbit_test`) to fight itself, or stop it |
 | `sm_pvb_profile [seconds]` | ROOT | Run a bounded PvB workload/profile window |
 
-**Developer/debug tools** (all ROOT) — for tuning the state machine and nav cache, not everyday use:
+**Developer/debug tools** (all ROOT) - for tuning the state machine and nav cache, not everyday use:
 
 | Command | What it does |
 |---|---|
@@ -211,7 +208,7 @@ Ships with 4 default classes: Universal, Statue, Midrange, Aggressive. Players c
 <details>
 <summary><b>Bot configuration trick (capability-by-presence)</b></summary>
 
-You can disable a bot's behavior just by removing the relevant key from `pvb.cfg`. The bot literally loses that ability — not "0% chance", actually gone.
+You can disable a bot's behavior just by removing the relevant key from `pvb.cfg`. The bot literally loses that ability - not "0% chance", actually gone.
 
 | Remove these keys | Result |
 |---|---|
@@ -225,7 +222,7 @@ You can disable a bot's behavior just by removing the relevant key from `pvb.cfg
 </details>
 
 <details>
-<summary><b>AntiCheat</b> — server-side cheat detection (beta)</summary>
+<summary><b>AntiCheat</b> - server-side cheat detection (beta)</summary>
 
 
 The beta AntiCheat creates server-side honeypot rockets that legitimate clients cannot see. An accepted interaction adds to the player's suspicion score after proximity, aim, mouse-movement, multi-Pyro, and real-rocket context filters run.
@@ -234,7 +231,7 @@ The beta AntiCheat creates server-side honeypot rockets that legitimate clients 
 
 Accepted detections are written to `addons/sourcemod/logs/honeypot_detections.log`. With `tf2db_honeypot_admin_alerts 1`, every in-game admin with the generic (`b`) flag receives a chat alert and a client-console record. The threshold-crossing alert is highlighted. The override name is `tfdb_honeypot_admin_alert`.
 
-**Primary Cvars** — auto-created in `cfg/sourcemod/tf2db_honeypot_system.cfg`.
+**Primary Cvars** - auto-created in `cfg/sourcemod/tf2db_honeypot_system.cfg`.
 
 | Cvar | Default | What it does |
 |---|---:|---|
@@ -248,26 +245,26 @@ Accepted detections are written to `addons/sourcemod/logs/honeypot_detections.lo
 
 Use `sm_ac_debug` or `!hp_debug` as an in-game ROOT admin to toggle honeypot boxes and target lines for yourself. Visualization is independent of verbose scheduler logging and cannot be toggled from the dedicated server console.
 
-**Optional SourceTV integration:** `sourcetvmanager.ext` is not required for AntiCheat to load or detect honeypot interactions. When absent, recording-state queries and bookmark metadata are skipped safely; detection, logs, admin alerts, and built-in SourceTV-only visual transmission continue. Current support attaches metadata to an externally active recording—it does not own/start/stop demos. See [`docs/anticheat-design.md`](docs/anticheat-design.md).
+**Optional SourceTV integration:** `sourcetvmanager.ext` is not required for AntiCheat to load or detect honeypot interactions. When absent, recording-state queries and bookmark metadata are skipped safely; detection, logs, admin alerts, and built-in SourceTV-only visual transmission continue. Current support attaches metadata to an externally active recording-it does not own/start/stop demos. See [`docs/anticheat-design.md`](docs/anticheat-design.md).
 
 </details>
 
 <details>
-<summary><b>FFA</b> — free-for-all mode</summary>
+<summary><b>FFA</b> - free-for-all mode</summary>
 
 Friendly fire on. Rockets target everyone regardless of team. Toggled via vote (`sm_voteffa`) or admin command.
 
-**Coexists with DeathMatch.** Mutually exclusive with Guardian and PvB — those modes assume normal RED/BLU team layout that FFA's neutral mode breaks.
+**Coexists with DeathMatch.** Mutually exclusive with Guardian and PvB - those modes assume normal RED/BLU team layout that FFA's neutral mode breaks.
 
 </details>
 
 <details>
-<summary><b>DeathMatch</b> — Never-Ending Rounds + Solo queue</summary>
+<summary><b>DeathMatch</b> - Never-Ending Rounds + Solo queue</summary>
 
 Solves the "small server with empty rounds" problem two ways. Based on Mikah's NER/SOLO Standalone plugin, rewritten for 2.3.0.
 
-- **Never-Ending Rounds (NER)** — when a team would lose, a player from the winning team gets swapped over so the round keeps going.
-- **Solo queue** — players can opt out with `sm_solo`. They die immediately and respawn whenever a team needs someone.
+- **Never-Ending Rounds (NER)** - when a team would lose, a player from the winning team gets swapped over so the round keeps going.
+- **Solo queue** - players can opt out with `sm_solo`. They die immediately and respawn whenever a team needs someone.
 
 After any DeathMatch respawn, players get a brief damage-immunity window. A horn plays to signal it.
 
@@ -301,7 +298,7 @@ Auto-created in `cfg/sourcemod/tfdb_deathmatch.cfg`.
 </details>
 
 <details>
-<summary><b>Votes</b> — let players vote on rocket settings</summary>
+<summary><b>Votes</b> - let players vote on rocket settings</summary>
 
 Players can vote to toggle features mid-match. Each vote command has a 10-second per-player cooldown so spammers can't chain votes.
 
@@ -317,7 +314,7 @@ Players can vote to toggle features mid-match. Each vote command has a 10-second
 </details>
 
 <details>
-<summary><b>Speedometer</b> — rocket speed HUD</summary>
+<summary><b>Speedometer</b> - rocket speed HUD</summary>
 
 Shows current rocket speed in MPH. Players can toggle it for themselves with a cookie that sticks across sessions.
 
@@ -330,9 +327,9 @@ Shows current rocket speed in MPH. Players can toggle it for themselves with a c
 </details>
 
 <details>
-<summary><b>Trails</b> — visual rocket trails</summary>
+<summary><b>Trails</b> - visual rocket trails</summary>
 
-Particle and sprite trails on rockets. Configured per rocket class in `general.cfg` (look for the trail fields — commented out by default; see `guide.md` for enabling).
+Particle and sprite trails on rockets. Configured per rocket class in `general.cfg` (look for the trail fields - commented out by default; see `guide.md` for enabling).
 
 **Commands** (Public, per-player toggle)
 
@@ -344,14 +341,14 @@ Particle and sprite trails on rockets. Configured per rocket class in `general.c
 </details>
 
 <details>
-<summary><b>AntiSnipe</b> — block long-range rocket interference</summary>
+<summary><b>AntiSnipe</b> - block long-range rocket interference</summary>
 
 Stops players from hitting rockets at very long distance. Requires the CollisionHook extension. If the extension is missing, the plugin warns at load time and falls back to damage-based mode.
 
 </details>
 
 <details>
-<summary><b>Menu</b> — in-game admin tuning</summary>
+<summary><b>Menu</b> - in-game admin tuning</summary>
 
 In-game menu for adjusting per-class dodgeball settings without editing config files. Live reload picks up changes made to `general.cfg`; global `drag delay` and `drag grid interval` remain file-level settings.
 
@@ -362,14 +359,14 @@ In-game menu for adjusting per-class dodgeball settings without editing config f
 </details>
 
 <details>
-<summary><b>ExtraEvents</b> — additional rocket events</summary>
+<summary><b>ExtraEvents</b> - additional rocket events</summary>
 
 Adds the `on destroyed` event for rockets that explode without killing a player. Required if your rocket class configs use that event in `general.cfg`.
 
 </details>
 
 <details>
-<summary><b>Print</b> — pretty chat formatting</summary>
+<summary><b>Print</b> - pretty chat formatting</summary>
 
 Provides server commands used by rocket event strings (`on kill`, `on spawn kill`) for colored chat messages with player-name substitution. See `guide.md` for the color tag list and the `##@owner##` substitution syntax.
 
@@ -382,22 +379,22 @@ Provides server commands used by rocket event strings (`on kill`, `on spawn kill
 <details>
 <summary><b>Plugin not loading or activating</b></summary>
 
-**Dodgeball not activating** — The gamemode only activates on maps prefixed `tfdb_`, `db_` or `dbs_`. Check `dodgeball.smx` is loaded with `sm plugins list` in server console.
+**Dodgeball not activating** - The gamemode only activates on maps prefixed `tfdb_`, `db_` or `dbs_`. Check `dodgeball.smx` is loaded with `sm plugins list` in server console.
 
-**A subplugin not loading** — Make sure its `.smx` is in `addons/sourcemod/plugins/` (not the `Subplugins/` source folder). Check `sm plugins list` and the SourceMod error log.
+**A subplugin not loading** - Make sure its `.smx` is in `addons/sourcemod/plugins/` (not the `Subplugins/` source folder). Check `sm plugins list` and the SourceMod error log.
 
-**TF2Attributes errors** — You need both `tf2attributes.smx` (the extension) AND `gamedata/tf2.attributes.txt`. Guardian needs both. Download from [FlaminSarge/tf2attributes](https://github.com/FlaminSarge/tf2attributes).
+**TF2Attributes errors** - You need both `tf2attributes.smx` (the extension) AND `gamedata/tf2.attributes.txt`. Guardian needs both. Download from [FlaminSarge/tf2attributes](https://github.com/FlaminSarge/tf2attributes).
 
 </details>
 
 <details>
 <summary><b>Rockets misbehaving</b></summary>
 
-**Rockets not homing** — Check `general.cfg` has `"behaviour" "homing"` on your rocket class. Make sure `dodgeball_enable.cfg` is being executed.
+**Rockets not homing** - Check `general.cfg` has `"behaviour" "homing"` on your rocket class. Make sure `dodgeball_enable.cfg` is being executed.
 
-**Rockets feel sticky after deflect** — Lower global `"drag delay"` to capture the flick sooner. A small per-class `"control delay"` then holds that sampled direction before homing; try `.030 + .030` or `.030 + .045`. The two values are separate and additive. Drag delay `0` means variable shared-grid timing, not instant capture. Fixed `.060`–`.070` remains the later v1.9.6-like endpoint range. See [`docs/drag-design.md`](docs/drag-design.md) before changing the ownership model.
+**Rockets feel sticky after deflect** - Lower global `"drag delay"` to capture the flick sooner. A small per-class `"control delay"` then holds that sampled direction before homing; try `.030 + .030` or `.030 + .045`. The two values are separate and additive. Drag delay `0` means variable shared-grid timing, not instant capture. Fixed `.060`-`.070` remains the later v1.9.6-like endpoint range. See [`docs/drag-design.md`](docs/drag-design.md) before changing the ownership model.
 
-**Nuke rocket shows as ERROR / red cube** — Your server has `sv_pure 1` blocking the custom model. Either add `models/custom/dodgeball/` to your pure whitelist, or remove the `"model"` field from the nuke class so it uses the default rocket model.
+**Nuke rocket shows as ERROR / red cube** - Your server has `sv_pure 1` blocking the custom model. Either add `models/custom/dodgeball/` to your pure whitelist, or remove the `"model"` field from the nuke class so it uses the default rocket model.
 
 </details>
 
@@ -412,34 +409,34 @@ Guardian is automatically blocked when:
 
 Check `logs/tfdb_guardian/select.log` for detailed reasons.
 
-**Abilities not working** — They unlock after `arena_round_start` fires (when players can move). Check your `guardian.cfg` has valid ability types and buttons.
+**Abilities not working** - They unlock after `arena_round_start` fires (when players can move). Check your `guardian.cfg` has valid ability types and buttons.
 
 </details>
 
 <details>
 <summary><b>PvB issues</b></summary>
 
-**Bot replaced by a dumb vanilla bot after map change** — Your server has `tf_bot_quota_mode fill` or `match`. PvB sets it to `normal` automatically but some map configs override it. Add `sm_cvar tf_bot_quota_mode normal` to `cfg/sourcemod/dodgeball_enable.cfg`.
+**Bot replaced by a dumb vanilla bot after map change** - Your server has `tf_bot_quota_mode fill` or `match`. PvB sets it to `normal` automatically but some map configs override it. Add `sm_cvar tf_bot_quota_mode normal` to `cfg/sourcemod/dodgeball_enable.cfg`.
 
-**Players spawning on the bot's team briefly** — Should be fixed in 2.3.0. If it happens, confirm `tfdb_pvb.smx` loaded successfully (check `sm plugins list`).
+**Players spawning on the bot's team briefly** - Should be fixed in 2.3.0. If it happens, confirm `tfdb_pvb.smx` loaded successfully (check `sm plugins list`).
 
 </details>
 
 <details>
 <summary><b>AntiCheat false positives</b></summary>
 
-Run with `tfdb_ac_action 0` (log only) for a few weeks before enabling kick or ban. Review per-player score distributions in `logs/tfdb_ac/`. Raise `tfdb_ac_action_threshold` if pros trip the threshold legitimately. Read the AntiCheat section above for the full deploy guide — this plugin is beta.
+Run with `tfdb_ac_action 0` (log only) for a few weeks before enabling kick or ban. Review per-player score distributions in `logs/tfdb_ac/`. Raise `tfdb_ac_action_threshold` if pros trip the threshold legitimately. Read the AntiCheat section above for the full deploy guide - this plugin is beta.
 
 </details>
 
 <details>
 <summary><b>DeathMatch issues</b></summary>
 
-**`sm_dm` says "cannot activate"** — DeathMatch refuses when Guardian or PvB is active. Disable those first or wait for the round to end.
+**`sm_dm` says "cannot activate"** - DeathMatch refuses when Guardian or PvB is active. Disable those first or wait for the round to end.
 
-**Cosmetics wrong color after team swap** — Should be fixed in 2.3.0. If you still see it, a manual respawn resolves it.
+**Cosmetics wrong color after team swap** - Should be fixed in 2.3.0. If you still see it, a manual respawn resolves it.
 
-**NER feels different in FFA** — By design. FFA neutralizes teams, so NER respawns players in place rather than swapping sides.
+**NER feels different in FFA** - By design. FFA neutralizes teams, so NER respawns players in place rather than swapping sides.
 
 </details>
 
@@ -449,7 +446,6 @@ Run with `tfdb_ac_action 0` (log only) for a few weeks before enabling kick or b
 
 The rest of this README is for people writing SourceMod plugins on top of TFDB. If you're just running a server, you can stop reading here.
 
-Maintenance contracts and deferred refactors are recorded in [`docs/code-quality-audit.md`](docs/code-quality-audit.md). Drag, bounce, and AntiCheat ownership decisions have separate design records in `docs/`.
 
 ### Public API
 
@@ -508,7 +504,7 @@ if (LibraryExists("tfdb_pvb") &&
     GetFeatureStatus(FeatureType_Native, "TFDB_IsPvBActive") == FeatureStatus_Available &&
     TFDB_IsPvBActive())
 {
-    // PvB is running — defer or refuse to activate your mode.
+    // PvB is running - defer or refuse to activate your mode.
 }
 ```
 
@@ -518,17 +514,8 @@ Register your own library with `RegPluginLibrary("your_name")` so partners can c
 
 If you're building from source: compile `dodgeball.sp` first (it generates the natives in `tfdb.inc`). Then compile subplugins in any order. Subplugin source lives in `Subplugins/<name>/scripting/`.
 
-Run the complete source-contract and 14-plugin compile gate with:
 
-```bash
-python tools/verify_all.py
-```
-
-The script treats compiler warnings as failures. It discovers the sibling SourceMod toolchain used by this checkout; set `SPCOMP` to an explicit `spcomp64.exe` path to override it.
-
-The current SourcePawn-to-C++ Graphify extraction, full-node visualization, and rationality notes are saved under `graphify-out-ast/`. Graphify has no SourcePawn grammar, so these artifacts are structural aids rather than compiler or runtime proof.
-
-The research-backed whole-project review—correctness, real-time performance, ownership, configuration, persistence, testing, observability, and staged priorities—is in [`SYSTEMS_ENGINEERING_AUDIT.md`](SYSTEMS_ENGINEERING_AUDIT.md).
+The research-backed whole-project review-correctness, real-time performance, ownership, configuration, persistence, testing, observability, and staged priorities-is in [`SYSTEMS_ENGINEERING_AUDIT.md`](SYSTEMS_ENGINEERING_AUDIT.md).
 
 ### File layout (for reference)
 
@@ -591,7 +578,7 @@ tf/
 | **Damizean** | Original YADP |
 | **bloody & lizzy** | YADP maintenance |
 | **ClassicGuzzi** | Dodgeball Redux |
-| **Oracle team** | DB_Reborn (bounce reflection formula) |
+| **Darka (UDL team)** | AntiCheat (honeypot detection system) |
 | **BloodyNightmare & Mitchell** | Airblast Prevention (now built into core) |
 | **x07x08** | Major advancements (Unified branch, 2.1.0 baseline) |
 | **Mikah** | NER/SOLO Standalone plugin (basis of DeathMatch) |
@@ -603,7 +590,7 @@ And the entire SourceMod community for keeping TF2 modding alive.
 
 ## License
 
-GPL v3.0 — see [LICENSE](LICENSE).
+GPL v3.0 - see [LICENSE](LICENSE).
 
 <div align="center">
 
