@@ -1,4 +1,4 @@
-// tfdb_menu_menus.inc — Menu UI — all admin menu handlers, class/spawner editing, preset management.
+// tfdb_menu_menus.inc - Menu UI - all admin menu handlers, class/spawner editing, preset management.
 
 public Action CmdDodgeballMenu(int client, int args)
 {
@@ -837,7 +837,7 @@ public int RocketClassFlagsMenuHandler(Menu menu, MenuAction menuActions, int iP
 {
 	// Flag table: index maps option number (1-based) to RocketFlags value.
 	static const RocketFlags g_FlagMenuOptions[] =  {
-		RocketFlag_None,           // 0 — unused (1-based option numbering)
+		RocketFlag_None,           // 0 - unused (1-based option numbering)
 		RocketFlag_ElevateOnDeflect,
 		RocketFlag_IsNeutral,
 		RocketFlag_KeepDirection,

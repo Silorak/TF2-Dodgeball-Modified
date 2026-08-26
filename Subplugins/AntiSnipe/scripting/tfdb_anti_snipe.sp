@@ -58,7 +58,7 @@ public void OnAllPluginsLoaded()
 	// is silently a no-op. Log a one-time warning so admins notice.
 	if (CvarHookCollision.BoolValue && GetExtensionFileStatus("collisionhook.ext") < 1)
 	{
-		LogMessage("[AntiSnipe] tf_dodgeball_as_collision=1 but CollisionHook extension is not loaded — collision anti-snipe is inactive.");
+		LogMessage("[AntiSnipe] tf_dodgeball_as_collision=1 but CollisionHook extension is not loaded - collision anti-snipe is inactive.");
 	}
 }
 

@@ -30,7 +30,7 @@ public void OnRoundStart(Event event, char[] eventName, bool dontBroadcast)
 	// Optional: let players move during Arena's pre-round.
 	//
 	// Repeating rather than one-shot on purpose. The freeze is not a single
-	// event to undo -- the game re-applies it, and players spawning during
+	// event to undo - the game re-applies it, and players spawning during
 	// setup arrive already frozen, so a single pass at round_start would
 	// unfreeze whoever happened to exist at that instant and nobody else.
 	// This runs until the round actually goes live (OnSetupFinished clears
@@ -108,7 +108,7 @@ public void OnSetupFinished(Event event, char[] eventName, bool dontBroadcast)
 	RoundStarted    = true;
 	RoundCount++;
 
-	// Round is live -- the setup unfreeze has done its job.
+	// Round is live - the setup unfreeze has done its job.
 	delete UnfreezeTimer;
 	UnfreezeTimer = null;
 }
@@ -177,7 +177,7 @@ public void OnPlayerDeath(Event event, char[] eventName, bool dontBroadcast)
 
 	if (!IsValidClient(victim)) return;
 
-	// Force FL_NOTARGET on death — prevents spectator ghost airblast bug
+	// Force FL_NOTARGET on death - prevents spectator ghost airblast bug
 	if (UsePushPrevention)
 	{
 		SetEntityFlags(victim, GetEntityFlags(victim) | FL_NOTARGET);
@@ -191,7 +191,7 @@ public void OnPlayerDeath(Event event, char[] eventName, bool dontBroadcast)
 
 	// Decrement the dying player's team-bucket directly. We hook player_death
 	// as EventHookMode_Pre, so IsPlayerAlive(victim) may still report true
-	// here — a RecountAlive() at this moment can miss the death. The clamp
+	// here - a RecountAlive() at this moment can miss the death. The clamp
 	// to 0 guards against the rare case where the victim has already been
 	// counted out by another path (e.g. player_team firing first).
 	if (LastDeadTeam == 2 || LastDeadTeam == 3)
@@ -233,7 +233,7 @@ public void OnPlayerDeath(Event event, char[] eventName, bool dontBroadcast)
 /**
  * Called on player_team. Refreshes cached alive counters because team
  * changes invalidate the per-team alive bookkeeping. We recount rather than
- * try to apply oldteam/newteam deltas — the event also fires on disconnect
+ * try to apply oldteam/newteam deltas - the event also fires on disconnect
  * (with disconnect=true) and on initial join (oldteam=0/Unassigned), and
  * IsPlayerAlive() semantics during the event vary; a full recount is
  * unconditionally correct.
@@ -245,8 +245,8 @@ public void OnPlayerTeam(Event event, char[] eventName, bool dontBroadcast)
 
 	// Deferred recount: ChangeAliveClientTeam (NER, DM) sets m_lifeState = 2
 	// before ChangeClientTeam, then restores it to 0 after. The immediate
-	// RecountAlive above runs INSIDE that window — while m_lifeState is still
-	// spoofed dead — and doesn't count the swapped player. This stale count
+	// RecountAlive above runs INSIDE that window - while m_lifeState is still
+	// spoofed dead - and doesn't count the swapped player. This stale count
 	// makes BothTeamsPlaying() return false, stopping the rocket spawner.
 	// Recount again on the next frame when m_lifeState is back to 0.
 	RequestFrame(Frame_DeferredRecount);
@@ -387,12 +387,12 @@ public void OnObjectDeflected(Event event, char[] eventName, bool dontBroadcast)
 	// m_bCritical stays 0 at all times (never set server-only either).
 	// Crit damage is handled by multiplying the damage value directly.
 	// The engine's Deflected() may call SetCritical(true) if the deflector
-	// has crit boost — re-zero it unconditionally.
+	// has crit boost - re-zero it unconditionally.
 	SetEntProp(entity, Prop_Send, "m_bCritical", 0, 1);
 
 	// Since CreateTrails no longer re-fires, the client won't swap the crit glow.
 	// Swap it server-side using the rocket's new team (already set by Deflected()).
-	// Only for crit rockets — non-crit rockets have no glow to swap.
+	// Only for crit rockets - non-crit rockets have no glow to swap.
 	if (RocketIsCritical[index])
 	{
 		int newTeam = GetEntProp(entity, Prop_Send, "m_iTeamNum");
@@ -459,7 +459,7 @@ void OnRocketThink(int index)
 /**
  * Per-tick iterator. Drives per-rocket OnRocketThink dispatch.
  * Fires every server tick (66-128 Hz). This is the reliable tick source for
- * projectile-entity logic — SDKHook_Think is NOT (see OnRocketThink docblock).
+ * projectile-entity logic - SDKHook_Think is NOT (see OnRocketThink docblock).
  */
 public void OnGameFrame()
 {
@@ -512,7 +512,7 @@ public void OnClientDisconnect(int client)
 	// Refresh cached alive counters. The disconnecting client may still be
 	// reported as in-game/alive at this moment by some calls, so a recount
 	// here may double up with player_team(disconnect=true) which fires just
-	// before — that's fine, RecountAlive is idempotent.
+	// before - that's fine, RecountAlive is idempotent.
 	RecountAlive();
 }
 
@@ -602,7 +602,7 @@ void ApplyBounceCeiling(float bounceVec[3], float ceiling)
 	bounceVec[2] = maxVz;
 
 	// Boost horizontal components to preserve total magnitude.
-	// Skip redistribution on pure-vertical bounces (XY ≈ 0) — would divide by
+	// Skip redistribution on pure-vertical bounces (XY ≈ 0) - would divide by
 	// zero. Rocket just loses speed in that degenerate case (very rare in play).
 	if (origXYSq <= 1.0) return;
 
@@ -672,7 +672,7 @@ public Action OnTouch(int entity, int other)
 		CopyVectors(bounceVecRef, bounceVec);
 	}
 
-	// Pause homing — rocket flies freely with bounce velocity until the shared
+	// Pause homing - rocket flies freely with bounce velocity until the shared
 	// legacy grid catches up. Bounce timing stays random even when drag uses the
 	// fixed, consistent eye-angle window.
 	RocketHomingPaused[index]    = true;

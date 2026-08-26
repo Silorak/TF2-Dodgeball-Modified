@@ -114,7 +114,7 @@ public void OnMapEnd()
 	
 	Loaded = false;
 	
-	// Do NOT UnhookEvent here — SM auto-cleans on plugin unload.
+	// Do NOT UnhookEvent here - SM auto-cleans on plugin unload.
 	// Manual unhooking causes cascading errors.
 	
 	CvarDisableOnBot.RemoveChangeHook(DisableOnBotCallback);
@@ -294,7 +294,7 @@ public void OnRoundStart(Event event, char[] eventName, bool dontBroadcast)
 /**
  * Returns true if Guardian or PvB is currently active. Used to gate FFA enable.
  *
- * NOTE: DeathMatch (NER/Solo) is intentionally NOT in this list — DM and FFA
+ * NOTE: DeathMatch (NER/Solo) is intentionally NOT in this list - DM and FFA
  * coexist fine. DM swaps players between RED/BLU; FFA makes rockets neutral.
  * Different layers, no conflict. Only Guardian (boss-on-BLU rule) and PvB
  * (1v1 team-vs-team) actually break under FFA.
@@ -327,8 +327,8 @@ public Action CmdToggleFFA(int client, int args)
 		return Plugin_Handled;
 	}
 
-	// Preemptive mutex — refuse to enable FFA while Guardian/PvB/DM is active.
-	// (If FFA is already on, allow the toggle-OFF path to proceed regardless —
+	// Preemptive mutex - refuse to enable FFA while Guardian/PvB/DM is active.
+	// (If FFA is already on, allow the toggle-OFF path to proceed regardless -
 	// admins should always be able to turn FFA off.)
 	if (!FFAEnabled && IsModeActive())
 	{
@@ -367,7 +367,7 @@ public Action CmdVoteFFA(int client, int args)
 		return Plugin_Handled;
 	}
 
-	// Preemptive mutex — same logic as CmdToggleFFA. Refuse VOTE-TO-ENABLE when
+	// Preemptive mutex - same logic as CmdToggleFFA. Refuse VOTE-TO-ENABLE when
 	// a partner mode is running (vote-to-disable is allowed regardless).
 	if (!FFAEnabled && IsModeActive())
 	{
@@ -427,7 +427,7 @@ void StartFFAVote()
 	Menu menu = new Menu(VoteMenuHandler);
 	menu.VoteResultCallback = VoteResultHandler;
 
-	// Vote menu shown to all clients — use server language
+	// Vote menu shown to all clients - use server language
 	char title[64];
 	FormatEx(title, sizeof(title), "%T",
 		FFAEnabled ? "FFA_Vote_Menu_Title_Disable" : "FFA_Vote_Menu_Title_Enable", LANG_SERVER);
@@ -643,7 +643,7 @@ static void ExecCfgIfExists(const char[] relPath, const char[] label)
 	FormatEx(resolved, sizeof(resolved), "cfg/%s", relPath);
 	if (!FileExists(resolved, true, "GAME"))
 	{
-		LogMessage("[FFA] %s config not found: %s — skipping exec", label, resolved);
+		LogMessage("[FFA] %s config not found: %s - skipping exec", label, resolved);
 		return;
 	}
 	ServerCommand("exec \"%s\"", relPath);
@@ -728,7 +728,7 @@ void UpdateClientWearablesTeam(int client, int team)
 // ============================================================================
 
 /**
- * TFDB_IsFFAActive() — true while FFA toggle is on. Used by PvB / Guardian /
+ * TFDB_IsFFAActive() - true while FFA toggle is on. Used by PvB / Guardian /
  * DeathMatch to refuse to coexist with FFA (FFA flips rocket teams to neutral
  * which breaks the bot-vs-humans team semantics those modes assume).
  */

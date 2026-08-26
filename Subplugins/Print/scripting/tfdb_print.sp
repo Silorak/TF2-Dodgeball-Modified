@@ -250,7 +250,7 @@ void PrintPhrase(const char[] phrase, const char args[32][255], const any aArgs[
 }
 
 // Returns either the numeric value or the string as any[].
-// SM 1.12 requires any[] return type — cannot coerce char[] to any scalar.
+// SM 1.12 requires any[] return type - cannot coerce char[] to any scalar.
 // With only 8 calls instead of 29, this fits comfortably in default heap.
 any[] HBC(const char[][] args, const any[] aArgs, int index)
 {

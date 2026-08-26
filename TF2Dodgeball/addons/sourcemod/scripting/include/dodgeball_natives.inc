@@ -18,7 +18,7 @@
 
 // Generate a getter that returns Field[GetNativeCell(1)].
 // Uses view_as<any> so float arrays work without a separate macro.
-// Bounds-check the rocket index — third-party subplugins that forget to call
+// Bounds-check the rocket index - third-party subplugins that forget to call
 // IsValidRocket() first would otherwise read/write adjacent memory and crash
 // core. ThrowNativeError raises a script exception in the calling subplugin
 // instead of corrupting our state. (Audit finding 2026-04-28.)
@@ -152,7 +152,7 @@ public any Native_SetRocketEntity(Handle plugin, int numParams) {
 TFDB_NATIVE_GET(     Native_GetRocketFlags,              RocketInstanceFlags)
 TFDB_NATIVE_SET_CAST(Native_SetRocketFlags,              RocketInstanceFlags, RocketFlags)
 
-// Ent-ref round-trip — kept explicit because of the EntIndexToEntRef wrapping.
+// Ent-ref round-trip - kept explicit because of the EntIndexToEntRef wrapping.
 public any Native_GetRocketTarget(Handle plugin, int numParams) {
 	int index = GetNativeCell(1);
 	if (!ValidateNativeIndex(index, sizeof(RocketTarget), "Rocket")) return 0;
@@ -167,7 +167,7 @@ public any Native_SetRocketTarget(Handle plugin, int numParams) {
 	return 0;
 }
 
-// Derived — owner is read from an entity prop, not a rocket-class array.
+// Derived - owner is read from an entity prop, not a rocket-class array.
 public any Native_GetRocketOwner(Handle plugin, int numParams) {
 	int index = GetNativeCell(1);
 	if (!ValidateNativeIndex(index, sizeof(RocketEntity), "Rocket")) return 0;
@@ -196,7 +196,7 @@ TFDB_NATIVE_GET(Native_GetRocketMphSpeed,            RocketMphSpeed)
 TFDB_NATIVE_GET(Native_GetRocketRawMphSpeed,          RocketRawMphSpeed)
 TFDB_NATIVE_SET(Native_SetRocketMphSpeed,            RocketMphSpeed)
 
-// Vector get/set — needs SetNativeArray / GetNativeArray. Kept explicit.
+// Vector get/set - needs SetNativeArray / GetNativeArray. Kept explicit.
 public any Native_GetRocketDirection(Handle plugin, int numParams) {
 	int index = GetNativeCell(1);
 	if (!ValidateNativeIndex(index, sizeof(RocketDirection), "Rocket")) return 0;
@@ -217,7 +217,7 @@ TFDB_NATIVE_SET(Native_SetRocketLastDeflectionTime,  RocketLastDeflectionTime)
 TFDB_NATIVE_GET(Native_GetRocketLastBeepTime,        RocketLastBeepTime)
 TFDB_NATIVE_SET(Native_SetRocketLastBeepTime,        RocketLastBeepTime)
 
-// Global counter — not array-indexed, so the macros don't apply.
+// Global counter - not array-indexed, so the macros don't apply.
 public any Native_GetRocketCount(Handle plugin, int numParams) {
 	return RocketCount;
 }
@@ -407,7 +407,7 @@ TFDB_NATIVE_SET(Native_SetRocketClassCritGlowStack,         RocketClassCritGlowS
  *
  * Reads the per-class crit glow particle name for a given team. Returns the
  * stored override (set in cfg or via the setter); empty string means "use
- * the engine default" — the caller can fall back to "critical_rocket_red" /
+ * the engine default" - the caller can fall back to "critical_rocket_red" /
  * "critical_rocket_blue" / "eyeboss_projectile" as appropriate.
  *
  * iTeam values: 2 = TFTeam_Red, 3 = TFTeam_Blue, 0 = neutral (any other value

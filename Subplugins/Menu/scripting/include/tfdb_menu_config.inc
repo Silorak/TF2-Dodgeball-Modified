@@ -1,11 +1,11 @@
-// tfdb_menu_config.inc — Menu config parser — loads and caches rocket class settings for the admin menu.
+// tfdb_menu_config.inc - Menu config parser - loads and caches rocket class settings for the admin menu.
 
 public void TFDB_OnRocketsConfigExecuted(const char[] strConfigFile)
 {
 	// This will cause problems if "general.cfg" is not executed first.
 	if (strcmp(strConfigFile, "general.cfg") == 0)
 	{
-		// Destroy existing rockets so the refresh is clean — old-config
+		// Destroy existing rockets so the refresh is clean - old-config
 		// rockets would keep flying with their old speed/turn/model
 		// while new rockets use the new config, which is confusing.
 		Internal_DestroyRocketClasses();

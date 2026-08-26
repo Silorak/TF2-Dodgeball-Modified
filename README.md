@@ -8,7 +8,7 @@
 
 The dodgeball gamemode for TF2 SourceMod servers. Pyros airblast homing rockets at each other. Last team alive wins. Built on years of community work and packaged for modern servers.
 
-[Quick install](#quick-install) · [What's in the box](#whats-in-the-box) · [Subplugins](#subplugins) · [For plugin developers](#for-plugin-developers) · [Engineering audit](SYSTEMS_ENGINEERING_AUDIT.md)
+[Quick install](#quick-install) · [What's in the box](#whats-in-the-box) · [Subplugins](#subplugins) · [For plugin developers](#for-plugin-developers)
 
 </div>
 
@@ -38,20 +38,6 @@ Anything you don't want? Just don't install its `.smx` file - or move it to `plu
 
 ---
 
-## What's new in 2.3.0
-
-- **Guardian, PlayerVsBot, DeathMatch, AntiCheat** - four new optional subplugins.
-- **DeathMatch (NER)**: rounds never end. Deaths stick, sides reshuffle. Keeps small servers alive.
-- **AntiCheat**: honeypot-based detection. Catches obvious public-tier cheats.
-- **PlayerVsBot**: a game-states bot with 10 states. Config-driven, no learning. Fight it 1v1 or spawn a test squad.
-- **Rockets feel more consistent across server tickrates** (66 / 100 / 128).
-- **Bouncing simplified** - pure physics reflection plus an optional height clamp.
-- **Crit glow customization** - stack 1-10 fake-crit particles per class. Override the particle name per team.
-- **Speedometer** - shows true rally MPH (not engine-capped).
-- **Modes don't fight each other** - Guardian / PvB / DeathMatch refuse to run together. FFA coexists with DeathMatch.
-- **Three old plugins built into the core** (Airblast Prevention, Anti-Switch, NoBlock). Same settings, just live in `general.cfg` now.
-
----
 
 ## Quick install
 
@@ -515,7 +501,6 @@ Register your own library with `RegPluginLibrary("your_name")` so partners can c
 If you're building from source: compile `dodgeball.sp` first (it generates the natives in `tfdb.inc`). Then compile subplugins in any order. Subplugin source lives in `Subplugins/<name>/scripting/`.
 
 
-The research-backed whole-project review-correctness, real-time performance, ownership, configuration, persistence, testing, observability, and staged priorities-is in [`SYSTEMS_ENGINEERING_AUDIT.md`](SYSTEMS_ENGINEERING_AUDIT.md).
 
 ### File layout (for reference)
 

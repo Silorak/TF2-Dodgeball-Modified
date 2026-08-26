@@ -1,4 +1,4 @@
-// tfdb_pvb_teams.inc — auto-extracted from tfdb_pvb.sp
+// tfdb_pvb_teams.inc - auto-extracted from tfdb_pvb.sp
 // Do not edit directly; this is a split of the PvB plugin.
 
 public void OnLibraryAdded(const char[] name) {
@@ -17,7 +17,7 @@ public void OnPluginStart() {
     LoadTranslations("tfdb.phrases.txt");
 
     // CurrentMap used to be set only in OnMapStart, which does NOT re-fire
-    // on a plugin-only reload (`sm plugins reload tfdb_pvb`) mid-map -- a
+    // on a plugin-only reload (`sm plugins reload tfdb_pvb`) mid-map - a
     // completely normal admin/testing workflow, not an edge case. That left
     // CurrentMap as an empty string for the rest of that session, silently
     // breaking every nav-cache file path (data/tfdb_pvb_navcache/%s.txt
@@ -32,7 +32,7 @@ public void OnPluginStart() {
     // Same reload gap as CurrentMap above: the 15s retry poll used to only
     // get created in OnMapStart, so a plugin-only reload had no independent
     // trigger to (re)start the nav scan until the next player spawn event.
-    // Harmless to create here too -- StartNavScanIfNeeded() is already a
+    // Harmless to create here too - StartNavScanIfNeeded() is already a
     // no-op once a scan is active or ready, so an extra timer just means an
     // extra cheap poll, never a duplicate scan. Also try immediately, since
     // a reload while players are already in-game (the normal testing case)
@@ -93,7 +93,7 @@ public void OnPluginStart() {
 
     // Pre-emptive team-join protection. Without this, humans can spawn on
     // the bot's team for 1-2 ticks before ManageTeams reactively yanks
-    // them — which destroys spawn state via forced TF2_RespawnPlayer.
+    // them - which destroys spawn state via forced TF2_RespawnPlayer.
     if (!HookEventEx("player_team", Event_PlayerTeamChange, EventHookMode_Pre))
         LogError("[PvB] Failed to hook player_team");
     if (!HookEventEx("object_deflected", Event_ObjectDeflected))
@@ -141,11 +141,11 @@ public void OnMapStart() {
 
     // Diagnostics (nav= debug field, 2026-08-08 test) proved OnMapStart
     // fires on every ROUND restart on this server, not only on a genuine
-    // map change -- some round-restart implementations changelevel to the
+    // map change - some round-restart implementations changelevel to the
     // same map rather than doing a lightweight in-place reset. Every one
     // of those was unconditionally wiping a perfectly good, already-built
     // nav cache via NavCache_Reset() below, then forcing a full rebuild
-    // (bail-and-retry cycle) before it was usable again -- measured at
+    // (bail-and-retry cycle) before it was usable again - measured at
     // ~44% of total playtime spent with the cache cold, bots ~99% frozen
     // during that window vs ~48% (normal positioning idle, not paralysis)
     // once ready. Only reset when the map name actually changed.
@@ -154,7 +154,7 @@ public void OnMapStart() {
     GetCurrentMap(CurrentMap, sizeof(CurrentMap));
     bool mapActuallyChanged = !StrEqual(previousMap, CurrentMap);
 
-    // Walkable-area cache is per-map -- last map's data (or its "ready"
+    // Walkable-area cache is per-map - last map's data (or its "ready"
     // flag) must not carry over on a REAL map change, or the new map's
     // first spawn would skip loading/building its own cache entirely.
     if (mapActuallyChanged) {
@@ -168,7 +168,7 @@ public void OnMapStart() {
     // scattered across the open arena. Poll independently so a failed
     // attempt gets retried with fresh positions on a schedule instead of
     // only when a death happens to trigger one. Only (re)create this on a
-    // real map change -- OnPluginStart already creates one, and since
+    // real map change - OnPluginStart already creates one, and since
     // OnMapStart fires on every round restart here, creating another every
     // time would stack up redundant repeating timers over a long session.
     if (mapActuallyChanged) {
@@ -187,7 +187,7 @@ public void OnMapStart() {
 
     CreateTimer(5.0, Timer_ClearMapChanged);
 
-    // Debug logging persists across map changes — rotate to new file per map
+    // Debug logging persists across map changes - rotate to new file per map
     if (DebugActive) {
         RotateDebugFile();
     }
@@ -240,7 +240,7 @@ public Action Timer_RetryNavScan(Handle timer) {
         return Plugin_Continue;
     }
 
-    // Cache is built and stable -- periodically try to GROW it from
+    // Cache is built and stable - periodically try to GROW it from
     // wherever bots currently are, closing gaps the initial scan's seed
     // positions never reached. Never stops for good: as a round plays out,
     // bots keep visiting territory the very first scan never got seeded
@@ -253,7 +253,7 @@ public void OnClientDisconnect(int client) {
     ResetPerConnectionState(client);
 
     // Client is still "in-game" during OnClientDisconnect, so UpdateCachedCounts
-    // would still count them. Instead, check if this was the last human — if so,
+    // would still count them. Instead, check if this was the last human - if so,
     // kick the bot NOW before the server hibernates and OnGameFrame stops firing.
     if (!IsFakeClient(client) && BotEnabled && !DebugStatesMode)
     {
@@ -273,7 +273,7 @@ public void OnClientDisconnect(int client) {
         }
     }
 
-    // Same IsClientInGame-still-true hazard as the humansLeft loop above —
+    // Same IsClientInGame-still-true hazard as the humansLeft loop above -
     // without excluding `client` here, CachedRealCount stays overcounted by
     // one (the leaving player) until some unrelated later event (join, team
     // change, another disconnect) happens to refresh it. That stale count is
@@ -284,7 +284,7 @@ public void OnClientDisconnect(int client) {
 }
 
 public void OnClientPostAdminCheck(int client) {
-    // A bot completing admin-check while PvB isn't running is never ours —
+    // A bot completing admin-check while PvB isn't running is never ours -
     // it's TF2's own vanilla quota-fill bot (tf_bot_quota_mode drifted back
     // to "fill" during the gap between a human disconnecting and PvB's next
     // LockBotQuota() call). Mirrors tfdb_guardian.sp's OnClientPostAdminCheck
@@ -293,7 +293,7 @@ public void OnClientPostAdminCheck(int client) {
     // This is the reliable place to catch it, NOT the per-tick OnGameFrame
     // self-heal in RunPvBGameFrame(): OnGameFrame stops firing entirely while
     // the server is hibernating (0 real humans), which is exactly the state
-    // right up until the reconnecting human finishes loading — so a stray
+    // right up until the reconnecting human finishes loading - so a stray
     // bot that spawned during that gap could sit unmanaged indefinitely.
     // OnClientPostAdminCheck runs as part of client-connect processing, which
     // has to work even on a hibernating server (that's how anyone can ever
@@ -312,7 +312,7 @@ public void OnClientPostAdminCheck(int client) {
 
 void UpdateCachedCounts(int excludeClient = 0) {
     // CachedRealCount = real humans on a PLAY team (RED/BLU). Spectators don't count.
-    // Every consumer of CachedRealCount asks "how many humans can play?" — a
+    // Every consumer of CachedRealCount asks "how many humans can play?" - a
     // spec player is not a participant. Excluding them here is what makes
     // PvB auto-disable when the last human goes to spec (bug 2026-04-26).
     //
@@ -345,7 +345,7 @@ void LockBotQuota() {
 void EnablePvB() {
     // Refuse to activate during a Guardian round. Three-gate check avoids the
     // "Plugin owning this native is currently paused" exception when the partner
-    // plugin crashed/paused after load — FeatureStatus_Available alone isn't
+    // plugin crashed/paused after load - FeatureStatus_Available alone isn't
     // enough because the native binding survives a pause; LibraryExists is the
     // authoritative runtime gate.
     if (LibraryExists("tfdb_guardian") &&
@@ -356,7 +356,7 @@ void EnablePvB() {
         return;
     }
 
-    // DeathMatch (NER / Solo) mutual exclusion — DM swaps teams which corrupts
+    // DeathMatch (NER / Solo) mutual exclusion - DM swaps teams which corrupts
     // the PvB bot-vs-humans team layout. Same three-gate pattern as above.
     if (LibraryExists("tfdb_deathmatch") &&
         GetFeatureStatus(FeatureType_Native, "TFDB_IsDeathMatchActive") == FeatureStatus_Available &&
@@ -366,7 +366,7 @@ void EnablePvB() {
         return;
     }
 
-    // FFA mutex — FFA flips rocket teams to neutral. With PvB's bot-on-BLU layout,
+    // FFA mutex - FFA flips rocket teams to neutral. With PvB's bot-on-BLU layout,
     // the bot ends up neutral and friendly-fires its own teammates (paradoxical
     // since "team" means nothing in FFA, but the bot's decision tree doesn't model that). Plus
     // PvB assumes 1v1 bot-vs-human team semantics throughout. Guard at activation.
@@ -406,7 +406,7 @@ void EnablePvB() {
         int teamBefore = GetClientTeam(i);
         // Gate on TEAM, not IsClientObserver. During arena pregame, dead/not-
         // yet-spawned players on BLU/RED are in freeze-cam observer mode but
-        // they are NOT on the spectator team — IsClientObserver would skip
+        // they are NOT on the spectator team - IsClientObserver would skip
         // them incorrectly. We only leave actual spectators (team 1) alone.
         if (teamBefore <= view_as<int>(TFTeam_Spectator)) continue;
         if (teamBefore == view_as<int>(TFTeam_Red)) continue;
@@ -423,7 +423,7 @@ void EnablePvB() {
     BotNameDirty = true;
     UpdateCachedCounts();
     CPrintToChatAll("%t", "PvB_Entered", BotName);
-    PvB_Log("[PvB] EnablePvB complete — humans forced to RED, bot added to BLU (bot=%s).", BotName);
+    PvB_Log("[PvB] EnablePvB complete - humans forced to RED, bot added to BLU (bot=%s).", BotName);
 
     ApplyBotTypeSettings();
 }
@@ -434,7 +434,7 @@ void DisablePvB() {
         return;
     }
     ServerCommand("mp_autoteambalance 1");
-    ServerCommand("mp_teams_unbalance_limit 1");  // restore default — undo EnablePvB override
+    ServerCommand("mp_teams_unbalance_limit 1");  // restore default - undo EnablePvB override
     ServerCommand("tf_bot_kick all");
     BotEnabled = false;
     PendingMaxPlayerDisable = false;  // bot is gone, drain any stale queue
@@ -638,13 +638,13 @@ public Action Cmd_BotTest(int client, int args)
     }
     else if (StrEqual(arg, "all_moves", false))
     {
-        // 2 midrange bots — long rallies for move-set testing
+        // 2 midrange bots - long rallies for move-set testing
         redClasses[0] = 2; redCounts[0] = 1; redCount = 1;
         blueClasses[0] = 2; blueCounts[0] = 1; blueCount = 1;
     }
     else if (StrEqual(arg, "orbit_test", false))
     {
-        // universal vs statue — orbit triggers
+        // universal vs statue - orbit triggers
         redClasses[0] = 0; redCounts[0] = 1; redCount = 1;    // universal
         blueClasses[0] = 1; blueCounts[0] = 1; blueCount = 1; // statue
     }
@@ -669,10 +669,10 @@ public Action Cmd_BotTest(int client, int args)
     DebugStatesBotCount = 0;
     TestModeActive = true;
 
-    // Auto-start the CSV dataset for this squad — this is the only entry
+    // Auto-start the CSV dataset for this squad - this is the only entry
     // point that's supposed to trigger it (see DebugLogBotTick/DebugLogDecision
     // below). Don't clobber a session the admin already started manually via
-    // sm_botdebug -- only stop what sm_bot_test itself started.
+    // sm_botdebug - only stop what sm_bot_test itself started.
     if (!DebugActive)
     {
         DebugTotalLines = 0;
@@ -681,7 +681,7 @@ public Action Cmd_BotTest(int client, int args)
         ReplyToCommand(client, "[PvB] Dataset logging started: %s", DebugLogPath);
     }
 
-    // Spawn red bots — use the same tf_bot_add syntax as StartDebugStates
+    // Spawn red bots - use the same tf_bot_add syntax as StartDebugStates
     for (int i = 0; i < redCount; i++) {
         for (int j = 0; j < redCounts[i]; j++) {
             char botName[64];
@@ -826,11 +826,11 @@ void RunPvBGameFrame() {
     }
 
     // A fake client present while PvB itself isn't running is never one we
-    // manage — it's a stray/vanilla TF2 bot. This happens when the engine's
+    // manage - it's a stray/vanilla TF2 bot. This happens when the engine's
     // own bot-quota system reverts tf_bot_quota_mode back to "fill" (map cfg,
     // a mid-map exec, engine defaults) during the window between a human
     // disconnecting and PvB next calling LockBotQuota() (only re-asserted in
-    // OnMapStart / before EnablePvB — nowhere on the disconnect->reconnect
+    // OnMapStart / before EnablePvB - nowhere on the disconnect->reconnect
     // path). The vanilla bot doesn't know dodgeball rules and just stands
     // there ("the bot isn't cleared, rejoin gives a bot that doesn't work").
     // Self-heal every tick: kick it and re-lock quota so it can't come back.
@@ -859,12 +859,12 @@ void RunPvBGameFrame() {
     // tick. Override with `!pvb` admin toggle (sets CommandForced).
     //
     // Deferred to round end (queued via PendingMaxPlayerDisable). Triggering
-    // mid-round was jarring — bot would vanish mid-rally when a 3rd player
+    // mid-round was jarring - bot would vanish mid-rally when a 3rd player
     // joins. The flag is checked + drained in OnRoundWin / OnRoundEnd.
     if (isEvenTick && maxP != 0 && humans > 0 && humans > maxP && BotEnabled && !CommandForced && !MapChanged && !DebugStatesMode) {
         if (!PendingMaxPlayerDisable) {
             PendingMaxPlayerDisable = true;
-            // Guarded translation lookup — see sourcemod-practices/translations.md.
+            // Guarded translation lookup - see sourcemod-practices/translations.md.
             if (TranslationPhraseExists("PvB_TooManyPlayers_DeferredDisable")) {
                 CPrintToChatAll("%t", "PvB_TooManyPlayers_DeferredDisable", humans, maxP);
             } else {
@@ -911,14 +911,14 @@ void ManageTeams() {
             }
             // Force-respawn the bot if it's dead, the round is running, AND
             // we're still within the brief post-round-start grace window.
-            // This MUST be outside the team-change check above — otherwise a
+            // This MUST be outside the team-change check above - otherwise a
             // bot that's already on BLU but dead (common after round restart
             // when TF2's arena respawn wave doesn't pick up the bot) never
             // gets respawned, leaving it stuck dead for the entire round.
             //
             // The grace-window gate is the fix for a real gameplay bug: without
             // it, this branch fires on ANY bot death for the entire round, not
-            // just the round-restart spawn-wave-miss it was written for — so
+            // just the round-restart spawn-wave-miss it was written for - so
             // killing the bot mid-round got silently undone within 1-2 ticks,
             // before TF2's own arena logic could register BLU as eliminated
             // and award the round. That made the round unwinnable by killing
@@ -928,7 +928,7 @@ void ManageTeams() {
             // legitimate mid-round kill.
             //
             // During arena pregame, TF2_RespawnPlayer silently fails and
-            // leaves the bot stuck in death limbo — the RoundState_RoundRunning
+            // leaves the bot stuck in death limbo - the RoundState_RoundRunning
             // gate prevents calling it during pregame.
             if (!IsPlayerAlive(i) && GameRules_GetRoundState() == RoundState_RoundRunning
                 && (GetGameTime() - RoundStartTime) < 3.0) {
@@ -941,7 +941,7 @@ void ManageTeams() {
         else if (BotEnabled) {
             // Gate on TEAM (not IsClientObserver). During arena pregame, humans
             // on BLU/RED are in freeze-cam "observer mode" but aren't on the
-            // spec team — we must still force them to RED. IsClientObserver
+            // spec team - we must still force them to RED. IsClientObserver
             // would skip them incorrectly. Leave actual spec-team players alone.
             int humanTeam = GetClientTeam(i);
             if (humanTeam <= view_as<int>(TFTeam_Spectator)) continue;
@@ -981,7 +981,7 @@ void ManageDebugStatesTeams() {
                 TF2_RespawnPlayer(i);
             }
         }
-        // Real humans during debug-states: no forced team — humans can freely join
+        // Real humans during debug-states: no forced team - humans can freely join
         // RED or BLU to participate alongside the debug-states bots, or spectate to
         // watch bot-vs-bot rounds. The listener also allows any team choice in
         // debug-states mode.
@@ -1017,7 +1017,7 @@ public Action Listener_BlockPvBTeamCollision(int client, const char[] command, i
                 shouldRedirect = true;
             }
         }
-        // DebugStatesMode: no restrictions — humans can join any team.
+        // DebugStatesMode: no restrictions - humans can join any team.
 
         if (shouldRedirect) {
             FakeClientCommandEx(client, "jointeam red");
@@ -1043,7 +1043,7 @@ public void Event_ObjectDeflected(Event event, const char[] name, bool dontBroad
 
                 // COUNTER: pre-aim where the enemy's deflected rocket will come from.
                 // Read the enemy's eye angles NOW (during their 0.045s drag delay,
-                // their aim isn't locked yet — but it's the best prediction we have).
+                // their aim isn't locked yet - but it's the best prediction we have).
                 int counterType = GetEffectiveBotType(i);
                 if (CfgCounterChance[counterType] > 0
                     && GetRandomInt(1, 100) <= CfgCounterChance[counterType])
@@ -1085,7 +1085,7 @@ public void Event_ObjectDeflected(Event event, const char[] name, bool dontBroad
 
     if (!IsClientBot(deflector) && !Allowed[deflector]) return;
 
-    // This is a REAL deflect — increment the actual deflect count
+    // This is a REAL deflect - increment the actual deflect count
     DeflectCount[deflector]++;
 
     int botType = GetEffectiveBotType(deflector);
@@ -1107,7 +1107,7 @@ public void Event_ObjectDeflected(Event event, const char[] name, bool dontBroad
     char moveName[16];
     MoveSetName(LastMoveSet[deflector], moveName, sizeof(moveName));
 
-    // Log the bot's eye angles at the moment of deflect — this is what
+    // Log the bot's eye angles at the moment of deflect - this is what
     // TFDB's delayed one-shot drag sample uses for the rocket's new direction.
     float eyeAng[3];
     GetClientEyeAngles(deflector, eyeAng);
@@ -1125,12 +1125,12 @@ public Action Event_PlayerTeamChange(Event event, const char[] name, bool dontBr
 
     int newTeam = event.GetInt("team");
 
-    // Refresh playing-human count on EVERY transition — this is what makes
+    // Refresh playing-human count on EVERY transition - this is what makes
     // PvB auto-disable when the last human goes to spec. The OnGameFrame
     // disable check at line ~2114 reads CachedRealCount; without this update
     // it stays stale until next disconnect / admincheck.
     //
-    // Hook is EventHookMode_Pre — GetClientTeam still returns the OLD team at
+    // Hook is EventHookMode_Pre - GetClientTeam still returns the OLD team at
     // this moment. Defer to next frame so UpdateCachedCounts sees the real
     // post-transition state. (2026-04-26 fix: bot lingered when last human
     // went to spec because the count was sampled pre-transition.)
@@ -1143,7 +1143,7 @@ public Action Event_PlayerTeamChange(Event event, const char[] name, bool dontBr
     // regression fix: pre-clientcheck migration the menu fired because old
     // counts included spectators; now it needs an explicit trigger.)
     if (newTeam == view_as<int>(TFTeam_Red) || newTeam == view_as<int>(TFTeam_Blue)) {
-        // Defer 1.5s — gives Frame_RefreshCachedCounts time to land AND lets
+        // Defer 1.5s - gives Frame_RefreshCachedCounts time to land AND lets
         // the player's spawn settle so the menu doesn't pop during freezecam.
         CreateTimer(1.5, Timer_CheckPlayerJoin, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
     }
@@ -1174,7 +1174,7 @@ public any Native_IsPvBDebugStates(Handle plugin, int numParams)
 public Action Timer_PvBForceTeam(Handle timer, any userId)
 {
     // Only normal PvB mode force-moves humans off BLU (bot-only team).
-    // Debug-states mode is permissive — humans can join any team to participate.
+    // Debug-states mode is permissive - humans can join any team to participate.
     if (!BotEnabled || DebugStatesMode) return Plugin_Stop;
 
     int client = GetClientOfUserId(userId);
@@ -1229,12 +1229,12 @@ public Action Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
             totalDeflects, maxDeflects, maxBot, BotWins, BotLosses);
     }
 
-    // Drain the deferred "too many players" disable now — current rally has
+    // Drain the deferred "too many players" disable now - current rally has
     // ended, safe to kick the bot. OnGameFrame queues this when humans > maxP
     // so the bot finishes the round before disappearing.
     if (PendingMaxPlayerDisable && !DebugStatesMode) {
         PendingMaxPlayerDisable = false;
-        // Re-check the condition — humans may have left during the round.
+        // Re-check the condition - humans may have left during the round.
         if (CachedRealCount > CfgMaxPlayers && !CommandForced) {
             DisablePvB();
             CommandDisabled = false;
@@ -1258,7 +1258,7 @@ public Action Event_PlayerSpawn(Event event, const char[] name, bool dontBroadca
     if (client > 0 && client <= MaxClients) {
         // Only reset combat state if this spawn follows a real death.
         // NER (DeathMatch) calls TF2_RespawnPlayer to teleport the player
-        // to a spawn point without killing them — this fires player_spawn
+        // to a spawn point without killing them - this fires player_spawn
         // but the player didn't actually die. Resetting state on a NER
         // respawn causes bots to lose their deflect/orbit/guard state and
         // miss subsequent deflects (especially statue bots).
@@ -1306,7 +1306,7 @@ public Action Event_PlayerDeath(Event event, const char[] name, bool dontBroadca
 
     if (victim <= 0 || victim > MaxClients) return Plugin_Continue;
 
-    // Mark that this player died — Event_PlayerSpawn should only reset
+    // Mark that this player died - Event_PlayerSpawn should only reset
     // combat state if the player actually died (not NER respawn).
     DiedRecently[victim] = true;
 
@@ -1524,7 +1524,7 @@ int GetCachedRocketForClient(int client) {
 
             int target = TFDB_GetRocketTarget(i);
             // target == client: rocket is genuinely homing toward this bot.
-            // target <= 0: rocket has no current target — treat it as
+            // target <= 0: rocket has no current target - treat it as
             // non-targeted, NOT as "targeting me." The old `|| target <= 0`
             // made every untargeted rocket count as targeting this specific
             // bot, giving it priority over rockets actually targeting
@@ -1564,7 +1564,7 @@ int GetCachedRocketForClient(int client) {
     }
     #endif
 
-    // Fallback: no TFDB — use global cached rocket
+    // Fallback: no TFDB - use global cached rocket
     int entity = GetCachedRocket();
     if (entity != -1) {
         ClientRocketRef[client] = EntIndexToEntRef(entity);
@@ -1607,7 +1607,7 @@ int CountIncomingThreats(int client) {
 }
 
 /**
- * Count rockets actively threatening this client — close AND closing.
+ * Count rockets actively threatening this client - close AND closing.
  * Used by STATE_PANIC to decide if multi-rocket survival mode is needed.
  * Throttled to the same 10Hz as GetCachedRocketForClient to avoid
  * per-tick MAX_ROCKETS scans.
@@ -1672,11 +1672,11 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 }
 
 Action RunPvBCommand(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon) {
-    // Real-player telemetry (see DebugLogPlayerState) — captured here,
+    // Real-player telemetry (see DebugLogPlayerState) - captured here,
     // BEFORE ProcessBotTick's guard below, because an ordinary human
     // (not IsBot, not Allowed[client]) never gets past that guard at all.
     // vel/angles/buttons at this point are the player's own raw usercmd,
-    // untouched by anything in this plugin -- exactly the real aim/move
+    // untouched by anything in this plugin - exactly the real aim/move
     // input needed to compare against bot behavior for tuning.
     if (!IsFakeClient(client) && IsPlayerAlive(client)) {
         DebugLogPlayerState(client, vel, angles, buttons);
@@ -1780,7 +1780,7 @@ void ResetPerConnectionState(int client) {
     PlayerLastYaw[client] = 0.0;
     PlayerLastVelX[client] = 0.0;
     PlayerLastVelY[client] = 0.0;
-    // Overlay is per-client and slot indices get reused on reconnect --
+    // Overlay is per-client and slot indices get reused on reconnect -
     // clear it so a new occupant doesn't inherit the previous admin's beams.
     NavDrawEnabled[client] = false;
     NavDrawRadius[client] = 0;
@@ -1819,7 +1819,7 @@ bool IsClientBot(int client) {
 }
 
 int GetRealClientCount() {
-    // Counts real humans on a PLAY team (RED/BLU). Spectators excluded — same
+    // Counts real humans on a PLAY team (RED/BLU). Spectators excluded - same
     // semantics as CachedRealCount (see UpdateCachedCounts).
     int count = 0;
     for (int i = 1; i <= MaxClients; i++) {

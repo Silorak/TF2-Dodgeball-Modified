@@ -273,7 +273,7 @@ void UpdateCritGlow(int index, int entity, int team)
 	if (stack > MAX_CRIT_STACK) stack = MAX_CRIT_STACK;
 
 	// Same-team skip: if the current stack is already the correct team color
-	// and the first entry is still alive, assume the rest are too — don't
+	// and the first entry is still alive, assume the rest are too - don't
 	// destroy and recreate.
 	if (RocketCritGlow[index][0] != INVALID_ENT_REFERENCE && RocketCritGlowTeam[index] == team)
 	{
@@ -453,7 +453,7 @@ bool ProcessDeflection(int index, int entity, int rocketClass, RocketFlags flags
 	//     GetVectorDotProduct(RocketDirection[index], directionToClient)
 	// i.e. it answers "who is this rocket pointed at?", so it can only answer
 	// correctly using the direction the deflector just aimed. Scoring against
-	// the PRE-deflect heading favoured players off to the sides -- deflect
+	// the PRE-deflect heading favoured players off to the sides - deflect
 	// straight at someone and the rocket picked their neighbour. v1.9.6 does
 	// direction first, then target, and says so in its own comments.
 	//
@@ -653,7 +653,7 @@ void HomingRocketThink(int index)
 
 	// --- Bounce unpause: clear the pause once the shared legacy grid catches up ---
 	// OnTouch set RocketHomingPaused=true and stamped RocketBounceEventBoundary (the
-	// next boundary of the shared grid after the bounce — see NextLegacyGridTick). We let
+	// next boundary of the shared grid after the bounce - see NextLegacyGridTick). We let
 	// the rocket fly its bounce direction blindly until then, then resume homing.
 	// Reproduces the original timer-driven build's 0-100ms variable post-bounce
 	// window (same grid boundaries for every rocket) instead of a fixed delay.
@@ -928,7 +928,7 @@ int GetRandomRocketClass(int spawnerClass)
 
 	if (tableSize == 0) return 0;
 
-	// Sum actual weights — don't assume they total 100.
+	// Sum actual weights - don't assume they total 100.
 	// This lets configs use any relative weights: "common%" "9", "nuke%" "1"
 	// works the same as "common%" "90", "nuke%" "10".
 	int totalWeight = 0;
@@ -940,7 +940,7 @@ int GetRandomRocketClass(int spawnerClass)
 	if (totalWeight <= 0) return 0;
 
 	// Pick a random value in [0, totalWeight - 1].
-	// Using GetRandomInt — SM's built-in that handles range correctly
+	// Using GetRandomInt - SM's built-in that handles range correctly
 	// without the modulo bias of GetURandomInt() % N.
 	int random = GetRandomInt(0, totalWeight - 1);
 
@@ -958,7 +958,7 @@ int GetRandomRocketClass(int spawnerClass)
 	}
 
 	// Should never reach here if weights are valid, but guard against
-	// floating point or config edge cases — return last valid class.
+	// floating point or config edge cases - return last valid class.
 	return tableSize - 1;
 }
 

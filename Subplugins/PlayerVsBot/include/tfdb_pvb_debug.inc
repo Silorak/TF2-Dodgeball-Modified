@@ -1,4 +1,4 @@
-// tfdb_pvb_debug.inc — auto-extracted from tfdb_pvb.sp
+// tfdb_pvb_debug.inc - auto-extracted from tfdb_pvb.sp
 // Do not edit directly; this is a split of the PvB plugin.
 
 public Action Cmd_BotDebugDraw(int client, int args) {
@@ -15,7 +15,7 @@ void DebugDrawBotState(int client, const float vel[3], const float angles[3])
     if (now < NextDebugDraw[client]) return;
     NextDebugDraw[client] = now + 0.25;
 
-    // Only draw for real humans currently in-game -- no point spending
+    // Only draw for real humans currently in-game - no point spending
     // temp-entity bandwidth on bots watching other bots.
     int recipients[MAXPLAYERS];
     int numRecipients = 0;
@@ -29,7 +29,7 @@ void DebugDrawBotState(int client, const float vel[3], const float angles[3])
     pos[2] += 4.0;
 
     // Wall-scan: 8 short beams, color-coded from WallBlocked_/EdgeBlocked_
-    // (see MaybeScanWalls -- same data, same world-absolute indexing).
+    // (see MaybeScanWalls - same data, same world-absolute indexing).
     for (int i = 0; i < 8; i++) {
         // World-absolute, matching how MaybeScanWalls actually scanned them.
         // Drawing these relative to current facing (as this used to) made the
@@ -52,7 +52,7 @@ void DebugDrawBotState(int client, const float vel[3], const float angles[3])
         TE_Send(recipients, numRecipients);
     }
 
-    // Move direction (cyan) -- this tick's actual decided vel[], the same
+    // Move direction (cyan) - this tick's actual decided vel[], the same
     // vector that gets force-applied via TeleportEntity.
     float horizSpeed = SquareRoot(vel[0] * vel[0] + vel[1] * vel[1]);
     if (horizSpeed > 1.0) {
@@ -65,7 +65,7 @@ void DebugDrawBotState(int client, const float vel[3], const float angles[3])
         TE_Send(recipients, numRecipients);
     }
 
-    // Aim direction (yellow) -- where angles[] this tick is actually
+    // Aim direction (yellow) - where angles[] this tick is actually
     // pointing, from eye height so it reads as a sightline.
     float eyePos[3];
     GetClientEyePosition(client, eyePos);
@@ -95,7 +95,7 @@ public Action Cmd_BotDebug(int client, int args) {
         if (rate >= 1 && rate <= 66) DebugSampleRate = rate;
     }
 
-    // Fresh user-initiated session — reset cumulative-line counter so the hard
+    // Fresh user-initiated session - reset cumulative-line counter so the hard
     // cap measures THIS session, not the previous one. (RotateDebugFile also
     // calls StartDebugLogging but must NOT reset DebugTotalLines, otherwise the
     // hard cap would never trigger across rotations.)
@@ -132,9 +132,9 @@ void PvB_Log(const char[] format, any ...)
 
     File f = OpenFile(path, "a");
     if (f == null) {
-        // Last resort only -- if the plugin's own log is unwritable the
+        // Last resort only - if the plugin's own log is unwritable the
         // message still has to go somewhere.
-        LogError("[PvB] cannot open %s -- falling back to SM log for: %s", path, msg);
+        LogError("[PvB] cannot open %s - falling back to SM log for: %s", path, msg);
         return;
     }
 
@@ -158,10 +158,10 @@ void StartDebugLogging() {
 
     // Write header
     DebugFile.WriteLine("=== PVB DEBUG START === map=%s rate=%d build=%s ===", CurrentMap, DebugSampleRate, PVB_BUILD_MARKER);
-    DebugFile.WriteLine("FORMAT [BOT tick N]: #clientIdx name type=class team=(2R/3B) state=BEHAVIOR_TREE_STATE evade=(none/jump_over/reposition/strafe/crouch) orbit=(0/1) trick=MOVE_SET_NAME pos(x y z) vel(x y) speed=groundspeed ang(pitch yaw) rocket(ent mine=targetingMe tgtcl=actualTarget dist spd) enemy=#idx(dist) walls=8-char-OWV-string(O=open,W=wall-hit,V=void-edge; WORLD-ABSOLUTE compass, index i = world yaw i*45: 0=+X,1=+X+Y,2=+Y,3=-X+Y,4=-X,5=-X-Y,6=-Y,7=+X-Y -- NOT relative to facing, so the same index means the same real direction on every line) open=openDirCount btn=WSADM1M2JC reason=(idle_roll/retreat_floor/break_flank/too_far/too_close/sweet_spot/n/a -- which State_Move branch fired) edgeDist=(cells from mapped boundary, ? if uncached) edgeov=(1 if edge-comfort retreat bias overrode this tick) wslide=(wall-slide commitment sign: 0/1/-1) ctl=(1 = a behaviour-tree leaf decided this tick's velocity, 0 = no leaf decided and the bot is deliberately holding position; a run of 0s used to mean the engine's own NextBot locomotion had taken over) cqc=(this bot class's ACTUAL runtime min/max/floor/retreat distances from pvb.cfg) nav=(ready=g_NavScanReady active=g_NavScanActive cellsnull=g_WalkableCells==null edgenull=g_CellEdgeDist==null hit=cache hits of 8 sampled dirs attempts=StartNavScanIfNeeded calls that passed early-out guards bails=how many of those found nobody with valid footing enabled=CfgEnabled map=live CurrentMap value cellsdone=g_NavCellsDone rejwall/rejnofloor/rejslope/rejfoot=NavCache_ExpandCell rejection counters frontier=g_NavFrontier.Length or -1 if null seed=(n=how many clients seeded the most recent fresh-scan attempt x/y/z=world pos of the first seed) fwdsweep=(direction-0/forward IncrementalWallClear outcome this tick: reason 0=clear 1=real wall hit 2=no floor/edge, faildist=distance along the 100-unit sweep where it failed, -1 if clear))");
+    DebugFile.WriteLine("FORMAT [BOT tick N]: #clientIdx name type=class team=(2R/3B) state=BEHAVIOR_TREE_STATE evade=(none/jump_over/reposition/strafe/crouch) orbit=(0/1) trick=MOVE_SET_NAME pos(x y z) vel(x y) speed=groundspeed ang(pitch yaw) rocket(ent mine=targetingMe tgtcl=actualTarget dist spd) enemy=#idx(dist) walls=8-char-OWV-string(O=open,W=wall-hit,V=void-edge; WORLD-ABSOLUTE compass, index i = world yaw i*45: 0=+X,1=+X+Y,2=+Y,3=-X+Y,4=-X,5=-X-Y,6=-Y,7=+X-Y - NOT relative to facing, so the same index means the same real direction on every line) open=openDirCount btn=WSADM1M2JC reason=(idle_roll/retreat_floor/break_flank/too_far/too_close/sweet_spot/n/a - which State_Move branch fired) edgeDist=(cells from mapped boundary, ? if uncached) edgeov=(1 if edge-comfort retreat bias overrode this tick) wslide=(wall-slide commitment sign: 0/1/-1) ctl=(1 = a behaviour-tree leaf decided this tick's velocity, 0 = no leaf decided and the bot is deliberately holding position; a run of 0s used to mean the engine's own NextBot locomotion had taken over) cqc=(this bot class's ACTUAL runtime min/max/floor/retreat distances from pvb.cfg) nav=(ready=g_NavScanReady active=g_NavScanActive cellsnull=g_WalkableCells==null edgenull=g_CellEdgeDist==null hit=cache hits of 8 sampled dirs attempts=StartNavScanIfNeeded calls that passed early-out guards bails=how many of those found nobody with valid footing enabled=CfgEnabled map=live CurrentMap value cellsdone=g_NavCellsDone rejwall/rejnofloor/rejslope/rejfoot=NavCache_ExpandCell rejection counters frontier=g_NavFrontier.Length or -1 if null seed=(n=how many clients seeded the most recent fresh-scan attempt x/y/z=world pos of the first seed) fwdsweep=(direction-0/forward IncrementalWallClear outcome this tick: reason 0=clear 1=real wall hit 2=no floor/edge, faildist=distance along the 100-unit sweep where it failed, -1 if clear))");
     DebugFile.WriteLine("FORMAT [PLAYER tick N]: same as [BOT] minus state/evade/orbit/trick/walls, plus velDelta/yawDelta (turn rate)");
     DebugFile.WriteLine("[STATE] events: behavior tree state transitions. Format: bot=N class=X old=Y new=Z reason=R");
-    DebugFile.WriteLine("DECISION/<type> events: rare, not per-tick -- StateChange, Deflect, JumpOverStart, JumpReposition, OrbitStart, OrbitEnd, Death");
+    DebugFile.WriteLine("DECISION/<type> events: rare, not per-tick - StateChange, Deflect, JumpOverStart, JumpReposition, OrbitStart, OrbitEnd, Death");
 
     DebugActive = true;
     for (int i = 1; i <= MaxClients; i++) { BotDebugTick[i] = 0; PlayerDebugTick[i] = 0; }
@@ -189,7 +189,7 @@ void DebugBumpLineCount() {
     DebugTotalLines++;
 
     if (DebugTotalLines >= DEBUG_MAX_TOTAL_LINES) {
-        PrintToServer("[PvB] Debug log hit hard cap (%d lines) — auto-stopping. Use sm_stopdebug next time.", DEBUG_MAX_TOTAL_LINES);
+        PrintToServer("[PvB] Debug log hit hard cap (%d lines) - auto-stopping. Use sm_stopdebug next time.", DEBUG_MAX_TOTAL_LINES);
         StopDebugLogging();
         return;
     }
@@ -218,7 +218,7 @@ void DebugLogDecision(int client, const char[] where, const char[] details)
 void DebugLogPlayerState(int client, float vel[3], float angles[3], int buttons) {
     if (!DebugActive || DebugFile == null) return;
 
-    // Same sampling throttle DebugLogBotTick uses -- without this it would
+    // Same sampling throttle DebugLogBotTick uses - without this it would
     // write every single tick (66/s) instead of DebugSampleRate-sampled,
     // wildly out of proportion with the bot-side data it's meant to line
     // up against for comparison.
@@ -246,15 +246,15 @@ void DebugLogPlayerState(int client, float vel[3], float angles[3], int buttons)
     PlayerLastVelX[client] = vel[0];
     PlayerLastVelY[client] = vel[1];
 
-    // Button flags — full input picture
+    // Button flags - full input picture
     char btnStr[48];
     FormatEx(btnStr, sizeof(btnStr), "%s%s%s%s%s%s%s%s",
         (buttons & IN_FORWARD)  ? "W" : "-",
         (buttons & IN_BACK)     ? "S" : "-",
         (buttons & IN_MOVELEFT) ? "A" : "-",
         (buttons & IN_MOVERIGHT)? "D" : "-",
-        (buttons & IN_ATTACK)   ? "M1" : "--",  // Flame
-        (buttons & IN_ATTACK2)  ? "M2" : "--",  // Airblast
+        (buttons & IN_ATTACK)   ? "M1" : "-",  // Flame
+        (buttons & IN_ATTACK2)  ? "M2" : "-",  // Airblast
         (buttons & IN_JUMP)     ? "J" : "-",
         (buttons & IN_DUCK)     ? "C" : "-");   // Crouch
 
@@ -391,8 +391,8 @@ void DebugLogBotTick(int client, float vel[3], float angles[3], int buttons) {
         (buttons & IN_BACK)     ? "S" : "-",
         (buttons & IN_MOVELEFT) ? "A" : "-",
         (buttons & IN_MOVERIGHT)? "D" : "-",
-        (buttons & IN_ATTACK)   ? "M1" : "--",
-        (buttons & IN_ATTACK2)  ? "M2" : "--",  // Airblast
+        (buttons & IN_ATTACK)   ? "M1" : "-",
+        (buttons & IN_ATTACK2)  ? "M2" : "-",  // Airblast
         (buttons & IN_JUMP)     ? "J" : "-",
         (buttons & IN_DUCK)     ? "C" : "-");
 
@@ -450,7 +450,7 @@ void DebugLogBotTick(int client, float vel[3], float angles[3], int buttons) {
         }
     }
 
-    // Wall/edge scan state (see MaybeScanWalls) -- O = open, W = real wall
+    // Wall/edge scan state (see MaybeScanWalls) - O = open, W = real wall
     // hit (TR_TraceHull), V = void edge (no walkable floor). Indices 0-7 are
     // WORLD-ABSOLUTE compass directions (i = world yaw i*45: 0 = +X, 2 = +Y,
     // 4 = -X, 6 = -Y), NOT relative to where the bot is looking. Reading a
@@ -458,7 +458,7 @@ void DebugLogBotTick(int client, float vel[3], float angles[3], int buttons) {
     // so a persistent 'V' in one slot is a fixed piece of map geometry
     // rather than something that moves as the bot turns. W and V used to be
     // a single combined "blocked" bit (old logs only ever show
-    // walls=XXXXXXXX either way) -- split so a fully-blocked reading is
+    // walls=XXXXXXXX either way) - split so a fully-blocked reading is
     // distinguishable as "surrounded by real geometry" vs "standing at an
     // edge" instead of requiring another guess.
     char wallStr[9];
@@ -474,13 +474,13 @@ void DebugLogBotTick(int client, float vel[3], float angles[3], int buttons) {
     // Decision introspection (see LastMoveReason/LastEdgeDist/WallSlideSign):
     // WHY this tick's vel[] is what it is, not just what it is. reason= is
     // whichever State_Move branch fired (or "n/a" if State_Move didn't run this
-    // tick -- e.g. DEFLECT/ORBIT/GUARD states). edgeDist= is this cell's
+    // tick - e.g. DEFLECT/ORBIT/GUARD states). edgeDist= is this cell's
     // distance from the mapped boundary in grid cells ("?" if the position
     // isn't cached), edgeov=1 means the edge-comfort retreat bias
     // overrode normal CQC positioning this tick. wslide= is the wall-slide
     // commitment sign (see FindUnblockedDirCommitted): 0 none, 1 CW, -1 CCW.
     // cqc=(...) is the ACTUAL runtime pvb.cfg values driving this bot's
-    // class this tick, not the file on disk -- confirms config is loaded
+    // class this tick, not the file on disk - confirms config is loaded
     // and applied as expected instead of having to take it on faith.
     char edgeDistStr[8];
     if (LastEdgeDistKnown[client]) FormatEx(edgeDistStr, sizeof(edgeDistStr), "%d", LastEdgeDist[client]);

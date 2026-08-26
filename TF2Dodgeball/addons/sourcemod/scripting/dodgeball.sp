@@ -51,7 +51,7 @@ ConVar CvarNoTargetRedirectDamage;
 ConVar CvarStealMessage;
 ConVar CvarDelayMessage;
 
-// Cached cvar values — populated on plugin start and refreshed via change-hooks.
+// Cached cvar values - populated on plugin start and refreshed via change-hooks.
 // Hot paths (HomingRocketThink / RocketLegacyThink / SharedRocketThink / CheckRoundDelays)
 // read these instead of going through ConVar.BoolValue / .FloatValue every tick.
 bool  g_CacheStealPreventionDamage;
@@ -156,7 +156,7 @@ RocketFlags RocketInstanceFlags[MAX_ROCKETS];
 RocketState RocketInstanceState[MAX_ROCKETS];
 float       RocketSpeed[MAX_ROCKETS];
 float       RocketMphSpeed[MAX_ROCKETS];
-float       RocketRawMphSpeed[MAX_ROCKETS];  // Uncapped MPH — what speed WOULD be without sv_maxvelocity limit
+float       RocketRawMphSpeed[MAX_ROCKETS];  // Uncapped MPH - what speed WOULD be without sv_maxvelocity limit
 float       RocketDirection[MAX_ROCKETS][3];
 int         RocketDeflections[MAX_ROCKETS];
 int         RocketEventDeflections[MAX_ROCKETS];
@@ -166,7 +166,7 @@ float       LastSpawnTime[MAX_ROCKETS];
 int         RocketBounces[MAX_ROCKETS];
 bool        RocketHomingPaused[MAX_ROCKETS];     // true between OnTouch bounce and HomingRocketThink bounce unpause
 float       RocketDragEventBoundary[MAX_ROCKETS]; // fixed drag deadline, or next legacy-grid tick when DragDelay is 0
-float       RocketBounceEventBoundary[MAX_ROCKETS]; // next shared legacy-grid tick after the bounce — see NextLegacyGridTick
+float       RocketBounceEventBoundary[MAX_ROCKETS]; // next shared legacy-grid tick after the bounce - see NextLegacyGridTick
 float       RocketNextHomingThink[MAX_ROCKETS];   // GetGameTime() when the homing-lerp block is next eligible. Only gated when class sets "think interval" > 0.
 float       RocketLastLogicThink[MAX_ROCKETS];    // GetGameTime() of last shared/legacy-think call (10 Hz gate inside OnRocketThink)
 int         RocketCritGlow[MAX_ROCKETS][MAX_CRIT_STACK];  // Stacked entity refs for server-managed crit glow particles (per-class "crit glow stack")

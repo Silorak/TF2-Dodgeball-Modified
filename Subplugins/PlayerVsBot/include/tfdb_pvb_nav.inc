@@ -1,4 +1,4 @@
-// tfdb_pvb_nav.inc — auto-extracted from tfdb_pvb.sp
+// tfdb_pvb_nav.inc - auto-extracted from tfdb_pvb.sp
 // Do not edit directly; this is a split of the PvB plugin.
 
 stock int NavGridIndex(int ix, int iy) {
@@ -27,7 +27,7 @@ void NavCache_TryGrow()
 
         int ix = RoundToNearest(pos[0] / NAV_CELL_SIZE);
         int iy = RoundToNearest(pos[1] / NAV_CELL_SIZE);
-        if (NavCache_CellKnown(ix, iy)) continue;  // already mapped -- nothing new here
+        if (NavCache_CellKnown(ix, iy)) continue;  // already mapped - nothing new here
         NavCache_AddCell(ix, iy, floorZ);
     }
 
@@ -67,14 +67,14 @@ bool DirectionIsWalkable_LiveTrace(const float basePos[3], const float dir2D[3],
         //    faildist=32 on all 20,762 samples.
         //
         //  * TraceFilter_WorldOnly, to keep rockets/players out of the probe:
-        //    froze it differently and worse -- seed count went to 0 and every
+        //    froze it differently and worse - seed count went to 0 and every
         //    scan attempt bailed (17/17), faildist=8 on the first hop. The
         //    floor here is NOT world geometry (entity 0); it is a brush
         //    entity, consistent with the walkway being player_clip. Filtering
         //    to entity==0 deletes the very surface the bot stands on.
         //
         // The step-up blindness described in those attempts is REAL and still
-        // unfixed -- this probe cannot see a surface above its own start, and
+        // unfixed - this probe cannot see a surface above its own start, and
         // that is how bots reach z=81 and fall. But it must be solved without
         // moving this start height and without excluding brush entities.
         start[2] = prevZ + WALL_CHECK_LIFT;
@@ -83,7 +83,7 @@ bool DirectionIsWalkable_LiveTrace(const float basePos[3], const float dir2D[3],
         end[1] = start[1];
         end[2] = start[2] - EDGE_CHECK_FALL_DIST;
 
-        // NoPlayers filter, data -1 -- see NavCache_ProbeFloorZ for why this
+        // NoPlayers filter, data -1 - see NavCache_ProbeFloorZ for why this
         // is neither unfiltered (hits players) nor WorldOnly (misses the
         // brush-entity floor these maps are built from).
         TR_TraceRayFilter(start, end, MASK_PLAYERSOLID_BRUSHONLY, RayType_EndPoint, TraceFilter_PlayerSolid, -1);
@@ -93,7 +93,7 @@ bool DirectionIsWalkable_LiveTrace(const float basePos[3], const float dir2D[3],
         TR_GetEndPosition(hitPos);
 
         // Drop-only, not symmetric: a symmetric rise+drop check was tried
-        // and reverted -- on a player_clip walkway (a rough physical
+        // and reverted - on a player_clip walkway (a rough physical
         // stand-in, not exact geometry) it caught ordinary floor
         // unevenness as constantly as it caught real cliffs.
         float drop = prevZ - hitPos[2];
@@ -217,20 +217,20 @@ bool NavCache_RetreatDirection(const float pos[3], float outDir[3])
 bool NavCache_ProbeFloorZ(const float pos[3], float &outZ)
 {
     // Low lift, deliberately restored 2026-08-10 (raising it froze every bot
-    // -- see DirectionIsWalkable_LiveTrace).
+    // - see DirectionIsWalkable_LiveTrace).
     //
     // FILTERED with TraceFilter_NoPlayers, not unfiltered and NOT
     // TraceFilter_WorldOnly. All three were measured:
-    //   * unfiltered   -- hits PLAYERS. Confirmed directly by sm_navcell:
+    //   * unfiltered   - hits PLAYERS. Confirmed directly by sm_navcell:
     //                     "probe hit z=68.03 ent=1 class=player startsolid=1".
     //                     MASK_PLAYERSOLID_BRUSHONLY does not exclude players
     //                     despite the "BRUSHONLY" in its name; that only
     //                     refers to omitting CONTENTS_MONSTER from the
     //                     contents bits. So a bot standing near a cell during
     //                     the scan got its own hull cached as ground.
-    //   * WorldOnly    -- finds nothing at all here (seed count 0, 17/17
+    //   * WorldOnly    - finds nothing at all here (seed count 0, 17/17
     //                     scans bailed). The floor is a brush entity.
-    //   * NoPlayers    -- the correct middle: keeps brush-entity floors,
+    //   * NoPlayers    - the correct middle: keeps brush-entity floors,
     //                     drops players. A player is never ground.
     // Data must be -1, not 0: the filter's own `entity != data` test would
     // reject the world (entity 0) if 0 were passed as the exclusion.
@@ -297,7 +297,7 @@ void NavCache_Save()
         return;
     }
 
-    // Iterate flat array — write known cells in "ix:iy floorZ" format
+    // Iterate flat array - write known cells in "ix:iy floorZ" format
     for (int idx = 0; idx < NAV_GRID_CELLS; idx++) {
         if (!g_NavCellKnown[idx]) continue;
         int ix = (idx / NAV_GRID_SIZE) - NAV_GRID_HALF;
@@ -380,18 +380,18 @@ void StartNavScanIfNeeded()
         g_NavScanReady = true;
         NavCache_ComputeEdgeDistances();
         // DO NOT audit here. StartNavScanIfNeeded is reached from OnMapStart,
-        // and NavCache_AuditExtremes fires TR_TraceRay -- tracing that early,
+        // and NavCache_AuditExtremes fires TR_TraceRay - tracing that early,
         // before the world/physics environment is fully up, segfaults the
         // server (exit 139 on map load, 2026-08-10; SourcePawn itself is
         // VM-safe, so a native crash means an engine call ran at a moment it
         // could not be made). Cache loading is exactly the path that hits
         // OnMapStart, which is why this was the one place it could not go.
-        // Use sm_navaudit for a loaded cache instead -- admin-triggered, so
+        // Use sm_navaudit for a loaded cache instead - admin-triggered, so
         // by definition the map is live.
         return;
     }
 
-    // Flat arrays are already allocated as globals — just clear them
+    // Flat arrays are already allocated as globals - just clear them
     NavCache_Reset();
     g_NavFrontier = new ArrayList(3);
     g_NavFrontierRead = 0;
@@ -422,7 +422,7 @@ void StartNavScanIfNeeded()
     g_NavSeedCount = seedCount;
 
     if (g_NavFrontier.Length == 0) {
-        // Nobody currently in-game had valid footing to seed from -- bail
+        // Nobody currently in-game had valid footing to seed from - bail
         // quietly, a later spawn will retry.
         g_NavScanBails++;
         NavCache_Reset();
@@ -484,13 +484,13 @@ bool IncrementalWallClear(const float basePos[3], float baseZ, const float dir2D
         //   MASK_PLAYERSOLID_BRUSHONLY = SOLID|MOVEABLE|WINDOW|GRATE|PLAYERCLIP
         //
         // Measured on abyss_v4 across two full sessions, 11,702 wall-scan
-        // samples: the letter 'W' never appeared once. Not rare -- zero.
+        // samples: the letter 'W' never appeared once. Not rare - zero.
         // Every WallBlocked_ bit that was ever set came from the offEdge
         // term instead. The bot could not see a single wall on this map,
         // which is why open= reads 8 essentially always, FindUnblockedDir
         // never had real data to prefer a direction with, EvadeStrafePickSide
         // always fell through to its coin flip, and "hugs walls when it
-        // doesn't need to" was inevitable -- there were no walls in its
+        // doesn't need to" was inevitable - there were no walls in its
         // world model at all.
         //
         // The earlier switch away from PLAYERSOLID was made to fix 40/40
@@ -499,24 +499,24 @@ bool IncrementalWallClear(const float basePos[3], float baseZ, const float dir2D
         // but excluding player_clip outright treats the symptom by deleting
         // the signal. Handle the embedded case directly instead: if the
         // hull STARTS in solid, the obstruction is where we already are,
-        // not something ahead in the sweep direction -- that is never a
+        // not something ahead in the sweep direction - that is never a
         // wall discovery, so don't report one.
         //
         // FILTER (2026-08-10): TraceFilter_PlayerSolid, not
-        // TraceFilter_WorldOnly. Swapping the MASK alone changed nothing --
-        // still zero 'W' across ~50,000 samples -- because the blocker was
+        // TraceFilter_WorldOnly. Swapping the MASK alone changed nothing -
+        // still zero 'W' across ~50,000 samples - because the blocker was
         // never the mask, it was the filter. This map's geometry is brush
         // ENTITIES (the floor is `func_brush`, ent 51, proven via sm_navcell),
         // and `entity == 0` discards every one of them. It blinded the wall
         // sweep in exactly the way it blinded the floor probe, where the same
         // filter produced seed count 0 and 17/17 failed scans.
         //
-        // PlayerSolid asks the question that actually matters for a wall --
-        // "would a PLAYER be stopped by this" -- so it keeps brush entities
+        // PlayerSolid asks the question that actually matters for a wall -
+        // "would a PLAYER be stopped by this" - so it keeps brush entities
         // and drops players, rockets, and the func_physbox_multiplayer
         // rocket-barriers that stop traces but not people.
         TR_TraceHullFilter(sweepStart, sweepEnd, mins, maxs, MASK_PLAYERSOLID_BRUSHONLY, TraceFilter_PlayerSolid, excludeClient);
-        if (TR_DidHit() && !TR_StartSolid()) { outFailDist = traveled; return false; }  // a REAL wall -- outNoFloor stays false
+        if (TR_DidHit() && !TR_StartSolid()) { outFailDist = traveled; return false; }  // a REAL wall - outNoFloor stays false
 
         // Re-anchor height to the ACTUAL local floor before the next
         // segment, so a descending staircase gets followed step by step
@@ -525,7 +525,7 @@ bool IncrementalWallClear(const float basePos[3], float baseZ, const float dir2D
         floorProbe[0] = curPos[0]; floorProbe[1] = curPos[1]; floorProbe[2] = prevZ;
         float curZ;
         if (!NavCache_ProbeFloorZ(floorProbe, curZ)) { outNoFloor = true; outFailDist = traveled; return false; }  // an EDGE, not a wall
-        if ((prevZ - curZ) > EDGE_CHECK_MAX_DROP) { outNoFloor = true; outFailDist = traveled; return false; }     // same -- too steep a drop to call "floor"
+        if ((prevZ - curZ) > EDGE_CHECK_MAX_DROP) { outNoFloor = true; outFailDist = traveled; return false; }     // same - too steep a drop to call "floor"
 
         prevPos[0] = curPos[0]; prevPos[1] = curPos[1];
         prevZ = curZ;
@@ -542,12 +542,12 @@ void NavCache_ExpandCell(int ix, int iy, float z)
     // MASK_SOLID_BRUSHONLY instead of MASK_PLAYERSOLID_BRUSHONLY (excludes
     // CONTENTS_PLAYERCLIP). Diagnostic data made this unambiguous: 40/40
     // neighbor checks rejected at the wall-sweep, 0 from the floor probe,
-    // across 5 different cells -- not "surrounded by real geometry" (that
+    // across 5 different cells - not "surrounded by real geometry" (that
     // wouldn't be 100% uniform across a spread of cells), a systematic
     // sweep failure. The floor probe is a zero-width RAY and never had this
     // problem; only the swept HULL did. Two candidate causes, both fixed by
     // this: (1) this map's walkway is player_clip (confirmed earlier this
-    // session) -- if it's a THICK volume rather than a thin sheet, a hull
+    // session) - if it's a THICK volume rather than a thin sheet, a hull
     // that starts already inside it registers "stuck in solid" for any
     // sweep direction, same as the classic floor-flush bug but sideways;
     // MASK_SOLID_BRUSHONLY stops caring about player_clip entirely. (2) a
@@ -575,7 +575,7 @@ void NavCache_ExpandCell(int ix, int iy, float z)
         // Horizontal path check: refuse a neighbor if there's a wall
         // between here and there. Incremental (see
         // IncrementalWallClear), not one sweep at a fixed height
-        // for the whole hop -- a level sweep can't cross a real staircase,
+        // for the whole hop - a level sweep can't cross a real staircase,
         // it slams into the first riser.
         float dx2 = neighborPos[0] - basePos[0];
         float dy2 = neighborPos[1] - basePos[1];
@@ -589,7 +589,7 @@ void NavCache_ExpandCell(int ix, int iy, float z)
             continue;
         }
 
-        // Floor check along the WHOLE hop, incrementally -- a single probe
+        // Floor check along the WHOLE hop, incrementally - a single probe
         // at the far end can land past a narrow dip hidden partway through
         // the 48-unit jump (the exact bug fixed for the live per-tick
         // guard earlier; this one-time scan needs the same rigor, it just
@@ -620,7 +620,7 @@ public Action Timer_NavScanStep(Handle timer)
         g_NavCellsDone++;
         if (g_NavCellsDone >= NAV_MAX_CELLS) {
             g_NavFrontierRead = g_NavFrontier.Length;
-            PvB_Log("[PVB-NAV] %s hit the %d-cell safety cap -- scan stopped early", CurrentMap, NAV_MAX_CELLS);
+            PvB_Log("[PVB-NAV] %s hit the %d-cell safety cap - scan stopped early", CurrentMap, NAV_MAX_CELLS);
             break;
         }
     }
@@ -635,7 +635,7 @@ public Action Timer_NavScanStep(Handle timer)
         if (g_NavGrowthMode) {
             // Growth pass: unlike the initial scan, ANY number of newly
             // discovered cells is a legitimate result to keep, never a
-            // failure to discard -- the existing 11000+ cell cache (or
+            // failure to discard - the existing 11000+ cell cache (or
             // however large) isn't at risk here, this only ever adds to
             // it. Only bother recomputing/resaving if something actually
             // changed; most growth ticks find nothing new once a map is
@@ -651,18 +651,18 @@ public Action Timer_NavScanStep(Handle timer)
         }
 
         if (g_NavCellsDone < NAV_MIN_VIABLE_CELLS) {
-            // The flood-fill died almost immediately -- most likely the
+            // The flood-fill died almost immediately - most likely the
             // seed spawned in a small boxed-in room where the real exit
             // isn't grid-aligned with one of the 8 sampled directions
             // within range. Treating this as "done" would permanently
             // cache a useless 1-cell result and block every future
             // attempt (g_NavScanReady gates StartNavScanIfNeeded). Leave
-            // it NOT ready so the next spawn -- which reseeds from every
+            // it NOT ready so the next spawn - which reseeds from every
             // currently in-game client, including any bot that's since
-            // wandered into the open arena via the live-trace fallback --
+            // wandered into the open arena via the live-trace fallback -
             // gets another shot instead of being stuck on this forever.
             NavCache_Reset();
-            PvB_Log("[PVB-NAV] %s scan died at %d cells (rejected: wall=%d nofloor=%d slope=%d footprint=%d) -- too small to trust, will retry on next spawn",
+            PvB_Log("[PVB-NAV] %s scan died at %d cells (rejected: wall=%d nofloor=%d slope=%d footprint=%d) - too small to trust, will retry on next spawn",
                 CurrentMap, g_NavCellsDone, g_NavRejectWall, g_NavRejectNoFloor, g_NavRejectSlope, g_NavRejectFootprint);
             return Plugin_Stop;
         }
@@ -684,7 +684,7 @@ void NavCache_AuditExtremes()
     // Hard refusal to trace on a map that isn't live yet. This function
     // segfaulted the server when it was reachable from OnMapStart (see
     // StartNavScanIfNeeded). Requiring a real client in-game is a cheap,
-    // reliable proxy for "the world exists and TR_* is safe to call" -- the
+    // reliable proxy for "the world exists and TR_* is safe to call" - the
     // diagnostic is worth nothing if running it can take the server down.
     bool anyoneHere = false;
     for (int i = 1; i <= MaxClients; i++) {
@@ -726,7 +726,7 @@ void NavCache_AuditExtremes()
 
         float cachedZ;
         if (!NavCache_IsWalkable(cellPos, cachedZ)) {
-            PvB_Log("[PVB-NAV-AUDIT] %-10s cell %d:%d -- not in cache", labels[s], sampleIx[s], sampleIy[s]);
+            PvB_Log("[PVB-NAV-AUDIT] %-10s cell %d:%d - not in cache", labels[s], sampleIx[s], sampleIy[s]);
             continue;
         }
         cellPos[2] = cachedZ;
@@ -737,7 +737,7 @@ void NavCache_AuditExtremes()
         TR_TraceRay(pStart, pEnd, MASK_PLAYERSOLID_BRUSHONLY, RayType_EndPoint);
 
         if (!TR_DidHit()) {
-            PvB_Log("[PVB-NAV-AUDIT] %-10s cell %d:%d cachedZ=%.2f -- probe NO HIT (cached a cell with no floor!)",
+            PvB_Log("[PVB-NAV-AUDIT] %-10s cell %d:%d cachedZ=%.2f - probe NO HIT (cached a cell with no floor!)",
                 labels[s], sampleIx[s], sampleIy[s], cachedZ);
             continue;
         }
@@ -767,21 +767,21 @@ bool DirectionIsWalkable(const float basePos[3], const float dir2D[3], float tot
     // A cache HIT used to return true immediately, skipping the live trace
     // entirely. That is what killed a bot at (2001 585) on abyss_v4
     // (2026-08-10 capture): cell 42:12 and every neighbour out to +-2 are
-    // cached as solid floor at z=64.03 with edgeDist=10 -- ten cells, ~480
+    // cached as solid floor at z=64.03 with edgeDist=10 - ten cells, ~480
     // units, from any mapped boundary. Deep interior by every cache metric.
     // The bot walked that ground at z=63, stepped up 19 units onto a lip at
-    // (2001 585) -- inside the SAME 48-unit cell -- and dropped to -236.
+    // (2001 585) - inside the SAME 48-unit cell - and dropped to -236.
     //
     // The grid samples one floor probe per 48-unit cell. It structurally
     // cannot represent a hole narrower than one cell, so for that spot it
-    // was confidently, precisely wrong -- and because a hit short-circuited
+    // was confidently, precisely wrong - and because a hit short-circuited
     // the trace, nothing else ever looked. walls= read OOOOOOOO, the
     // per-tick step guard passed, and edgeov stayed 0 for all 10,546
     // samples of that session.
     //
     // The control experiment is already on record: the immediately previous
     // session ran the whole time with ready=0 (scan unfinished), so every
-    // query fell through to the live trace -- zero falls, and correct
+    // query fell through to the live trace - zero falls, and correct
     // single-direction void readings at real edges. Cache on: one death.
     // Cache off: none. The cache was actively degrading safety by
     // suppressing the finer check.
@@ -789,7 +789,7 @@ bool DirectionIsWalkable(const float basePos[3], const float dir2D[3], float tot
     // So: let the cache refuse fast (a boundary cell is a boundary cell,
     // no trace needed to reject it), but make every "yes" go through the
     // 8-unit-granularity live trace, which samples finely enough to see a
-    // sub-cell hole. Cost is bounded -- the per-tick step guard is 3 hops,
+    // sub-cell hole. Cost is bounded - the per-tick step guard is 3 hops,
     // and the 8-direction scan is throttled to WALL_SCAN_INTERVAL.
     int edgeDist;
     if (NavCache_GetEdgeDist(target, edgeDist) && edgeDist < NAV_HARD_MARGIN_CELLS) return false;
@@ -813,7 +813,7 @@ void MaybeScanWalls(int client)
     float dist = GetVectorDistance(pos, LastWallPos[client]);
     if (dist < WALL_SKIP_DIST && now < NextWallScan_[client] + WALL_SCAN_INTERVAL) return;
 
-    // 8 WORLD-ABSOLUTE directions (index i = world yaw i*45) -- deliberately
+    // 8 WORLD-ABSOLUTE directions (index i = world yaw i*45) - deliberately
     // NOT built from the bot's eye angles. See WorldYawToDirIndex for why:
     // this array outlives the facing it would have been stamped with, and a
     // rocket-tracking bot's facing is the fastest-changing thing about it.
@@ -824,12 +824,12 @@ void MaybeScanWalls(int client)
 
     // A single sweep held at pos's height for the whole WALL_CHECK_DIST
     // (100 units, over twice the scanner's 48-unit hop) has the exact same
-    // "can't cross a real staircase" problem NavCache_ExpandCell had --
+    // "can't cross a real staircase" problem NavCache_ExpandCell had -
     // confirmed via diagnostics: even with a fully-built, correct nav
     // cache (edgeDist=18-19, deep interior, nowhere near a real boundary),
     // mobile bots kept reading walls=WWWWWWWW / open=0 in 100% of samples.
     // Now uses IncrementalWallClear (see NavCache_ExpandCell), the same
-    // technique that fixed the scanner -- short hops, re-anchored to the
+    // technique that fixed the scanner - short hops, re-anchored to the
     // locally-probed floor each step, instead of one sweep at a fixed
     // height for the whole distance.
     float tracePos[3];
@@ -844,14 +844,14 @@ void MaybeScanWalls(int client)
         bool hitWall = !wallClear && !wallNoFloor;
 
         // Diagnostic only, direction 0 (forward) as a representative
-        // sample -- see LastWallFailDist/LastWallFailReason.
+        // sample - see LastWallFailDist/LastWallFailReason.
         if (i == 0) {
             if (wallClear) { LastWallFailDist[client] = -1.0; LastWallFailReason[client] = 0; }
             else if (wallNoFloor) { LastWallFailDist[client] = wallFailDist; LastWallFailReason[client] = 2; }
             else { LastWallFailDist[client] = wallFailDist; LastWallFailReason[client] = 1; }
         }
 
-        // Also check map edges — don't walk off a ledge. Evaluated
+        // Also check map edges - don't walk off a ledge. Evaluated
         // UNCONDITIONALLY, not gated behind "!hitWall": this flag is what
         // keeps the "all directions blocked -> push through anyway"
         // fallbacks in State_Move/State_Orbit/State_Guard from marching a bot off a
@@ -860,14 +860,14 @@ void MaybeScanWalls(int client)
         // the one check that actually matters for not falling off the map.
         //
         // This used to be TR_PointOutsideWorld, which only answers "is this
-        // point outside the compiled level's leaf structure entirely" --
+        // point outside the compiled level's leaf structure entirely" -
         // the out-of-bounds/killzone check. It does NOT detect a gap/chasm
         // that's still fully inside the map's own bounds (skybox still
         // encloses it) with nothing but void below, which is exactly what
         // this abyss-style map is built from and exactly why bots kept
         // walking straight off the edge. The correct check for "is there
         // WALKABLE floor here" is a downward trace checked against TF2's
-        // own slope-walkability limit (see TraceFindsWalkableFloor) --
+        // own slope-walkability limit (see TraceFindsWalkableFloor) -
         // "some surface exists below" isn't enough on its own, since a
         // slope steeper than the engine's own walkable limit un-grounds a
         // player exactly like a real edge does (debug logs showed bots
@@ -876,7 +876,7 @@ void MaybeScanWalls(int client)
         // wallNoFloor folded in here, not into hitWall: on a disk/island
         // map surrounded by void, most directions from most positions run
         // out of floor within WALL_CHECK_DIST (100 units) long before
-        // hitting any real wall brush -- that's an edge, not a wall, and
+        // hitting any real wall brush - that's an edge, not a wall, and
         // it's useful extra edge information DirectionIsWalkable's own
         // 80-unit check might miss (an edge sitting between 80-100 units
         // out), not something to discard.
@@ -885,7 +885,7 @@ void MaybeScanWalls(int client)
         WallBlocked_[client][i] = hitWall || offEdge;
         EdgeBlocked_[client][i] = offEdge;
 
-        // Diagnostic only, mirrors DirectionIsWalkable's own target calc --
+        // Diagnostic only, mirrors DirectionIsWalkable's own target calc -
         // see LastCacheHitCount.
         float diagTarget[3];
         diagTarget[0] = pos[0] + dirs[i][0] * 80.0;
@@ -955,7 +955,7 @@ bool FindUnblockedDirCommitted(int client, int desiredDir, float distToGoal, int
 
     if (!WallBlocked_[client][desiredDir])
     {
-        WallSlideSign[client] = 0;  // clear path -- no detour, drop any commitment
+        WallSlideSign[client] = 0;  // clear path - no detour, drop any commitment
         outDir = desiredDir;
         return true;
     }
@@ -964,12 +964,12 @@ bool FindUnblockedDirCommitted(int client, int desiredDir, float distToGoal, int
 
     if (WallSlideSign[client] != 0 && now >= WallSlideUntil[client])
     {
-        // Commitment window elapsed -- did it actually help? 10 units of
+        // Commitment window elapsed - did it actually help? 10 units of
         // slack so normal positional noise doesn't read as "no progress."
         if (distToGoal >= WallSlideStartDist[client] - 10.0)
-            WallSlideSign[client] = -WallSlideSign[client];  // wasn't working -- try the other way
+            WallSlideSign[client] = -WallSlideSign[client];  // wasn't working - try the other way
         else
-            WallSlideSign[client] = 0;  // it was working -- let it re-decide fresh next time
+            WallSlideSign[client] = 0;  // it was working - let it re-decide fresh next time
     }
 
     if (WallSlideSign[client] == 0)
@@ -1012,7 +1012,7 @@ public Action Cmd_NavRebuild(int client, int args) {
 
     bool existed = FileExists(path);
     if (existed && !DeleteFile(path)) {
-        CReplyToCommand(client, "[PvB] Could not delete %s -- check file permissions.", path);
+        CReplyToCommand(client, "[PvB] Could not delete %s - check file permissions.", path);
         return Plugin_Handled;
     }
 
@@ -1055,7 +1055,7 @@ public Action Cmd_NavDraw(int client, int args) {
     CReplyToCommand(client, "[PvB] Nav cache overlay ENABLED (radius %d cells, %d units). sm_navdraw again to stop.",
         NavDrawRadius[client], RoundToFloor(float(NavDrawRadius[client]) * NAV_CELL_SIZE));
     CReplyToCommand(client, "[PvB] GREEN = cached, real floor confirmed   YELLOW = cached, near the cache's own boundary");
-    CReplyToCommand(client, "[PvB] {red}MAGENTA = CACHED BUT NO REAL FLOOR{default} -- phantom cell, this is what makes bots walk into the void");
+    CReplyToCommand(client, "[PvB] {red}MAGENTA = CACHED BUT NO REAL FLOOR{default} - phantom cell, this is what makes bots walk into the void");
     CReplyToCommand(client, "[PvB] RED = real floor exists but NOT cached (scan never reached it)");
     return Plugin_Handled;
 }
@@ -1141,7 +1141,7 @@ int ParseUserIdArg(const char[] arg)
 
 public Action Cmd_NavCell(int client, int args) {
     // Server console (client 0) has no position of its own, but it CAN name a
-    // target -- and the arg parsing below already supports that. Refusing
+    // target - and the arg parsing below already supports that. Refusing
     // outright before even looking at the args made the command unusable from
     // the server console / RCON even when a perfectly good target was given.
     if (client == 0 && args < 1) {
@@ -1171,7 +1171,7 @@ public Action Cmd_NavCell(int client, int args) {
     int cx = RoundToNearest(pos[0] / NAV_CELL_SIZE);
     int cy = RoundToNearest(pos[1] / NAV_CELL_SIZE);
 
-    CReplyToCommand(client, "[PvB] Cache around (%d,%d) [world %.0f,%.0f] -- each cell: Z height / edge-distance, X = not in cache", cx, cy, pos[0], pos[1]);
+    CReplyToCommand(client, "[PvB] Cache around (%d,%d) [world %.0f,%.0f] - each cell: Z height / edge-distance, X = not in cache", cx, cy, pos[0], pos[1]);
     for (int dy = 3; dy >= -3; dy--) {
         char row[256];
         row[0] = '\0';
@@ -1198,7 +1198,7 @@ public Action Cmd_NavCell(int client, int args) {
 
     // --- What is the floor probe actually hitting here? ---
     // The cache for tfdb_abyss_v4 is 11,019 of 11,022 cells at EXACTLY
-    // 64.03, a uniform plane spanning +-2496 -- including well out over the
+    // 64.03, a uniform plane spanning +-2496 - including well out over the
     // void, where bots have repeatedly fallen to -230 while the cache
     // reported edgeDist 9-10 (deep interior). A scan of real geometry does
     // not look like that; a single flat brush the trace can see does.
@@ -1211,7 +1211,7 @@ public Action Cmd_NavCell(int client, int args) {
     // becomes one command instead of another guess.
     // Probe from well clear of the querying player's own hull, and with
     // players filtered out. The first version of this did neither and
-    // dutifully reported "ent=1 class=player startsolid=1" -- it was
+    // dutifully reported "ent=1 class=player startsolid=1" - it was
     // measuring the admin standing on the spot. That was still useful (it
     // proved MASK_PLAYERSOLID_BRUSHONLY does NOT exclude players), but it
     // told us nothing about the ground.
@@ -1223,7 +1223,7 @@ public Action Cmd_NavCell(int client, int args) {
     // and a surface that merely stops a TRACE are different things, and the
     // whole phantom-plane problem is that this probe cannot currently tell
     // them apart. Reporting per-contents tells us exactly which brush type
-    // the cache has been mapping -- no more inferring it from symptoms.
+    // the cache has been mapping - no more inferring it from symptoms.
     int bits[5];
     bits[0] = CONTENTS_SOLID;
     bits[1] = CONTENTS_PLAYERCLIP;
@@ -1250,7 +1250,7 @@ public Action Cmd_NavCell(int client, int args) {
         else strcopy(cls, sizeof(cls), "<none>");
 
         // Collision group + solid flags alongside the hit, because "what is
-        // it" was never the hard part -- "would a PLAYER actually stop on it"
+        // it" was never the hard part - "would a PLAYER actually stop on it"
         // was, and that took a round-trip through the Valve wiki to answer for
         // func_physbox_multiplayer. Print the properties that decide it so the
         // next unknown entity is one command, not another research detour.
@@ -1308,7 +1308,7 @@ public bool TraceFilter_PlayerSolid(int entity, int contentsMask, any data) {
     // Per the Valve Developer Community: "func_physbox_multiplayer is
     // identical to func_physbox, except NOT SOLID TO PLAYERS BY DEFAULT."
     // That behaviour lives in the C++ class's ShouldCollide() override, NOT
-    // in any networked property -- there is no collision group, solid flag
+    // in any networked property - there is no collision group, solid flag
     // or contents bit that reflects it, which is exactly why reading
     // m_CollisionGroup missed it and a rebuilt cache came back byte-identical.
     // SourceMod cannot call ShouldCollide, so the class name is the only
@@ -1344,7 +1344,7 @@ public bool TraceFilter_PlayerSolid(int entity, int contentsMask, any data) {
                  COLLISION_GROUP_PASSABLE_DOOR,
                  COLLISION_GROUP_DISSOLVING:
             {
-                return false;  // a player passes through this -- not ground
+                return false;  // a player passes through this - not ground
             }
         }
     }

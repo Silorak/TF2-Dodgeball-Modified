@@ -23,7 +23,7 @@
 
 // Bumped by hand on every debug-relevant fix so a pasted-back debug log's
 // header line ("=== PVB DEBUG START === ... build=... ===") proves which
-// build actually produced it -- no more guessing whether a test result
+// build actually produced it - no more guessing whether a test result
 // reflects the latest source or a stale upload.
 #define PVB_BUILD_MARKER        "quality-guard-2026-08-15"
 
@@ -32,7 +32,7 @@ bool TFDBAvailable = false;
 
 // === WALL/EDGE SCAN CONSTANTS ===
 // Used by both MaybeScanWalls (periodic 8-direction scan) and ProcessBotTick's
-// per-tick step guard, so these must be defined before either -- moved here
+// per-tick step guard, so these must be defined before either - moved here
 // from just above MaybeScanWalls, which was too late in the file for the
 // per-tick guard's earlier use.
 #define WALL_CHECK_DIST    100.0
@@ -50,11 +50,11 @@ bool TFDBAvailable = false;
 // raw bot positions need more clearance than pre-validated cell centers.
 #define WALL_CHECK_LIFT      4.0
 // Proven correct for the scanner (built a real 11000+-cell cache with
-// it) -- do not change without re-verifying via g_NavReject* diagnostics.
+// it) - do not change without re-verifying via g_NavReject* diagnostics.
 #define SCANNER_WALL_CHECK_LIFT 4.0
 // Lift specifically for MaybeScanWalls's live horizontal sweep (via
 // IncrementalWallClear), separate from WALL_CHECK_LIFT and
-// SCANNER_WALL_CHECK_LIFT -- see the correction above. 16.0, matching the
+// SCANNER_WALL_CHECK_LIFT - see the correction above. 16.0, matching the
 // first attempt's value, but this time isolated with faildist diagnostics
 // confirming exactly which problem it's meant to fix before committing to
 // it a second time.
@@ -64,7 +64,7 @@ bool TFDBAvailable = false;
 // step without false-flagging it as a cliff, well short of "might still be
 // standing on something out of range."
 #define EDGE_CHECK_FALL_DIST 64.0
-// Hop size for DirectionIsWalkable's incremental path sampling -- checking
+// Hop size for DirectionIsWalkable's incremental path sampling - checking
 // only the far endpoint of a long lookahead can sample past a localized
 // drop that levels off again further out. 20 units was still coarse enough
 // to straddle a narrow curb-then-cliff feature (a small lip climbed on one
@@ -75,11 +75,11 @@ bool TFDBAvailable = false;
 #define EDGE_CHECK_STEP 8.0
 // Max height change tolerated PER HOP before a direction is flagged
 // unwalkable. Used to be the same value as EDGE_CHECK_STEP (the hop
-// distance itself) -- coupling "how densely to sample" to "how much noise
+// distance itself) - coupling "how densely to sample" to "how much noise
 // to tolerate" meant shrinking the hop size to catch narrow features also
 // made the check intolerant of ordinary floor unevenness over that same
 // short span. Debug logs showed bots frozen with walls=VVVVVVVV on
-// completely flat, known-good spawn ground, nowhere near a real edge --
+// completely flat, known-good spawn ground, nowhere near a real edge -
 // every direction was being misread as a cliff. Decoupled: still sample
 // every 8 units (catches a narrow lip), but allow a more realistic amount
 // of height noise per hop before calling it unwalkable.
@@ -91,7 +91,7 @@ bool TFDBAvailable = false;
 // KNOWN UNSOLVED PROBLEM, kept here as the record of it: the downward
 // walkability probes start only WALL_CHECK_LIFT (4) above the reference
 // floor, so any surface more than 4 units up is above the ray's own origin
-// and invisible to them -- while step-up will still put a bot on it. That is
+// and invisible to them - while step-up will still put a bot on it. That is
 // how two abyss_v4 bots reached z=81 on a map whose entire 11,022-cell nav
 // cache contains nothing above z=68.53, and then fell.
 //
@@ -109,11 +109,11 @@ bool TFDBAvailable = false;
 // needs room; doing it in a corridor just grinds the bot along geometry.
 #define ORBIT_MIN_OPEN_DIRS 4
 // Pyro airblast cooldown. Was written as a bare 0.75 in three places, which
-// is also the value the orbit trigger has to agree with -- if orbit thinks
+// is also the value the orbit trigger has to agree with - if orbit thinks
 // the blast is ready and State_Deflect doesn't, the bot flips between them.
 #define AIRBLAST_COOLDOWN 0.75
 // The compression blast's real box. A press outside either of these cannot
-// connect at any angle, but still burns the full cooldown -- see
+// connect at any angle, but still burns the full cooldown - see
 // AirblastWouldConnect.
 #define AIRBLAST_REACH      256.0
 #define AIRBLAST_FIRE_RANGE 240.0
@@ -171,10 +171,10 @@ bool ClassIsStatueLike[MAX_BOT_TYPES];     // Per-class: force-idle behavior (wa
 // --- Evasion Actions ---
 enum EvadeAction {
     EVADE_NONE = 0,
-    EVADE_JUMP,        // grounded/low rocket close to feet — hop it, then deflect on the way down
+    EVADE_JUMP,        // grounded/low rocket close to feet - hop it, then deflect on the way down
     EVADE_CROUCH,
-    EVADE_REPOSITION,  // rocket behind/off to the side — jump + turn to reacquire it
-    // Not really "evasion" in the dodge-out-of-the-way sense -- more a
+    EVADE_REPOSITION,  // rocket behind/off to the side - jump + turn to reacquire it
+    // Not really "evasion" in the dodge-out-of-the-way sense - more a
     // recovery/delay move: airblast is on cooldown, a rocket is already
     // close and lined up, and there's nothing to do but buy time. Strafes
     // laterally away from the rocket's line while aim stays locked onto
@@ -212,10 +212,10 @@ bool CfgClassSpeech[MAX_BOT_TYPES];
 // --- Per-class config arrays (loaded from pvb.cfg "classes") ---
 // Every bot in debug-states mode indexes these by its own type, so classes
 // don't stomp each other's tunings.
-// react_min / react_max removed — airblast fires at fixed 240 HU (airblast range)
+// react_min / react_max removed - airblast fires at fixed 240 HU (airblast range)
 float CfgMaxOrbitTime[MAX_BOT_TYPES];
 int   CfgMaxOrbitLoops[MAX_BOT_TYPES];
-// angle_random_chance / angle_random_strength removed — unused in BT code
+// angle_random_chance / angle_random_strength removed - unused in BT code
 float CfgEvadeChance[MAX_BOT_TYPES];
 float CfgCqcFloorDist[MAX_BOT_TYPES];   // Hard floor - no class can EVER go closer
 float CfgCqcMinDist[MAX_BOT_TYPES];
@@ -228,15 +228,15 @@ float CfgLookAtPlayerTime[MAX_BOT_TYPES];
 // --- Capability-by-presence flags -------------------------------------------
 // Each CfgCan* flag is TRUE iff the corresponding config key(s) were present in
 // the class section of pvb.cfg. Remove the keys from the class block and the
-// bot becomes physically incapable of that action — not just "chance 0", but
+// bot becomes physically incapable of that action - not just "chance 0", but
 // gated out of the code path entirely. Defaults to TRUE so classes with
 // complete configs behave exactly as before.
 //
-//   CfgCanOrbit[t]   — orbit_time / orbit_max_loops / orbit_chance present
-//   CfgCanEvade[t]   — evade_chance present
-//   CfgCanCqc[t]     — any cqc_*_dist key present
-//   CfgCanIdle[t]    — idle_chance present (gates both look-idle and move-idle)
-//   CfgIdleAlways[t] — idle_chance >= 100 (permanent idle, no duration roll)
+//   CfgCanOrbit[t]   - orbit_time / orbit_max_loops / orbit_chance present
+//   CfgCanEvade[t]   - evade_chance present
+//   CfgCanCqc[t]     - any cqc_*_dist key present
+//   CfgCanIdle[t]    - idle_chance present (gates both look-idle and move-idle)
+//   CfgIdleAlways[t] - idle_chance >= 100 (permanent idle, no duration roll)
 bool CfgCanOrbit[MAX_BOT_TYPES];
 bool CfgCanEvade[MAX_BOT_TYPES];
 bool CfgCanCqc[MAX_BOT_TYPES];
@@ -275,13 +275,13 @@ int   CfgCqcMode[MAX_BOT_TYPES];    // CQC_MODE_ARC / _MIRROR / _HOLD
 // hard flick that arcs the rocket high (or slams it into the floor), which is
 // what makes it hard for the target to track.
 // Commit point for the airblast, expressed as time-to-impact rather than a
-// distance -- see State_Deflect. fire_min_dist stops a very slow rocket being
+// distance - see State_Deflect. fire_min_dist stops a very slow rocket being
 // let all the way onto the bot's face before it commits.
 float CfgFireTimeToImpact[MAX_BOT_TYPES];
 float CfgFireMinDist[MAX_BOT_TYPES];
 float CfgSpikeUpPitch[MAX_BOT_TYPES];
 float CfgSpikeDownPitch[MAX_BOT_TYPES];
-// Aim speed. Enemy tracking is deliberately the slowest thing the bot does --
+// Aim speed. Enemy tracking is deliberately the slowest thing the bot does -
 // there is no urgency in facing someone. Rocket tracking scales with range;
 // see AimFactorForRocket.
 float CfgAimEnemy[MAX_BOT_TYPES];
@@ -317,8 +317,8 @@ int TotalDeflects = 0;        // Total deflects achieved
 int TotalKills = 0;           // Kills by bot
 int TotalDeaths = 0;          // Times bot died
 int RoundDeflects = 0;        // Deflects THIS round (for stat display)
-float RoundStartTime = 0.0;   // GetGameTime() at last teamplay_round_start — see ManageTeams' spawn-wave-miss grace window
-// (Disable-vote globals removed 2026-04-24 — unified into class vote menu.)
+float RoundStartTime = 0.0;   // GetGameTime() at last teamplay_round_start - see ManageTeams' spawn-wave-miss grace window
+// (Disable-vote globals removed 2026-04-24 - unified into class vote menu.)
 int VoteMaxPlayers = 12;      // Max players allowed to vote (loaded from config)
 
 // Class vote system - players vote for which bot type to play against.
@@ -331,13 +331,13 @@ bool PendingMaxPlayerDisable = false; // OnGameFrame queued a "too many players"
 int  PendingHotSwapType = -1;          // Vote winner queued for next-round hot-swap; -1 = no swap pending
 bool SoloMenuShown = false;   // Was the solo player menu shown
 Handle ClassVoteTimer = null;
-float MapStartTime = 0.0;     // GetEngineTime() at last OnMapStart -- see Timer_CheckPlayerJoin
+float MapStartTime = 0.0;     // GetEngineTime() at last OnMapStart - see Timer_CheckPlayerJoin
 
 // Right after a map change, real players reconnect on a stagger of many
 // seconds (map download/load + class select), not all at once. A short
 // solo-check delay made the FIRST player to finish loading look like the
 // only human in the server and handed him a one-click direct bot-enable
-// menu (ShowClassPickMenu) before everyone else had even connected --
+// menu (ShowClassPickMenu) before everyone else had even connected -
 // bypassing !votepvb entirely for people who were, in fact, on their way in.
 // Give stragglers a real window right after map start; a genuine lone
 // late-joiner well into a map (no one else around, no one about to load in)
@@ -381,13 +381,13 @@ float OrbitEpisodeEnd[MAXPLAYERS + 1]; // Absolute safety deadline for the curre
 
 // Evasion state (jump/crouch over low rockets)
 bool Evading[MAXPLAYERS + 1];          // Currently in evasion action
-bool DiedRecently[MAXPLAYERS + 1];     // True between death and next spawn — skip state reset on NER respawns
+bool DiedRecently[MAXPLAYERS + 1];     // True between death and next spawn - skip state reset on NER respawns
 EvadeAction CurrentEvadeAction[MAXPLAYERS + 1]; // EVADE_JUMP or EVADE_CROUCH
 float EvadeEnd[MAXPLAYERS + 1];        // When evasion action ends
 float NextEvadeCheck[MAXPLAYERS + 1];  // Throttle evasion checks
 
 // Rate-limit per-tick CountIncomingThreats scan (full rocket loop is expensive
-// at 66 Hz x N bots). 0.1s cadence is plenty — multi-threat state doesn't
+// at 66 Hz x N bots). 0.1s cadence is plenty - multi-threat state doesn't
 // change faster than that in practice.
 
 // Post-deflect look behavior
@@ -407,22 +407,22 @@ int DebugStatesBotType[MAXPLAYERS + 1];
 // ============================================================================
 // PERSISTENT DEBUG SYSTEM
 // Captures per-bot decision data every N ticks to a CSV log file.
-// Runs continuously until manually stopped — survives map changes.
+// Runs continuously until manually stopped - survives map changes.
 // Use: sm_botdebug to start, sm_botdebug again (or sm_stopdebug) to stop.
 // ============================================================================
 bool DebugActive = false;
-bool DebugAutoStarted = false;      // True if sm_bot_test turned logging on -- so sm_bot_test stop only stops what IT started, not a session the admin started manually with sm_botdebug
+bool DebugAutoStarted = false;      // True if sm_bot_test turned logging on - so sm_bot_test stop only stops what IT started, not a session the admin started manually with sm_botdebug
 int  BotDebugTick[MAXPLAYERS + 1];  // Per-bot tick counter (was global, caused 4x logging with 4 bots)
 int  DebugSampleRate = 10;          // Log every N ticks (10 = ~6.6 samples/sec at 66 tick)
 int  DebugLinesWritten = 0;
-int  DebugTotalLines = 0;            // Cumulative across rotations — drives hard-cap shutoff (DebugLinesWritten resets on rotate)
+int  DebugTotalLines = 0;            // Cumulative across rotations - drives hard-cap shutoff (DebugLinesWritten resets on rotate)
 #define DEBUG_MAX_LINES 50000        // Rotate log file after this many lines (~400/bot/minute at rate=10, 66 tick)
 #define DEBUG_MAX_TOTAL_LINES 500000 // Hard cap: auto-stop logging if user forgets sm_stopdebug (prevents unbounded rotated-file growth)
 char DebugLogPath[PLATFORM_MAX_PATH];
 File DebugFile = null;               // File handle for high-frequency writes (avoids console spam)
 
 // Live in-world visualization: beams drawn from each bot showing its
-// wall-scan reads, current move direction, and aim target -- the same data
+// wall-scan reads, current move direction, and aim target - the same data
 // the CSV logger captures, but seen directly instead of reconstructed from
 // text after the fact. Toggle with sm_botdebugdraw. Independent of
 // DebugActive so you can run one without the other.
@@ -436,7 +436,7 @@ ConVar g_cvAccelerate = null;
 ConVar g_cvFriction   = null;
 ConVar g_cvStopspeed  = null;
 
-// Held aim tremor (see SmoothAim). Re-rolled on an interval, not per tick --
+// Held aim tremor (see SmoothAim). Re-rolled on an interval, not per tick -
 // per-tick randomness is vibration, not a human hand.
 #define AIM_JITTER_HOLD_MIN 0.12
 #define AIM_JITTER_HOLD_MAX 0.30
@@ -454,7 +454,7 @@ int   NavDrawRadius[MAXPLAYERS + 1];
 float NextNavDraw[MAXPLAYERS + 1];
 float NextDebugDraw[MAXPLAYERS + 1]; // per-bot throttle so beams don't spam every tick
 
-// Player data collection — logs human player state when debug is active.
+// Player data collection - logs human player state when debug is active.
 // Same sample rate as bots so data is directly comparable.
 // Use this data to study real player behavior and improve bot movesets.
 int  PlayerDebugTick[MAXPLAYERS + 1];   // Per-player tick counter for sampling
@@ -478,7 +478,7 @@ float PressureVec[MAXPLAYERS + 1][3];
 float PressureMag[MAXPLAYERS + 1];
 // Sum of the individual push MAGNITUDES (not the vector sum). Together with
 // PressureMag this gives a scale-free "are they cancelling each other out"
-// ratio -- see UpdatePressureVector.
+// ratio - see UpdatePressureVector.
 float PressureScalarSum[MAXPLAYERS + 1];
 float PressureCancelRatio[MAXPLAYERS + 1];
 int   PressureCount[MAXPLAYERS + 1];      // visible enemies that contributed
@@ -490,7 +490,7 @@ float NextPressureUpdate[MAXPLAYERS + 1];
 // re-triggered as the enemy keeps approaching.
 bool RetreatingFromFloor[MAXPLAYERS + 1];
 
-// Guard post — where a can_walk=0 class (statue) last spawned. Airblast
+// Guard post - where a can_walk=0 class (statue) last spawned. Airblast
 // knockback, gang-panic pushes, etc. can shove an immobile bot off its spot
 // even though it never chose to move; STATE_GUARD walks it back. Captured
 // fresh on every Event_PlayerSpawn (see ResetCombatState), so it always
@@ -504,9 +504,9 @@ bool  ReturningToGuard[MAXPLAYERS + 1];   // hysteresis: stay in GUARD until bac
 // Wall detection.
 // Both arrays are indexed in the WORLD-ABSOLUTE 8-direction space: index i
 // is world yaw i*45 (0 = +X, 2 = +Y, 4 = -X, 6 = -Y). Never facing-relative
-// -- these outlive any single tick's facing. See WorldYawToDirIndex.
-bool  WallBlocked_[MAXPLAYERS + 1][8];   // wall OR edge -- "don't prefer this direction"
-bool  EdgeBlocked_[MAXPLAYERS + 1][8];   // edge/void specifically -- "never push through this one"
+// - these outlive any single tick's facing. See WorldYawToDirIndex.
+bool  WallBlocked_[MAXPLAYERS + 1][8];   // wall OR edge - "don't prefer this direction"
+bool  EdgeBlocked_[MAXPLAYERS + 1][8];   // edge/void specifically - "never push through this one"
 float NextWallScan_[MAXPLAYERS + 1];
 float LastWallPos[MAXPLAYERS + 1][3];
 
@@ -514,14 +514,14 @@ float LastWallPos[MAXPLAYERS + 1][3];
 // an episode so the bot actually travels around the enemy instead of coin-
 // flipping left/right every tick and vibrating in place.
 // CQC engagement shape (cqc_mode). Dodgeball is played facing your opponent,
-// so unbounded orbiting was never right -- it walks the bot into whatever is
+// so unbounded orbiting was never right - it walks the bot into whatever is
 // on the far side of the enemy.
 #define CQC_MODE_ARC    0   // bounded sweep in front of the enemy
 #define CQC_MODE_MIRROR 1   // hold station in front, matching their slide
 #define CQC_MODE_HOLD   2   // keep the band and stand, deflecting
 #define CQC_MIRROR_DEADZONE 40.0   // enemy lateral speed below this = "not sliding"
 // Fraction of the cqc band width that counts as "close enough to the standoff
-// ring" -- inside it the bot makes no radial correction at all, so it stops
+// ring" - inside it the bot makes no radial correction at all, so it stops
 // micro-adjusting over a few units. See State_Move's proportional standoff.
 #define CQC_DEADBAND_FRAC 0.25
 
@@ -534,8 +534,8 @@ float LastWallPos[MAXPLAYERS + 1][3];
 // makes their position unpredictable without looking like an orbit.
 // The bot simulates this with a state machine that picks a WASD direction,
 // holds it for a short tap duration, then re-rolls.
-#define WASD_TAP_MIN  0.12    // shortest tap (~8 ticks at 66Hz — a quick side-step)
-#define WASD_TAP_MAX  0.40    // longest tap (~26 ticks — a committed dodge)
+#define WASD_TAP_MIN  0.12    // shortest tap (~8 ticks at 66Hz - a quick side-step)
+#define WASD_TAP_MAX  0.40    // longest tap (~26 ticks - a committed dodge)
 #define WASD_PAUSE_CHANCE 25  // % chance to stop between taps (a real player pauses)
 #define WASD_PAUSE_MIN 0.10   // pause duration
 #define WASD_PAUSE_MAX 0.35
@@ -592,14 +592,14 @@ float BaitUntil[MAXPLAYERS + 1];                // GetGameTime when bait episode
 bool  BaitRollConsumed[MAXPLAYERS + 1];         // one roll per deflect cycle
 float BaitSidestepDir[MAXPLAYERS + 1];          // +1 or -1 strafe direction during bait
 
-// Wall-slide commitment (see FindUnblockedDirCommitted) -- which
+// Wall-slide commitment (see FindUnblockedDirCommitted) - which
 // rotational side of an obstacle a bot is currently committed to routing
 // around, and whether that commitment is actually making progress.
 int   WallSlideSign[MAXPLAYERS + 1];        // +1 = clockwise-first, -1 = counter-clockwise-first, 0 = no active commitment
 float WallSlideUntil[MAXPLAYERS + 1];       // GetEngineTime() when the current commitment is reassessed
 float WallSlideStartDist[MAXPLAYERS + 1];   // distance-to-goal when this commitment began
 
-// EVADE_STRAFE side commitment -- picked once when a cooldown-strafe
+// EVADE_STRAFE side commitment - picked once when a cooldown-strafe
 // episode starts (see State_Deflect's onCooldown branch), held for that
 // whole episode (at most ~0.75s, the airblast cooldown window) rather
 // than re-picked every tick, so it reads as one continuous strafe instead
@@ -607,7 +607,7 @@ float WallSlideStartDist[MAXPLAYERS + 1];   // distance-to-goal when this commit
 // 0 = no active commitment.
 int   StrafeEvadeSign[MAXPLAYERS + 1];
 
-// Decision introspection -- WHY State_Move picked what it picked, not just
+// Decision introspection - WHY State_Move picked what it picked, not just
 // what it picked. Set at each decision point in State_Move, read by
 // DebugLogBotTick so the reasoning is visible per tick instead of having
 // to be reverse-engineered from position deltas after the fact.
@@ -624,7 +624,7 @@ int   LastEdgeDist[MAXPLAYERS + 1];         // this tick's cell distance from th
 // One-shot internal-state dump for MaybeScanWalls's 8-direction sample,
 // set once per scan so DebugLogBotTick can print which branch inside
 // DirectionIsWalkable actually fired instead of only seeing the final
-// O/W/V result -- needed to disambiguate "cache says unsafe" from
+// O/W/V result - needed to disambiguate "cache says unsafe" from
 // "cache doesn't know, live trace also says unsafe" from a symptom alone.
 int   LastCacheHitCount[MAXPLAYERS + 1];    // how many of the 8 sampled targets were a NavCache_IsWalkable hit
 // Direction-0 (forward) sample of MaybeScanWalls's IncrementalWallClear
@@ -647,7 +647,7 @@ int   LastWallFailReason[MAXPLAYERS + 1];   // 0=clear, 1=real wall hit, 2=no fl
 // ONCE per map, off the tick-time-budget critical path, and cache which
 // grid cells are actually connected, walkable ground. Runtime movement
 // checks then become a cheap lookup against pre-validated data instead of
-// a handful of live traces trying to guess it under time pressure -- which
+// a handful of live traces trying to guess it under time pressure - which
 // is exactly the category of bug (floor-flush hulls, brush-entity plane
 // normals, single-point lookahead gaps, curb-then-cliff patterns) this
 // project spent this whole session chasing one at a time.
@@ -655,15 +655,15 @@ int   LastWallFailReason[MAXPLAYERS + 1];   // 0=clear, 1=real wall hit, 2=no fl
 #define NAV_CELL_MAX_DELTA  45.0    // max per-hop height change between adjacent cells (~45 degrees)
 // Shared by NavCache_ExpandCell (the cache-build scanner, using
 // SCANNER_WALL_CHECK_LIFT) and MaybeScanWalls (the live per-tick scan,
-// using WALL_CHECK_LIFT) -- both sweep a hull from (floorZ + their lift)
+// using WALL_CHECK_LIFT) - both sweep a hull from (floorZ + their lift)
 // up to (floorZ + their lift + NAV_SWEEP_HEIGHT). A ceiling-clipping
 // theory here (reducing this to 36.0) was tried and measured to make no
-// difference to the scanner's rejection counters -- the scanner's actual
+// difference to the scanner's rejection counters - the scanner's actual
 // problem was its lift value, not this height; see
 // SCANNER_WALL_CHECK_LIFT. Reverted to 48.0, the value already confirmed
 // (via live walls= flipping from WWWWWWWW to VVVVVVVV) to work correctly
-// for the live scan at WALL_CHECK_LIFT=16.0, and -- combined with
-// SCANNER_WALL_CHECK_LIFT=4.0 -- exactly reconstructs the original
+// for the live scan at WALL_CHECK_LIFT=16.0, and - combined with
+// SCANNER_WALL_CHECK_LIFT=4.0 - exactly reconstructs the original
 // lift+height=52 window that's the only config to ever actually build a
 // working 11000+-cell cache for the scanner.
 #define NAV_SWEEP_HEIGHT    48.0
@@ -675,19 +675,19 @@ int   LastWallFailReason[MAXPLAYERS + 1];   // 0=clear, 1=real wall hit, 2=no fl
 // step I'm about to take safe," the same question a player never
 // consciously asks near a cliff because they're not walking that close in
 // the first place. NAV_EDGE_COMFORT_CELLS is how many cells of margin from
-// the nearest mapped boundary a bot tries to keep during normal movement --
+// the nearest mapped boundary a bot tries to keep during normal movement -
 // an influence-map-style bias (see NavCache_ComputeEdgeDistances), not
 // another reactive last-step check.
 #define NAV_EDGE_COMFORT_CELLS 4
 // How many cells of buffer from the boundary DirectionIsWalkable requires
 // before it will actually commit to a step, not just prefer to avoid one.
 // 0 (only refuse the literal boundary cell) proved not wide enough in
-// practice -- a curb can be standing on a cell that's already 1+ cells
+// practice - a curb can be standing on a cell that's already 1+ cells
 // "inland" by this metric while the real drop is still one step away.
 // 2 cells (~96 units) is a real margin, not a single grid square's worth.
 #define NAV_HARD_MARGIN_CELLS  2
 
-// Nav cache flat arrays — replaces StringMap for O(1) integer-indexed lookups.
+// Nav cache flat arrays - replaces StringMap for O(1) integer-indexed lookups.
 // Eliminates all FormatEx + string hash operations (~9000/sec at 8 bots).
 #define NAV_GRID_SIZE  128
 #define NAV_GRID_HALF  64
@@ -698,25 +698,25 @@ bool  g_NavCellKnown[NAV_GRID_CELLS];  // true if cell has been mapped
 
 // Convert grid coords to flat array index. Returns -1 if out of bounds.
 ArrayList g_NavFrontier     = null;  // queue of [ix, iy, floorZ] entries awaiting expansion, as floats
-int       g_NavFrontierRead = 0;     // read index into g_NavFrontier (never erases -- avoids O(n^2) on a growing queue)
+int       g_NavFrontierRead = 0;     // read index into g_NavFrontier (never erases - avoids O(n^2) on a growing queue)
 int       g_NavCellsDone    = 0;
-// Rejection-reason counters -- a one-time scan can afford to be verbose
+// Rejection-reason counters - a one-time scan can afford to be verbose
 // about exactly why a neighbor didn't expand, instead of guessing.
 int       g_NavRejectWall    = 0;
 int       g_NavRejectNoFloor = 0;
 int       g_NavRejectSlope   = 0;
-int       g_NavRejectFootprint = 0;  // see NavCache_FootprintClear -- a cell whose CENTER is fine but whose edge overhangs a drop
+int       g_NavRejectFootprint = 0;  // see NavCache_FootprintClear - a cell whose CENTER is fine but whose edge overhangs a drop
 bool      g_NavScanActive   = false;
 bool      g_NavScanReady    = false; // true once this map's cache is fully built or loaded from disk
-// Diagnostics only -- how many times StartNavScanIfNeeded got past its
+// Diagnostics only - how many times StartNavScanIfNeeded got past its
 // early-out guards to actually attempt a load-or-fresh-scan, and how many
 // of those attempts bailed immediately (nobody had valid footing to seed
 // from). Surfaced per-tick so a "still stuck" test tells us whether the
-// scan never even tried, is stuck mid-progress, or keeps bailing --
+// scan never even tried, is stuck mid-progress, or keeps bailing -
 // instead of only seeing the final null/not-ready state with no history.
 int       g_NavScanAttempts  = 0;
 int       g_NavScanBails     = 0;
-// Where the most recent fresh-scan attempt actually seeded from -- lets us
+// Where the most recent fresh-scan attempt actually seeded from - lets us
 // tell "the scan is dying inside a genuinely tiny enclosed room" from "the
 // scan is dying somewhere it shouldn't be" instead of only seeing the
 // final tiny cell count with no idea which part of the map it's stuck in.
@@ -725,11 +725,11 @@ float     g_NavSeedY = 0.0;
 float     g_NavSeedZ = 0.0;
 int       g_NavSeedCount = 0;
 // A one-shot scan only ever sees what its initial seed positions happened
-// to reach. Confirmed real gaps this way -- a bot fell after a long,
+// to reach. Confirmed real gaps this way - a bot fell after a long,
 // genuinely-successful wall-slide run reached a pocket the original scan
 // never explored. Growth mode re-seeds from wherever bots currently are,
 // even after g_NavScanReady is already true, and keeps whatever new cells
-// that finds -- unlike the initial scan, a small growth result is a
+// that finds - unlike the initial scan, a small growth result is a
 // legitimate partial addition, not a failed attempt to discard.
 bool      g_NavGrowthMode    = false;
 Handle    g_NavScanTimer    = null;
@@ -748,14 +748,14 @@ bool  OrbitStartedFromCooldown[MAXPLAYERS + 1];
 int   LastMoveSet[MAXPLAYERS + 1];
 float LastAirblastTime[MAXPLAYERS + 1];
 
-// Post-deflect aim — the direction the bot faces AFTER airblasting.
+// Post-deflect aim - the direction the bot faces AFTER airblasting.
 // TFDB reads eye angles once after the fixed global drag delay
 // to apply drag to the rocket. We set this direction when airblasting,
 // then smoothly turn toward it in the following ticks.
 float PostDeflectAim[MAXPLAYERS + 1][2];  // [0]=pitch, [1]=yaw
 bool  PostDeflectWave[MAXPLAYERS + 1];    // wave = oscillating yaw
 float PostDeflectUntil[MAXPLAYERS + 1];  // engine time until post-deflect aim expires
-int   PostDeflectRocketEnt[MAXPLAYERS + 1]; // the rocket entity this drag window is steering — see ProcessBotTick POST-DEFLECT DRAG
+int   PostDeflectRocketEnt[MAXPLAYERS + 1]; // the rocket entity this drag window is steering - see ProcessBotTick POST-DEFLECT DRAG
 int   DeflectCount[MAXPLAYERS + 1];
 
 // Gang
@@ -766,7 +766,7 @@ float GangBoostUntil[MAXPLAYERS + 1];
 // --- FSM: Formal state machine for bot behavior ---
 // Consolidates the 7 implicit state machines into validated transition helpers.
 // Each Set* helper logs the transition when debug is active, making state
-// changes auditable. Behavior is preserved — these wrap existing writes.
+// changes auditable. Behavior is preserved - these wrap existing writes.
 
 
 
@@ -784,7 +784,7 @@ int   CachedFrameThreats[MAXPLAYERS + 1];
 bool  CachedFrameThreatsValid[MAXPLAYERS + 1];
 
 // ============================================================================
-// SPATIAL GRID — Uniform hash grid for O(1)-ish spatial queries.
+// SPATIAL GRID - Uniform hash grid for O(1)-ish spatial queries.
 // Rebuilt each frame from OnGameFrame. Replaces O(MaxClients) linear scans
 // in FindClosestEnemy and NearestTeammateDist with O(nearby cells).
 // Cell size = 1000 HU (covers reaction/threat distance range).
@@ -900,7 +900,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 // Completion callback for admin brain-reset DELETEs. Clears BrainDraining so
 // normal writes resume, then reloads the in-memory brain from the (now empty
-// or pruned) table. If the DELETE failed we still clear the flag — keeping it
+// or pruned) table. If the DELETE failed we still clear the flag - keeping it
 // set would permanently block writes; the error is logged and the admin can retry.
 
 // ============================================================================
@@ -912,7 +912,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 
 // See g_NavGrowthMode. Seeds from every currently in-game client's
-// position, but only cells not already known -- if nothing new is found
+// position, but only cells not already known - if nothing new is found
 // (the common case once the map is well covered), this is a cheap no-op.
 
 // ============================================================================
@@ -922,7 +922,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 
 
-// RequestFrame target — defers UpdateCachedCounts to one frame after a
+// RequestFrame target - defers UpdateCachedCounts to one frame after a
 // player_team event so GetClientTeam returns the post-transition value.
 
 // ============================================================================
@@ -931,7 +931,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 // Lock down TF2's bot quota so the server never auto-spawns replacement bots.
 // Called from OnPluginStart, OnMapStart, and before EnablePvB adds our bot.
-// Redundant by design — some map configs can reset cvars between ticks.
+// Redundant by design - some map configs can reset cvars between ticks.
 
 
 
@@ -948,7 +948,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 
 // ============================================================================
-// BOT TEST MODE — configurable bot squads for focused testing
+// BOT TEST MODE - configurable bot squads for focused testing
 // ============================================================================
 
 int PendingTestTypes[MAXPLAYERS + 1];
@@ -1011,7 +1011,7 @@ bool TestModeActive = false;
 // still mid-connect (not yet IsClientInGame) and real humans sitting on
 // Spectator/unassigned (not yet counted by CachedRealCount/TFDB_IsRealHumanPlaying).
 // Subtracting our own fake bot slot(s) gives a precise "is anyone else here at
-// all, even partway through joining" check -- far better than trusting
+// all, even partway through joining" check - far better than trusting
 // CachedRealCount alone, which only sees players who are fully in and on a
 // play team.
 
@@ -1064,7 +1064,7 @@ bool TestModeActive = false;
 /**
  * Respawn the human after FakeClientCommand("jointeam red") has been fully
  * processed by the engine. Called via RequestFrame so the team change is
- * already applied when this runs — otherwise TF2_RespawnPlayer would fire
+ * already applied when this runs - otherwise TF2_RespawnPlayer would fire
  * on the old BLU team.
  */
 
@@ -1078,12 +1078,12 @@ bool TestModeActive = false;
 // TEAM-JOIN PROTECTION
 // ============================================================================
 // Three layers:
-//   1. AddCommandListener for "jointeam"/"autoteam" — intercepts user commands
+//   1. AddCommandListener for "jointeam"/"autoteam" - intercepts user commands
 //      BEFORE the engine processes them. FakeClientCommandEx reroutes.
-//   2. player_team event hook (Pre) — catches engine-level team changes that
+//   2. player_team event hook (Pre) - catches engine-level team changes that
 //      bypass the command (mp_autoteambalance, trigger_multiple, etc).
 //      Schedules Timer_PvBForceTeam 0.1s later as fallback.
-//   3. ManageTeams() reactive polling every 2 frames (pre-existing) — last
+//   3. ManageTeams() reactive polling every 2 frames (pre-existing) - last
 //      line of defense.
 //
 // Contract:
@@ -1093,12 +1093,12 @@ bool TestModeActive = false;
 // ============================================================================
 
 
-// Only count REAL deflects — when the airblast actually hits the rocket.
+// Only count REAL deflects - when the airblast actually hits the rocket.
 // The engine fires object_deflected only on a successful airblast connection.
 
 
 // ============================================================================
-// Natives — exposed for other subplugins to query PvB state before they
+// Natives - exposed for other subplugins to query PvB state before they
 // activate conflicting modes (e.g. Guardian refuses to start during PvB).
 // ============================================================================
 
@@ -1130,7 +1130,7 @@ bool TestModeActive = false;
 // Positive when the rocket is moving toward the target position.
 
 // Per-client rocket finder. Priorities:
-// 1. Rocket targeting THIS client (highest priority — must airblast)
+// 1. Rocket targeting THIS client (highest priority - must airblast)
 // 2. Rocket flying TOWARD this client within threat range (dodge/avoid)
 // 3. Fallback to global cached rocket if TFDB not available
 // Scans are throttled to every 0.1s per client to avoid perf issues.
@@ -1179,7 +1179,7 @@ bool TestModeActive = false;
 
 
 // ============================================================================
-// BEHAVIOR TREE — Flat priority-based state dispatch.
+// BEHAVIOR TREE - Flat priority-based state dispatch.
 // Max depth 2: UpdateBotState picks a state, then one BT_* leaf executes.
 // Each leaf is a stub returning Plugin_Continue until Phase 2+ implementation.
 // ============================================================================
@@ -1202,10 +1202,10 @@ enum MoveSetType {
 // === STUB FUNCTIONS (implemented in Phase 2+) ===
 
 // Ground-truth check before committing to a jump-evasion. A jump adds no new
-// horizontal velocity of its own -- it only carries whatever momentum the
+// horizontal velocity of its own - it only carries whatever momentum the
 // bot already had (e.g. from State_Move) into the air. MaybeScanWalls' scan
 // already folds map-edge detection in with walls (see ScanWalls:
-// TR_PointOutsideWorld) for exactly this reason -- State_Move/State_Dodge/State_Orbit
+// TR_PointOutsideWorld) for exactly this reason - State_Move/State_Dodge/State_Orbit
 // already consult it before choosing a walking direction, but the jump
 // triggers in State_Deflect never checked it before pressing IN_JUMP, so a bot
 // already moving toward a ledge when a rocket got close would jump straight
@@ -1213,21 +1213,21 @@ enum MoveSetType {
 
 
 // Estimates the rocket's CURRENT effective turn rate. A class's configured
-// "turn rate" is only the STARTING value — core scales it up per deflection
+// "turn rate" is only the STARTING value - core scales it up per deflection
 // via "turn rate increment" (see dodgeball_rockets.inc CalculateRocketTurnRate
 // / CalculateModifier), so a rocket that was gentle at 0 deflections can be
 // well past the orbit-safety threshold by deflection 5 on a tight cfg. Only
-// the deflection term is replicated here (not rockets-fired/player-count) —
+// the deflection term is replicated here (not rockets-fired/player-count) -
 // those two drift slowly across a whole round and don't meaningfully change
 // tick-to-tick, which is what "is orbiting safe right now" actually needs.
 
 // Shared safety check for both entering orbit and continuing an orbit already
-// in progress — called every tick of State_Orbit, not just once at entry, since
+// in progress - called every tick of State_Orbit, not just once at entry, since
 // the rocket's effective turn rate/speed can escalate past "safe" mid-orbit.
 //
 // "About to hit" awareness: if the rocket would close the remaining distance
 // before even one more WASD phase could finish, further circling is pointless
-// — bail to deflect instead of blindly running out a pre-committed loop count.
+// - bail to deflect instead of blindly running out a pre-committed loop count.
 // This is what makes a tight cfg naturally cap the bot at partial or even zero
 // orbit loops, and a loose cfg let it run its full randomized budget, without
 // any separate hardcoded per-cfg tuning.
@@ -1244,7 +1244,7 @@ enum MoveSetType {
 //
 // The compression blast is a fixed box: ~256 HU reach and a ~60 degree cone.
 // A press outside either of those is not a miss, it is a no-op that still
-// costs the full 0.75s cooldown -- and on a dodgeball server that cooldown is
+// costs the full 0.75s cooldown - and on a dodgeball server that cooldown is
 // usually the difference between deflecting the incoming rocket and being
 // killed by it. "Bots airblasting nothing and dying" is exactly this: two
 // call sites were firing at 600 and 400 units, both far outside the 256 the
@@ -1255,14 +1255,14 @@ enum MoveSetType {
 
 
 // EVADE-STRAFE (recovery/delay, not real dodge-out-of-the-way evasion).
-// Extracted from State_Deflect's onCooldown branch to reduce nesting depth --
+// Extracted from State_Deflect's onCooldown branch to reduce nesting depth -
 // inline it was reaching depth 6, worse than the depth-5 the 2026-07-12
 // systems audit flagged as needing decomposition in the old monolithic
 // OnPlayerRunCmd. Same pattern already used throughout this file
 // ("Extracted from X to reduce nesting depth").
 //
 // By the time State_Deflect's onCooldown branch calls this, distToRocket <=
-// AIRBLAST_RANGE (240) and the bot is already facing the rocket -- it's
+// AIRBLAST_RANGE (240) and the bot is already facing the rocket - it's
 // close, lined up, and can't fire yet. A real player backs off and
 // strafes clear rather than standing there waiting for the cooldown, aim
 // staying locked on the threat the whole time (SmoothAim in State_Deflect
@@ -1274,19 +1274,19 @@ enum MoveSetType {
 // fall back to normal State_Move CQC positioning instead.
 
 // Fresh side pick for a new EVADE_STRAFE episode: prefer whichever side
-// the wall/edge scan actually reads as clear right now -- not a fixed
+// the wall/edge scan actually reads as clear right now - not a fixed
 // left/right rule, the same "whichever side feels dodgeable in the
 // moment" judgment call this whole mechanic is modeling, proxied by real
 // scan data instead of a coin flip where possible.
 
-// Already committed to a side -- keep going the same way unless that side
+// Already committed to a side - keep going the same way unless that side
 // has since turned unsafe (backed toward a wall/edge mid-strafe), in
 // which case flip if the other side is clear, otherwise hold position
 // (sign 0) rather than push into either.
 
 
-// Dodge node — strafe perpendicular to rocket velocity
-// Orbit state machine — WASD phases to circle around the rocket
+// Dodge node - strafe perpendicular to rocket velocity
+// Orbit state machine - WASD phases to circle around the rocket
 
 // ============================================================================
 // PHASE 2: MOVEMENT + WALL AVOIDANCE
@@ -1301,7 +1301,7 @@ enum MoveSetType {
 // exactly the drop that matters). LIVE-TRACE FALLBACK ONLY: this is what
 // every per-tick edge check used to run directly. Kept as the fallback for
 // the brief window before this map's walkable-area cache (see below) has
-// finished its one-time scan -- prefer DirectionIsWalkable() everywhere
+// finished its one-time scan - prefer DirectionIsWalkable() everywhere
 // else, which checks the cache first and only drops to this when the cache
 // isn't ready yet.
 
@@ -1315,14 +1315,14 @@ enum MoveSetType {
 // actively stay away from, the same way a player doesn't consciously
 // re-check every footstep near a ledge because they're not walking that
 // close to begin with. Run once, right after the cache itself is ready
-// (fresh scan or loaded from disk) -- cheap relative to building the cache
+// (fresh scan or loaded from disk) - cheap relative to building the cache
 // itself, since it's just neighbor lookups over an already-known cell set.
 
 // outDist: grid hops to the nearest mapped edge. false if unknown (outside
 // the cache, or the field hasn't been computed yet).
 
 // Direction (as a normalized 2D vector) from pos toward whichever
-// immediate grid neighbor has the highest edge-distance -- "which way is
+// immediate grid neighbor has the highest edge-distance - "which way is
 // most away from the nearest boundary." Used to override normal movement
 // when a bot is already inside the comfort margin, same as a player
 // instinctively stepping back from an edge instead of optimizing position
@@ -1334,7 +1334,7 @@ enum MoveSetType {
 
 // Runtime lookup: is the grid cell containing pos[] confirmed walkable by
 // the completed (or in-progress) scan? Only trustworthy once g_NavScanReady
-// -- callers must fall back to the live trace otherwise, since a cell that
+// - callers must fall back to the live trace otherwise, since a cell that
 // simply hasn't been reached YET by an in-progress scan is not the same as
 // a cell the scan has confirmed is unwalkable.
 
@@ -1351,14 +1351,14 @@ enum MoveSetType {
 
 // The general fix, not another per-map patch: every cell-acceptance check
 // so far only ever sampled ONE point (the cell's center). A cliff edge
-// doesn't respect the 48-unit grid -- it can cut straight through the
+// doesn't respect the 48-unit grid - it can cut straight through the
 // middle of a cell, leaving the center reading "solid ground" while part
 // of that same tile already overhangs empty air. Confirmed on abyss_v4:
 // a bot fell from a spot the cache rated edgeDist=18-20 (deep "safe"
 // interior by graph distance), because the cell it stood on was accepted
 // by a single center-point check, not because it was actually near any
 // correctly-recorded boundary. This checks several points across the
-// tile -- roughly a player's footprint, not a single sample -- before the
+// tile - roughly a player's footprint, not a single sample - before the
 // cell is allowed into the graph at all. A cell that's genuinely
 // straddling an edge fails here and is simply never added, which means
 // every distance-from-boundary defense already built (margin, retreat
@@ -1374,27 +1374,27 @@ enum MoveSetType {
 // on abyss_v4 via seed-position diagnostics: fresh nav-cache scans kept
 // seeding from an elevated spawn platform (z=79) that sits ~16 units above
 // the main floor (z=63) reached by a staircase, and every single expansion
-// attempt died there -- 100% rejwall, 0% from any other rejection reason,
+// attempt died there - 100% rejwall, 0% from any other rejection reason,
 // an exact match for "the sweep can't get past the first step down."
 // Fixes this by walking the same short hops the floor-check already uses
 // (EDGE_CHECK_STEP), re-sweeping a short segment at the CURRENT local
 // floor height after each hop instead of the original position's height
-// for the whole distance -- the same technique DirectionIsWalkable_LiveTrace
+// for the whole distance - the same technique DirectionIsWalkable_LiveTrace
 // already uses for floor validation, just also applied to the wall check.
 //
 // Shared by NavCache_ExpandCell (the cache-build scanner, 48-unit hops)
 // and MaybeScanWalls (the live per-tick scan, 100-unit/WALL_CHECK_DIST
-// sweeps) -- the live scan's longer single-shot sweep turned out to have
+// sweeps) - the live scan's longer single-shot sweep turned out to have
 // the exact same "can't follow real terrain" problem regardless of lift
 // value, just less obviously since it doesn't have rejection counters to
 // show 100% wall failures the way the scanner did.
 // outNoFloor distinguishes WHY it failed: a real TR_TraceHull hit (solid
-// geometry -- a genuine wall) vs. simply running out of floor (an edge --
+// geometry - a genuine wall) vs. simply running out of floor (an edge -
 // on a disk/island-shaped map surrounded by void, most directions from
 // most positions run out of floor within 100 units long before hitting
 // any actual wall brush). Conflating the two into one bool was the actual
 // bug: MaybeScanWalls already has a SEPARATE, correct edge check
-// (DirectionIsWalkable/offEdge) feeding EdgeBlocked_ -- but this
+// (DirectionIsWalkable/offEdge) feeding EdgeBlocked_ - but this
 // function's floor-probe failures were ALSO being reported as a wall hit
 // (WallBlocked_ via hitWall), duplicating and mislabeling "there's an edge
 // here" as "there's a wall here". On this map's disk shape, that meant
@@ -1402,18 +1402,18 @@ enum MoveSetType {
 // sampled directions run into void within 100 units, misreported as W.
 //
 // THIRD bug found in this function (2026-08-09): TR_TraceHull without a
-// filter isn't brush-only despite the mask's name -- MASK_SOLID_BRUSHONLY
+// filter isn't brush-only despite the mask's name - MASK_SOLID_BRUSHONLY
 // only controls which CONTENTS_* flags count on world brushes, it does
 // NOT exclude other players/bots from the trace. Confirmed via per-segment
 // diagnostics: 100% of live per-tick samples failed at the very first
 // 8-unit segment as a "real wall hit", completely unmoved by lift=4 vs
-// lift=16 (ruling out a height/clearance problem) -- in close-quarters
+// lift=16 (ruling out a height/clearance problem) - in close-quarters
 // dodgeball combat, bots constantly cluster near each other and their
 // target, so a teammate or enemy standing within the first 8 units of the
 // sweep direction (often literally the enemy being aimed at) reads as a
 // solid wall. TraceFilter_NoPlayers already existed in this file but was
 // never wired up anywhere. Now uses TR_TraceHullFilter with it so only
-// world/static geometry counts -- other players no longer register as
+// world/static geometry counts - other players no longer register as
 // walls.
 
 
@@ -1423,22 +1423,22 @@ enum MoveSetType {
 // one flat brush the probe can see everywhere?
 //
 // That cache came out as 11,019 of 11,022 cells at EXACTLY z=64.03, an
-// unbroken 105x105 square spanning +-2496 -- while bots fell to -230 from
+// unbroken 105x105 square spanning +-2496 - while bots fell to -230 from
 // x~2060 with the cache reporting edgeDist 9-10. If the extreme cells report
 // the same entity and the same z as the centre, the flood-fill mapped a
 // phantom surface and every edgeDist derived from it is measured against the
 // wrong boundary (which is why edgeov has never once fired).
 
-// Cache-first walkability check -- the one every live call site should use.
+// Cache-first walkability check - the one every live call site should use.
 // Falls back to the live trace hop-check only while this map's one-time
 // scan hasn't finished yet (or was never able to start).
 
 // 8-direction wall scan relative to bot facing
 
-// Pressure vector — multi-foe positioning
+// Pressure vector - multi-foe positioning
 
 // ============================================================================
-// 8-DIRECTION INDEX SPACE -- WORLD-ABSOLUTE, NOT FACING-RELATIVE.
+// 8-DIRECTION INDEX SPACE - WORLD-ABSOLUTE, NOT FACING-RELATIVE.
 //
 // Index i is world yaw i*45 degrees: 0 = +X, 2 = +Y, 4 = -X, 6 = -Y.
 // This is the single shared convention for WallBlocked_/EdgeBlocked_ and
@@ -1450,19 +1450,19 @@ enum MoveSetType {
 // while every reader converted its world yaw using the eye yaw RIGHT NOW.
 // A dodgeball bot is tracking a homing rocket through SmoothAim factors of
 // 0.6-0.9 plus outright TeleportEntity angle snaps during the drag window,
-// so its yaw routinely swings 90-180 degrees inside one scan interval --
+// so its yaw routinely swings 90-180 degrees inside one scan interval -
 // several times the 45-degree width of a single bucket. WallBlocked_[3]
 // meant "back-right as of 0.2s ago" but was read as "back-right now", so
 // the wall/edge map was arbitrarily rotated against reality and every
 // consumer inherited it: direction preference in FindUnblockedDirCommitted,
 // side choice in EvadeStrafePickSide, the open-direction count in CanOrbit,
-// and -- the one that actually killed bots -- JumpEvadeSafe clearing a jump
+// and - the one that actually killed bots - JumpEvadeSafe clearing a jump
 // against a direction map pointing somewhere else entirely.
 //
 // An earlier pass caught half of this and made callers subtract the current
 // facing, which is why the old comment here described doing exactly that.
 // Subtracting the CURRENT facing from a world yaw does not convert it into
-// the SCAN-TIME facing's frame -- it just moved the same rotation error
+// the SCAN-TIME facing's frame - it just moved the same rotation error
 // around. World-absolute removes the frame mismatch outright: neither side
 // of the exchange depends on where the bot happens to be looking.
 // ============================================================================
@@ -1480,7 +1480,7 @@ enum MoveSetType {
 // across ticks instead of blindly re-deriving "clockwise first" fresh
 // every time. Without this, a wall that curves (the layered rings on
 // octagon are the reported case) produces exactly "runs into the wall and
-// circles like a dumb bot" -- desiredDir gets recomputed fresh each tick
+// circles like a dumb bot" - desiredDir gets recomputed fresh each tick
 // purely from CQC positioning with zero memory of the wall it just
 // bumped, FindUnblockedDir's CW-first bias resolves it the same way every
 // time, and the bot just slides along the same curve indefinitely with no
@@ -1488,7 +1488,7 @@ enum MoveSetType {
 //
 // Fix: commit to one rotational side for a couple seconds. When the
 // commitment expires, check whether distance to the goal actually
-// improved over that window -- if not, flip to the other side next time
+// improved over that window - if not, flip to the other side next time
 // instead of re-committing to the side that demonstrably wasn't working.
 // This is the standard fix for reactive-avoidance oscillation (short of
 // full pathfinding over the nav-cache grid, which is the further step if
@@ -1499,25 +1499,25 @@ enum MoveSetType {
 // Used only by the "all 8 directions blocked, push through anyway" last
 // resorts: a wall is safe to bump through (engine stops you), a void edge
 // is not (nothing stops you but gravity). Returns false only if every
-// single direction is an edge -- genuinely nowhere safe to move.
+// single direction is an edge - genuinely nowhere safe to move.
 
-// Movement node — follow/keep distance, wall-aware
+// Movement node - follow/keep distance, wall-aware
 
-// Guard-return node — walks a displaced can_walk=0 bot (statue) back to
+// Guard-return node - walks a displaced can_walk=0 bot (statue) back to
 // BotGuardPos. Reuses State_Move's wall-aware direction logic instead of a
 // blind beeline so it doesn't march straight into geometry that happens to
 // sit between the bot and its post.
 
-// Idle node — stand still, face enemy if one exists
+// Idle node - stand still, face enemy if one exists
 
-// Stub helper — Phase 5
+// Stub helper - Phase 5
 
 
 // Forward declarations for BT action nodes
 
 
 
-// Main BT entry point — replaces RunPvBCommand's sequential flow with
+// Main BT entry point - replaces RunPvBCommand's sequential flow with
 // a structured tree evaluation. The behavior is identical to the original
 // orchestrator; the tree structure makes priorities and early-exit points
 // explicit and auditable.
@@ -1569,7 +1569,7 @@ enum MoveSetType {
 // ============================================================================
 
 
-// Force a clean rescan. The on-disk cache outlives every code change --
+// Force a clean rescan. The on-disk cache outlives every code change -
 // StartNavScanIfNeeded loads it and returns, so a probe fix has no effect on
 // an existing map until the file is gone. That cost several rounds of
 // "nothing changed" when the actual scanner had in fact been fixed.
@@ -1577,7 +1577,7 @@ enum MoveSetType {
 
 
 // Per-cell nav overlay. Each cell gets one short vertical beam, coloured by
-// comparing the CACHE against a fresh live probe of the same spot -- the two
+// comparing the CACHE against a fresh live probe of the same spot - the two
 // disagreeing is the whole point, so the colours are chosen to make
 // disagreement impossible to miss rather than to look tidy.
 //
@@ -1586,22 +1586,22 @@ enum MoveSetType {
 // x~2060. Reading that off a saved text file takes a diff and a hypothesis;
 // seeing a magenta shelf hanging out past the real rim takes one look.
 
-// Minimal "#userid" arg parser -- returns a valid in-game client index, or
+// Minimal "#userid" arg parser - returns a valid in-game client index, or
 // -1 if arg isn't a #userid reference at all (caller decides what that means).
 
 // "See every cell" directly instead of inferring the cache's understanding
 // of an area from bot behavior. Dumps a grid of walkable-cache cells
 // centered on the caller's own position (or a target client's, passed as
-// #userid) -- each cell's floor height and distance from the mapped
+// #userid) - each cell's floor height and distance from the mapped
 // boundary, or X if the cache doesn't know it at all.
 
-// "What general.cfg [pvb.cfg] fire" -- the ACTUAL loaded runtime values for
+// "What general.cfg [pvb.cfg] fire" - the ACTUAL loaded runtime values for
 // a bot class, not the file on disk. No args: dumps every configured type.
 // #userid: dumps that bot's effective type. A raw number: dumps that type
 // index directly.
 
 // Beams showing exactly what the CSV logger's walls=/vel=/enemy= fields
-// capture as text, seen live instead of reconstructed after the fact --
+// capture as text, seen live instead of reconstructed after the fact -
 // this is the wall-scan data (see MaybeScanWalls) that the whole
 // abyss_v4/octagon debugging this session kept needing to infer from
 // dozens of log lines at a time. Green = open, red = wall, orange = edge.
@@ -1614,7 +1614,7 @@ enum MoveSetType {
 // BRAIN INSPECTION COMMANDS
 // Expose what the bot has learned to admins. All ROOT because raw policy
 // weights and SteamID-keyed opponent profiles are sensitive. Output goes to
-// admin's console (via ReplyToCommand) — no chat spam.
+// admin's console (via ReplyToCommand) - no chat spam.
 //
 // See subplugins/PvB-brain-inspection.md for usage examples.
 // ============================================================================
@@ -1625,14 +1625,14 @@ enum MoveSetType {
 
 
 
-// Plugin-scoped log. Everything PvB has to say -- nav scan progress and
-// audits, state changes, fall-kills, enable/disable -- lands in
+// Plugin-scoped log. Everything PvB has to say - nav scan progress and
+// audits, state changes, fall-kills, enable/disable - lands in
 // logs/tfdb_pvb/pvb_<date>.log instead of the shared SourceMod log, where it
 // was getting buried among every other plugin's output and repeatedly sent
 // people grepping the wrong file.
 //
 // One file per day, appended. These are low-frequency events (scan
-// start/finish, round transitions), not per-tick data -- the high-volume
+// start/finish, round transitions), not per-tick data - the high-volume
 // dataset still goes through DebugFile, which holds its handle open. Opening
 // per call here keeps the file consistent if the server crashes mid-round.
 //
@@ -1644,18 +1644,18 @@ enum MoveSetType {
 
 
 // Shared post-write bookkeeping: bumps line counters, enforces the hard cap
-// (auto-stops logging if the user forgot sm_stopdebug — otherwise rotated
+// (auto-stops logging if the user forgot sm_stopdebug - otherwise rotated
 // files would grow unbounded), then rotates the current file at DEBUG_MAX_LINES.
 // Call after every DebugFile.WriteLine() that participates in the line budget.
 // ============================================================================
 // DECISION-TRACE LOGGING
 // Captures the RATIONALE behind a bot's choice (cfg values consulted, rolls
-// made, branches taken) — not just the final state. Use at every pivotal
+// made, branches taken) - not just the final state. Use at every pivotal
 // branch in the behavior tree so post-hoc analysis can answer "why did statue walk
 // instead of idle?", "why did 3 bots all idle the same tick?", etc.
 //
 // Lines are tagged DECISION/<where> for grep-by-decision-point. Always logged
-// regardless of sample rate — these are rare events, not per-tick noise.
+// regardless of sample rate - these are rare events, not per-tick noise.
 //
 // Format: [tick N] DECISION/<where> #idx name type=T <free-form details>
 // Example: [tick 12345] DECISION/MoveMode #2 TBotV64 type=1 cfg.idle_chance=100 roll=42 wantIdle=1 -> MOVE_IDLE
@@ -1666,12 +1666,12 @@ enum MoveSetType {
 // PLAYER DATA COLLECTION
 // Logs human player state in the same debug file as bot data. Prefixed with
 // [PLAYER] so it's easy to filter. Captures movement, aim, buttons, position,
-// and rocket awareness — everything needed to study how real players behave
+// and rocket awareness - everything needed to study how real players behave
 // and derive better bot movesets from the data.
 // ============================================================================
 
 // ============================================================================
-// BOT TICK LOGGING — the dataset sm_bot_test spawns. Same fields as
+// BOT TICK LOGGING - the dataset sm_bot_test spawns. Same fields as
 // DebugLogPlayerState (position/velocity/aim/rocket-awareness/nearest enemy)
 // plus the bot-specific state the behavior tree actually branches on: which
 // BotState it's in (IDLE/MOVE/ORBIT/DODGE/DEFLECT/GANG_ESCAPE), whether it's
@@ -1707,7 +1707,7 @@ int   AimTicksSinceTarget[MAXPLAYERS + 1];  // Ticks since target changed (for o
 //
 // Fixed per-branch factors (0.6 / 0.75 / 0.85 / 0.9) made the bot swing onto
 // a rocket at nearly the same rate whether it was 850 units out or about to
-// hit -- which reads as inhuman in both directions at once: twitchy on a
+// hit - which reads as inhuman in both directions at once: twitchy on a
 // distant rocket nobody would be urgent about, and no more committed when it
 // actually matters. Good players are the opposite: loose and unhurried while
 // the rocket is far, then very fast in the last stretch.
@@ -1723,13 +1723,13 @@ int   AimTicksSinceTarget[MAXPLAYERS + 1];  // Ticks since target changed (for o
 
 
 // For "is this a genuine WALL" specifically (IncrementalWallClear), not
-// just "not a player" -- TraceFilter_NoPlayers stopped players from
+// just "not a player" - TraceFilter_NoPlayers stopped players from
 // registering as walls, but confirmed via spacebox_udl_a4 diagnostics
 // (walls=WWWWWWWW, faildist=8, while the bot was in state=DEFLECT with a
 // rocket actively targeting it) a nearby dodgeball ROCKET entity can
 // ALSO false-positive as a wall: under the default TRACE_EVERYTHING mode,
 // only DYNAMIC entities go through the filter at all (static props are
-// always solid regardless, bypassing the filter entirely -- see
+// always solid regardless, bypassing the filter entirely - see
 // TraceType's documented behavior), so excluding just the client index
 // range still leaves every other dynamic entity (rockets, physics props,
 // anything else) counting as solid. Only the world entity (index 0)
@@ -1744,7 +1744,7 @@ int   AimTicksSinceTarget[MAXPLAYERS + 1];  // Ticks since target changed (for o
 #define COLLISION_GROUP_INTERACTIVE_DEBRIS  3   // doesn't collide with other debris or players
 #define COLLISION_GROUP_WEAPON             11   // dropped weapons
 #define COLLISION_GROUP_VEHICLE_CLIP       12   // blocks vehicles only
-#define COLLISION_GROUP_PROJECTILE         13   // rockets/grenades -- passes players
+#define COLLISION_GROUP_PROJECTILE         13   // rockets/grenades - passes players
 #define COLLISION_GROUP_PASSABLE_DOOR      15   // player walks through
 #define COLLISION_GROUP_DISSOLVING         16   // mid-dissolve, non-solid to players
 
@@ -1756,8 +1756,8 @@ int   AimTicksSinceTarget[MAXPLAYERS + 1];  // Ticks since target changed (for o
 //
 // Measured on tfdb_abyss_v4 via sm_navcell, which is why this is neither of
 // the two obvious filters:
-//   * unfiltered      -- returns players ("ent=1 class=player startsolid=1").
-//   * WorldOnly       -- returns nothing. The real floor here is
+//   * unfiltered      - returns players ("ent=1 class=player startsolid=1").
+//   * WorldOnly       - returns nothing. The real floor here is
 //                        `func_brush` (ent 51, CONTENTS_SOLID at z=64.03),
 //                        a brush ENTITY, so entity==0 finds no ground at all
 //                        and every scan bails.
@@ -1767,7 +1767,7 @@ int   AimTicksSinceTarget[MAXPLAYERS + 1];  // Ticks since target changed (for o
 // actual root cause of the abyss falls.
 //
 // Out past the rim the probe hit `func_physbox_multiplayer` at z=-11.19.
-// That entity is on the map to stop ROCKETS leaving the arena -- players
+// That entity is on the map to stop ROCKETS leaving the arena - players
 // walk straight through it. But it is CONTENTS_SOLID, so a trace stops dead
 // on it and reports "floor". The cache then records ground where a player
 // cannot stand, the bot walks out onto it, and falls. Cache and live probe
@@ -1778,7 +1778,7 @@ int   AimTicksSinceTarget[MAXPLAYERS + 1];  // Ticks since target changed (for o
 // Discriminating by classname would only ever patch this one map. The engine
 // already stores the answer: an entity's collision group decides what it
 // actually collides with. Reject the groups that pass players through, and
-// this generalises to any map -- which is the whole point, since these bots
+// this generalises to any map - which is the whole point, since these bots
 // are meant to handle maps nobody has hand-tuned for them.
 
 
@@ -1796,10 +1796,10 @@ int   AimTicksSinceTarget[MAXPLAYERS + 1];  // Ticks since target changed (for o
 // Admin commands for live bot/rocket/brain state inspection.
 // Must be at end of file (after all globals are defined).
 // Commands:
-//   sm_inspect_bot <client>    — Full bot state dump
-//   sm_inspect_rocket <index>  — Rocket state dump
-//   sm_inspect_grid            — Spatial grid summary
-//   sm_inspect_all             — Full snapshot of all bots + rockets
+//   sm_inspect_bot <client>    - Full bot state dump
+//   sm_inspect_rocket <index>  - Rocket state dump
+//   sm_inspect_grid            - Spatial grid summary
+//   sm_inspect_all             - Full snapshot of all bots + rockets
 // ============================================================================
 
 

@@ -1,11 +1,11 @@
-// tfdb_pvb_states.inc — game state machine: state selection + state handlers
+// tfdb_pvb_states.inc - game state machine: state selection + state handlers
 // (UpdateBotState + all state functions: MOVE, DEFLECT, DODGE, ORBIT, etc.)
 //
 // ============================================================================
 //  STATE TRANSITION TABLE (read this first)
 // ============================================================================
 //
-//  UpdateBotState runs every tick. It evaluates conditions in priority order —
+//  UpdateBotState runs every tick. It evaluates conditions in priority order -
 //  the FIRST match wins and the bot enters that state. Lower-priority states
 //  are never reached if a higher one triggers.
 //
@@ -29,7 +29,7 @@
 //  5         Nothing else                        → IDLE
 //
 //  Notes:
-//  - Statue classes (isStatue) skip to DEFLECT on any rocket — no locomotion.
+//  - Statue classes (isStatue) skip to DEFLECT on any rocket - no locomotion.
 //  - can_walk=0 classes skip MOVE/CHASE/etc and fall to GUARD or IDLE.
 //  - "Window" states (PANIC, COUNTER, BAIT, CHASE) use a timestamp gate:
 //    once triggered, they stay active for a fixed duration before expiring.
@@ -149,7 +149,7 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
 
         if (LastEnemyDist[client] > 0.0 && dist > LastEnemyDist[client] + 50.0)
         {
-            // Enemy moved 50+ HU away since last check — fleeing
+            // Enemy moved 50+ HU away since last check - fleeing
             ChaseRollConsumed[client] = true;
             if (GetRandomInt(1, 100) <= CfgChaseChance[chaseBotType])
             {
@@ -164,7 +164,7 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
 
     // Snapshot before dispatch so the post-deflect block below can tell
     // "a drag window that's already been running for a tick or more" apart
-    // from "State_Deflect just armed a brand-new one THIS tick" — see the
+    // from "State_Deflect just armed a brand-new one THIS tick" - see the
     // justArmedDrag comment below.
     float prevPostDeflectUntil = PostDeflectUntil[client];
 
@@ -199,7 +199,7 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
     // After a deflect, apply the move set's aim direction for a short window.
     // The TFDB core reads eye angles once after the fixed global drag delay
     // to set the rocket's new direction. The bot must SNAP to the drag direction
-    // immediately — real players flick their mouse, not gradually turn.
+    // immediately - real players flick their mouse, not gradually turn.
     //
     // BUT: if a DIFFERENT rocket is incoming (within airblast range), cancel the
     // drag and let State_Deflect handle the new threat. The drag is only useful when
@@ -207,13 +207,13 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
     //
     // Comparing against PostDeflectRocketEnt (not just "is any rocket cached")
     // matters: TFDB doesn't reassign the just-deflected rocket's target away
-    // from this bot until the core's drag-delay deadline elapses — the same
+    // from this bot until the core's drag-delay deadline elapses - the same
     // delay this drag window exists to exploit. So GetCachedRocketForClient()
     // legitimately keeps reporting the just-deflected rocket as "targeting me"
     // for the rocket's entire remaining flight window, not due to stale
     // caching. Without this check, every deflect cancelled its own drag on
     // the same tick it was armed, before the delayed drag read could ever
-    // see it — the bot could deflect but every move set (wave/bounce/upspike/
+    // see it - the bot could deflect but every move set (wave/bounce/upspike/
     // downspike/direct/backfire) was silently inert.
     float nowPost = GetEngineTime();
 
@@ -221,7 +221,7 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
     // actually connects (its own comment says so explicitly). If State_Deflect
     // armed the drag window during the dispatch call above (PostDeflectUntil
     // grew from what it was before dispatch), that fire-aim belongs to THIS
-    // tick's usercmd -- overwriting angles[] here too would send the airblast
+    // tick's usercmd - overwriting angles[] here too would send the airblast
     // aimed at the move's post-deflect direction (e.g. -45 pitch for upspike)
     // instead of at the rocket, and the airblast misses. Let the drag start
     // applying from the NEXT tick onward instead, once the fire-aim usercmd
@@ -230,11 +230,11 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
 
     if (!justArmedDrag && nowPost < PostDeflectUntil[client])
     {
-        // Check if a genuinely different rocket is incoming — if so, cancel drag
+        // Check if a genuinely different rocket is incoming - if so, cancel drag
         int newRocket = GetCachedRocketForClient(client);
         if (newRocket >= 0 && newRocket != PostDeflectRocketEnt[client] && view_as<BotState>(BotState_[client]) == STATE_DEFLECT)
         {
-            // A different rocket is incoming and we're in DEFLECT state — cancel drag
+            // A different rocket is incoming and we're in DEFLECT state - cancel drag
             PostDeflectUntil[client] = 0.0;
         }
         else
@@ -246,12 +246,12 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
 
             if (PostDeflectWave[client])
             {
-                // Oscillate yaw for wave drag — real players wiggle mouse
+                // Oscillate yaw for wave drag - real players wiggle mouse
                 float t = GetEngineTime();
                 dragAng[1] += 20.0 * Sine(2.0 * 3.14159 * 5.0 * t);
             }
 
-            // SNAP to drag direction — no smoothing, no jitter.
+            // SNAP to drag direction - no smoothing, no jitter.
             // This simulates a real mouse flick during the drag window.
             float snapAng[3];
             snapAng[0] = dragAng[0];
@@ -264,7 +264,7 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
 
             // CRITICAL: must return Plugin_Changed so the engine applies our angle override.
             // If the BT state function returned Plugin_Continue, the engine would ignore
-            // our modified angles[] — the drag would silently fail.
+            // our modified angles[] - the drag would silently fail.
             result = Plugin_Changed;
         }
     }
@@ -273,7 +273,7 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
     // client is a tf_bot_add native TF2 bot (CTFBot/NextBot), not a
     // SourceMod fake client whose movement is purely usercmd-driven. Its own
     // internal locomotion AI runs independently of this hook and was already
-    // known to fight usercmd-level overrides -- that's exactly why SmoothAim
+    // known to fight usercmd-level overrides - that's exactly why SmoothAim
     // forces angles through TeleportEntity instead of trusting the angles[]
     // copyback alone. vel[] never got the same treatment: every BT_* leaf
     // above computes a correct desired velocity into vel[], but leaving it
@@ -281,7 +281,7 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
     // moment later, which is why bots visibly "decide" to move (see
     // DebugLogBotTick's vel=/speed= fields) while their actual position
     // barely changes. Force it the same way angles already are. Real human
-    // clients must never have their velocity stomped like this -- gate
+    // clients must never have their velocity stomped like this - gate
     // strictly on ctx.isBot, not on the broader Allowed[client] flag.
     // Gated on ctx.isBot ALONE, not on result == Plugin_Changed.
     //
@@ -295,13 +295,13 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
     //
     // Measured: 4,686 ticks across all six bots sitting at spawn with
     // walls=OOOOOOOO, open=8, edgeDist 4-8, an enemy 3,300 units away and
-    // reason=too_far -- wanting to advance, in the clear, not moving. The tell
+    // reason=too_far - wanting to advance, in the clear, not moving. The tell
     // was btn=---------C: crouch was held, and this plugin never presses
     // IN_DUCK anywhere. Something else was steering.
     //
     // Now the bot is always under our control. If no leaf produced a
     // velocity this tick we hold position deliberately (below) rather than
-    // letting the engine's locomotion fill the gap -- failing to a stand is
+    // letting the engine's locomotion fill the gap - failing to a stand is
     // recoverable and legible; failing to a second controller is neither.
     if (ctx.isBot)
     {
@@ -337,13 +337,13 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
         }
         // Safety net matching this map's own intended design, not a
         // heuristic. tfdb_abyss_v4's ring is meant to be lethal to fall off
-        // -- a trigger below it is supposed to kill/teleport anyone who
+        // - a trigger below it is supposed to kill/teleport anyone who
         // falls, same as it would a real player. Debug logs proved the
         // bots are somehow passing through that trigger untouched: they
         // land on real floor far below (-2079) and keep playing normally
         // instead of dying, no death event anywhere in the log. This is
         // most likely the same root pattern behind several other bugs this
-        // session -- tf_bot_add NextBot entities don't always process the
+        // session - tf_bot_add NextBot entities don't always process the
         // world the same way a real player's movement pipeline does. Since
         // I can't inspect or fix the trigger itself, enforce the same rule
         // directly: fall far enough below where this bot actually spawned
@@ -353,10 +353,10 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
         if (BotGuardPosValid[client] && curPos[2] < BotGuardPos[client][2] - FALL_KILL_DEPTH)
         {
             // Direct proof this branch actually ran, independent of whether
-            // ForcePlayerSuicide's death event fires/logs correctly --
+            // ForcePlayerSuicide's death event fires/logs correctly -
             // confirmed bots reaching -2079 alive with zero DECISION/Death
             // lines, so the failure could be here OR downstream of this call.
-            PvB_Log("[PVB-FALLKILL] bot=%d z=%.0f spawnZ=%.0f threshold=%.0f -- forcing suicide",
+            PvB_Log("[PVB-FALLKILL] bot=%d z=%.0f spawnZ=%.0f threshold=%.0f - forcing suicide",
                 client, curPos[2], BotGuardPos[client][2], BotGuardPos[client][2] - FALL_KILL_DEPTH);
             ForcePlayerSuicide(client);
 
@@ -365,7 +365,7 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
             // tf_bot_add NextBot entities don't process ordinary player
             // mechanics the same way real players do (angles needed a
             // direct TeleportEntity override, velocity needed the same,
-            // gravity didn't accumulate without direct intervention) -- if
+            // gravity didn't accumulate without direct intervention) - if
             // CommitSuicide's death processing turns out to be another one
             // of those, this guarantees the bot is out of the void
             // immediately regardless, rather than depending on a mechanism
@@ -377,7 +377,7 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
 
         // Per-tick "about to step into nothing" guard, independent of the
         // periodic 8-direction scan. MaybeScanWalls only refreshes every
-        // ~0.2s / 50 units moved -- debug logs showed a bot reading a clean
+        // ~0.2s / 50 units moved - debug logs showed a bot reading a clean
         // walls=WWWWWWWW right up until the tick before it was already
         // several ticks deep into an accelerating fall (see the abyss_v4
         // capture: z=56 with all-clear walls, then z=37/13/-14 with the
@@ -385,14 +385,14 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
         // gap between scans. This check uses THIS tick's actual decided
         // velocity against a fresh downward trace, so it can never be more
         // than one tick stale, unlike the throttled scan.
-        // Read the entity's OWN current velocity once -- used below both to
+        // Read the entity's OWN current velocity once - used below both to
         // detect actual falling (not just what FL_ONGROUND claims) and to
         // preserve real vertical speed through the forced apply.
         float actualVel[3];
         GetEntPropVector(client, Prop_Data, "m_vecVelocity", actualVel);
 
         bool grounded = (GetEntityFlags(client) & FL_ONGROUND) != 0;
-        // FL_ONGROUND can lag a tick or more behind the real transition --
+        // FL_ONGROUND can lag a tick or more behind the real transition -
         // debug logs showed z accelerating downward (gravity's signature)
         // for several ticks while FL_ONGROUND still read true and this
         // guard never fired. Trust the entity's actual vertical velocity
@@ -402,7 +402,7 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
 
         // === EDGE COMFORT (every state, not just State_Move) ===
         // State_Move has had an edge-comfort bias for a while, but it lived
-        // inside that one leaf -- so DEFLECT, DODGE, ORBIT and GANG_ESCAPE
+        // inside that one leaf - so DEFLECT, DODGE, ORBIT and GANG_ESCAPE
         // could all still steer a bot off a ledge, and those are exactly the
         // states a bot is in when something interesting is happening. Applying
         // it here, on the final decided velocity, means every state inherits
@@ -417,7 +417,7 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
         // Proportional rather than a hard veto: at the comfort threshold this
         // is a slight nudge inward, at the boundary cell it dominates. A hard
         // switch at a threshold is what makes a bot visibly stutter along a
-        // rim -- it flips between "fine" and "flee" every time the distance
+        // rim - it flips between "fine" and "flee" every time the distance
         // ticks over, which reads as exactly the glitching-against-geometry
         // this is meant to stop.
         float edgeHoriz = SquareRoot(vel[0] * vel[0] + vel[1] * vel[1]);
@@ -451,7 +451,7 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
 
         if (falling && !(buttons & IN_JUMP))
         {
-            // Already falling -- stop steering/drifting horizontally. A
+            // Already falling - stop steering/drifting horizontally. A
             // real player falling off a ledge doesn't keep gliding forward
             // under their own power; let gravity do the one thing it does.
             // This also caps how far any fall that does slip past the edge
@@ -470,7 +470,7 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
             {
                 // The step this tick's velocity is about to take lands on
                 // nothing walkable (no floor, or a slope steeper than TF2's
-                // own walkable limit) -- refuse it regardless of what the
+                // own walkable limit) - refuse it regardless of what the
                 // scan-based decision said. Next tick's refreshed
                 // state/scan picks a new direction instead of continuing.
                 vel[0] = 0.0;
@@ -481,11 +481,11 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
         // TeleportEntity's velocity argument is the FULL 3-component
         // velocity, not just horizontal, and none of the BT_* leaves above
         // ever touch vel[2]. Gravity/falling is the ENGINE's own physics
-        // simulation integrating downward speed frame over frame -- it is
+        // simulation integrating downward speed frame over frame - it is
         // not something the usercmd's vel[2] copyback already reflects.
         // Forcing that raw copyback value through a direct engine call
         // every tick doesn't just leak a small residual (the on-ground
-        // sinking seen last round, "fixed" by zeroing on FL_ONGROUND) --
+        // sinking seen last round, "fixed" by zeroing on FL_ONGROUND) -
         // in the air it RESETS actual fall speed back to that same small
         // input value every single tick instead of letting it accelerate,
         // which is exactly the "hovering down instead of falling normally"
@@ -497,11 +497,11 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
         // Force-applying the decided velocity outright is what makes the
         // movement read as an "artificial push" rather than a player. The
         // logged speed distribution is the proof: 250 samples at exactly 300
-        // and 41 at 299, with nothing in between -- the bot is only ever at
+        // and 41 at 299, with nothing in between - the bot is only ever at
         // full sprint or stopped dead, switching between them in one tick.
         //
         // Source moves players by ACCELERATING toward the wish direction at
-        // sv_accelerate * maxspeed HU/s^2 (3000 for a 300 HU/s Pyro -- about
+        // sv_accelerate * maxspeed HU/s^2 (3000 for a 300 HU/s Pyro - about
         // 45 HU/s per tick at 66 tick, so ~0.1s from a standstill to full
         // speed), and slowing them by FRICTION, which is gentler still. That
         // asymmetry is most of what "moving like a player" looks like: quick
@@ -523,7 +523,7 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
 
         if (wishLen < 1.0)
         {
-            // Nothing wanted this tick -- coast down under friction instead
+            // Nothing wanted this tick - coast down under friction instead
             // of snapping to zero. This is the single most unnatural part of
             // the old behaviour: real players never stop instantly.
             if (curLen > 0.1)
@@ -553,7 +553,7 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
         // m_flMaxspeed was boosted (gang escape) and then not restored
         // (before the per-tick fix) could carry an above-maxspeed velocity
         // indefinitely. Even with the fix, TeleportEntity's velocity
-        // argument is a direct set — the engine's own movement code clamps
+        // argument is a direct set - the engine's own movement code clamps
         // real players to maxspeed, so we must do the same here.
         float finalHoriz = SquareRoot(vel[0] * vel[0] + vel[1] * vel[1]);
         if (finalHoriz > maxSpeed && finalHoriz > 0.001) {
@@ -565,7 +565,7 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
         TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, vel);
     }
 
-    // Dataset logging — bots only (sm_bot_test squads), gated by DebugActive
+    // Dataset logging - bots only (sm_bot_test squads), gated by DebugActive
     // so this is free/no-op the rest of the time. See DebugLogBotTick.
     if (ctx.isBot) {
         DebugLogBotTick(client, vel, angles, buttons);
@@ -596,7 +596,7 @@ void UpdateBotState(int client)
     //
     // Range-gated. This used to fire on ANY tracked rocket, and
     // GetCachedRocketForClient applies no distance cap at all to a rocket
-    // that targets this bot -- so one rocket anywhere on the map pinned the
+    // that targets this bot - so one rocket anywhere on the map pinned the
     // bot in DEFLECT for its whole flight, including while it was flying
     // AWAY after being hit. The recorded symptom is a run of
     // "[PVB-WAIT] not facing" with dot sliding 0.55 -> -0.92 while dist grows
@@ -634,7 +634,7 @@ void UpdateBotState(int client)
         if (rocketDist <= CfgRocketEngageDist[botType])
         {
             // ORBIT sits INSIDE the rocket branch, ahead of the deflect
-            // decision -- not after it as a lower priority. That ordering was
+            // decision - not after it as a lower priority. That ordering was
             // why STATE_ORBIT could never be reached: Priority 2 returned on
             // any tracked rocket, and CanOrbit requires a tracked rocket, so
             // the two conditions were mutually exclusive and State_Orbit had
@@ -684,7 +684,7 @@ void UpdateBotState(int client)
 
     // Priority 3.5: PUNISH MISSED AIRBLAST
     // If the enemy just airblasted at nothing (missed), they're on 0.75s cooldown.
-    // This is the most vulnerable moment — close distance and deflect at them.
+    // This is the most vulnerable moment - close distance and deflect at them.
     if (canWalk && CfgPunishChance[botType] > 0 && GetFrameEnemy(client) > 0
         && EnemyMissWindow[client] > 0 && GetGameTime() < EnemyMissWindow[client])
     {
@@ -727,7 +727,7 @@ void UpdateBotState(int client)
             int eDist;
             if (NavCache_GetEdgeDist(ePos, eDist) && eDist < NAV_EDGE_COMFORT_CELLS)
             {
-                // Enemy is near an edge — pressure them
+                // Enemy is near an edge - pressure them
                 BotState_[client] = STATE_EDGE_PRESSURE;
                 if (oldState != STATE_EDGE_PRESSURE) LogStateChange(client, oldState, STATE_EDGE_PRESSURE, "edge_pressure");
                 return;
@@ -735,7 +735,7 @@ void UpdateBotState(int client)
         }
     }
 
-    // Priority 3.8: PANIC — multi-rocket + airblast cooldown = pure survival
+    // Priority 3.8: PANIC - multi-rocket + airblast cooldown = pure survival
     // Overrides everything below because the bot is about to die.
     if (canWalk && CfgPanicChance[botType] > 0 && rocketEnt >= 0
         && !CanDeflect(client) && CountActiveThreats(client) >= 2)
@@ -754,8 +754,8 @@ void UpdateBotState(int client)
         }
     }
 
-    // Priority 3.9: COUNTER — pre-aim where enemy's deflected rocket will come from
-    // Triggered right after the enemy deflects — predicts incoming direction.
+    // Priority 3.9: COUNTER - pre-aim where enemy's deflected rocket will come from
+    // Triggered right after the enemy deflects - predicts incoming direction.
     if (canWalk && CfgCounterChance[botType] > 0 && CounterPreAimUntil[client] > GetGameTime())
     {
         BotState_[client] = STATE_COUNTER;
@@ -763,7 +763,7 @@ void UpdateBotState(int client)
         return;
     }
 
-    // Priority 3.10: BAIT — bait enemy airblast, then punish the miss
+    // Priority 3.10: BAIT - bait enemy airblast, then punish the miss
     if (canWalk && CfgBaitChance[botType] > 0 && BaitUntil[client] > GetGameTime())
     {
         BotState_[client] = STATE_BAIT;
@@ -771,7 +771,7 @@ void UpdateBotState(int client)
         return;
     }
 
-    // Priority 3.11: CHASE — pursue a fleeing enemy
+    // Priority 3.11: CHASE - pursue a fleeing enemy
     if (canWalk && CfgChaseChance[botType] > 0 && HasEnemies(client) && ChaseUntil[client] > GetGameTime())
     {
         BotState_[client] = STATE_CHASE;
@@ -875,7 +875,7 @@ bool CanDeflect(int client)
 
     // NOTE: Airblast cooldown is NOT checked here.
     // The state should always be DEFLECT when a rocket is incoming.
-    // State_Deflect handles the cooldown internally — it just waits for the
+    // State_Deflect handles the cooldown internally - it just waits for the
     // right moment to press the airblast button.
 
     // Check the rocket is actually targeting this bot or closing on it
@@ -1179,7 +1179,7 @@ Action State_GangEscape(int client, int &buttons, float vel[3])
 
     // Escape through the biggest gap between gangers, not directly
     // away from the centroid. Fleeing from the centroid is predictable
-    // — a real player looks for the open lane between two enemies and
+    // - a real player looks for the open lane between two enemies and
     // sprint through it. If all gangers are on one side, the gap direction
     // naturally falls opposite them (same as centroid-flee). If they're
     // surrounding the bot, the gap is the widest angular space between
@@ -1189,13 +1189,13 @@ Action State_GangEscape(int client, int &buttons, float vel[3])
 
     if (gangCount <= 1)
     {
-        // Single ganger — just flee directly away
+        // Single ganger - just flee directly away
         flee[0] = botPos[0] - centroid[0];
         flee[1] = botPos[1] - centroid[1];
     }
     else
     {
-        // Multiple gangers — find the biggest angular gap between them
+        // Multiple gangers - find the biggest angular gap between them
         // Sort gangers by angle from bot, then find the widest gap
         float angles[16];  // max 16 gangers
         int angleCount = 0;
@@ -1228,7 +1228,7 @@ Action State_GangEscape(int client, int &buttons, float vel[3])
         }
         else
         {
-            // Sort angles (simple bubble sort — gangCount is tiny)
+            // Sort angles (simple bubble sort - gangCount is tiny)
             for (int a = 0; a < angleCount - 1; a++)
                 for (int b = a + 1; b < angleCount; b++)
                     if (angles[b] < angles[a])
@@ -1272,7 +1272,7 @@ Action State_GangEscape(int client, int &buttons, float vel[3])
 
     // Engine-native speed buff: TFCond_SpeedBuffAlly gives a 1.35x speed
     // multiplier (the Disciplinary Action buff). The engine handles
-    // maxspeed recalculation, automatic expiry, and cleanup on death —
+    // maxspeed recalculation, automatic expiry, and cleanup on death -
     // no manual m_flMaxspeed manipulation or per-tick restore needed.
     // This replaces the old SetEntPropFloat(m_flMaxspeed) approach which
     // required manual restore and could leak boosted speed across state
@@ -1285,7 +1285,7 @@ Action State_GangEscape(int client, int &buttons, float vel[3])
 
     // TFCond_SpeedBuffAlly already multiplies m_flMaxspeed by 1.35x, so
     // reading m_flMaxspeed here gives us the buffed value. Don't multiply
-    // by boostMult on top of that — the double-buff made aggressive bots
+    // by boostMult on top of that - the double-buff made aggressive bots
     // (boost_mult=2.5) sprint at 600 HU/s (engine cap) on top of the
     // 1.35x condition, which was 2.5x faster than a real player.
     // gang_speed_boost_mult > 1.0 now only controls whether the
@@ -1306,7 +1306,7 @@ Action State_GangEscape(int client, int &buttons, float vel[3])
     int actualDir;
     if (!FindUnblockedDir(client, desiredDir, actualDir))
     {
-        // Cornered — try jumping
+        // Cornered - try jumping
         buttons |= IN_JUMP;
         vel[0] = 0.0; vel[1] = 0.0;
     }
@@ -1342,7 +1342,7 @@ bool TryEvadeStrafe(int client, int botType, const float rocketVel[3], float vel
     bool canStrafeEvade = CfgEvadeStrafeEnabled[botType] && !ClassIsStatueLike[botType] && CfgCanWalk[botType];
     if (!canStrafeEvade) return false;
 
-    // Perpendicular to the rocket's travel direction -- same construction
+    // Perpendicular to the rocket's travel direction - same construction
     // State_Orbit uses for its own (differently-triggered) circling behavior.
     float perp[3];
     perp[0] = -rocketVel[1];
@@ -1424,14 +1424,14 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
 
     // Neither jump-evasion path applies to bots that can't walk (statue-like
     // or explicitly can_walk=0). Those classes are supposed to just stand
-    // and deflect in place -- hopping around contradicts that identity, and
+    // and deflect in place - hopping around contradicts that identity, and
     // statues in particular reach STATE_DEFLECT for ANY rocket regardless of
     // distance (see UpdateBotState), so without this gate they'd jump at
     // rockets that aren't even close.
     bool canJumpEvade = !ClassIsStatueLike[botType] && CfgCanWalk[botType];
 
     // Safety net: if an evasion (jump-over or reposition) never got the
-    // chance to resolve -- rocket left range, got destroyed, etc. -- don't
+    // chance to resolve - rocket left range, got destroyed, etc. - don't
     // leave the bias/state stuck forever.
     if (Evading[client] && now >= EvadeEnd[client])
     {
@@ -1440,11 +1440,11 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
     }
 
     // === JUMP-OVER CHECK ===
-    // Rocket is slow, low to ground, very close to feet — hop it, then let
+    // Rocket is slow, low to ground, very close to feet - hop it, then let
     // the normal aim/fire flow below handle the actual deflect once
     // airborne. This used to fire the airblast on the SAME tick as the jump
     // with a hardcoded 45-degree pitch that often didn't even point at the
-    // rocket (angles[1]/yaw was never touched at all) -- looked like random
+    // rocket (angles[1]/yaw was never touched at all) - looked like random
     // jumping regardless of where the rocket actually was. Now it only
     // presses jump and biases the upcoming deflect toward upspike/backfire
     // (see SELECT MOVE SET below); the actual aim math is whatever the rest
@@ -1476,14 +1476,14 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
     // === COMMIT POINT: TIME to impact, not distance to it ===
     //
     // The airblast box is fixed (256 HU, ~60 degree cone) so 240 is still the
-    // hard ceiling -- you physically cannot deflect further out. But firing at
+    // hard ceiling - you physically cannot deflect further out. But firing at
     // a fixed 240 regardless of speed models the wrong skill entirely.
     //
     // Distance is not time. At 5,000 HU/s a 240-unit gap is about 3 ticks; at
     // 1,000 HU/s the same gap is 16. One trigger, wildly different difficulty,
     // and the failure is asymmetric: per the TF2 wiki, "airblast too early and
     // the projectile is not reflected, and a second airblast will not ready
-    // before the collision" -- an early miss is FATAL, not merely wasted,
+    // before the collision" - an early miss is FATAL, not merely wasted,
     // because the cooldown outlasts the rocket's remaining flight.
     //
     // DEFAULT IS "fire as soon as it can possibly connect", not "wait".
@@ -1492,7 +1492,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
     // human commits. That was the wrong model: a bot is not a player and has
     // nothing to gain from a reaction window. Waiting only shrinks the number
     // of ticks in which range and cone both hold, so the bot blasted late,
-    // missed, and ate the cooldown -- measured as bots "airblasting nothing
+    // missed, and ate the cooldown - measured as bots "airblasting nothing
     // and dying". Deflecting is deterministic; there is no skill being
     // simulated by deferring it.
     //
@@ -1506,7 +1506,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
     //   set to 0.08s, 1000 HU/s -> 80: deliberately late, deliberately worse
 
     float closingSpeed = GetRocketClosingSpeed(rocketPos, rocketVel, botPos);
-    if (closingSpeed < 1.0) closingSpeed = rocketSpeed;  // odd geometry -- fall back to raw speed
+    if (closingSpeed < 1.0) closingSpeed = rocketSpeed;  // odd geometry - fall back to raw speed
 
     float fireDist = closingSpeed * CfgFireTimeToImpact[botType];
     // Timing variance: occasionally deflect slightly early or late to be unpredictable
@@ -1518,7 +1518,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
     if (fireDist > AIRBLAST_FIRE_RANGE)            fireDist = AIRBLAST_FIRE_RANGE;
     if (fireDist < CfgFireMinDist[botType])   fireDist = CfgFireMinDist[botType];
 
-    // Wait for the right moment — don't airblast if too far
+    // Wait for the right moment - don't airblast if too far
     if (distToRocket > fireDist)
     {
         // No State_Move re-entry here any more. This leaf used to call the
@@ -1527,12 +1527,12 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
         // stand frozen for the whole approach. That was a leaf working around
         // a broken priority order. UpdateBotState now range-gates the rocket
         // branch (CfgDeflectRange, default 300), so reaching this function at
-        // all means the rocket is genuinely close -- the remaining band
+        // all means the rocket is genuinely close - the remaining band
         // between AIRBLAST_FIRE_RANGE (240) and that gate is a few tenths of a
         // second of holding still and aiming, which is what a real player
         // does at that range anyway.
 
-        // Rocket too far to fire — smoothly track it (not a hard snap) so
+        // Rocket too far to fire - smoothly track it (not a hard snap) so
         // we're aimed correctly by the time it gets close. Overrides
         // whatever angle State_Move just set (it aims at the enemy, we need
         // the rocket instead).
@@ -1550,7 +1550,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
     // Check that the bot is actually FACING the rocket before firing.
     //
     // CRITICAL: aim at the rocket's PREDICTED position next tick, not current.
-    // At 5000 HU/s the rocket moves 76 HU per tick — if we aim at where it IS,
+    // At 5000 HU/s the rocket moves 76 HU per tick - if we aim at where it IS,
     // by the time the airblast processes the rocket has moved past the cone.
     float currentAng[3];
     GetClientEyeAngles(client, currentAng);
@@ -1564,15 +1564,15 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
     NormalizeVector(toRocket, toRocket);
 
     float dot = GetVectorDotProduct(fwd, toRocket);
-    // cos(50°) ≈ 0.643 — rocket must be within ~50° of where bot is facing
+    // cos(50°) ≈ 0.643 - rocket must be within ~50° of where bot is facing
     // (airblast cone is ~60°, we use 50° for safety margin)
     if (dot < AIRBLAST_CONE_DOT)
     {
-        // State_Move re-entry removed here too -- same reasoning as the
+        // State_Move re-entry removed here too - same reasoning as the
         // too-far branch. With the rocket branch range-gated, being
         // misaligned this close means turning is the whole job.
 
-        // Not facing the rocket — turn toward its predicted position.
+        // Not facing the rocket - turn toward its predicted position.
         // Smoothed (not a hard TeleportEntity snap): this branch re-fires
         // every tick while misaligned, and the target angle shifts slightly
         // each tick as the rocket moves, so a raw snap here reads as rapid,
@@ -1586,7 +1586,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
         angles[0] = aimAng[0];
         angles[1] = aimAng[1];
 
-        // Rocket is BEHIND (more than ~90 degrees off) AND genuinely close --
+        // Rocket is BEHIND (more than ~90 degrees off) AND genuinely close -
         // jump while re-acquiring so recovering from a bad angle looks like a
         // real reposition instead of the bot just standing there spinning in
         // place. By the time the bot lands, the snap-aim above (which runs
@@ -1597,7 +1597,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
         //
         // The distance gate matters: State_Deflect dispatches for ANY tracked
         // rocket up to 600u away (see CanDeflect), not just imminent ones,
-        // and dot<0 covers a full HALF of all possible facings -- without a
+        // and dot<0 covers a full HALF of all possible facings - without a
         // tighter range check here this fired for rockets that were merely
         // somewhere nearby and not yet a real threat, which looked like
         // random jumping with no walking/movement logic ever getting a
@@ -1610,13 +1610,13 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
             // JumpEvadeSafe checked the bot's CURRENT actual velocity
             // direction (last tick's real physics state), but State_Move
             // (called above, at the top of this branch) may have just
-            // computed a DIFFERENT vel[] this same tick -- that's what
+            // computed a DIFFERENT vel[] this same tick - that's what
             // actually gets committed alongside the jump below, not
             // whatever direction JumpEvadeSafe happened to see. A jump
             // exempts this tick from the normal per-tick ground guard (see
             // ProcessBotTick's force-apply block), so if this exact vel[]
             // was never independently vetted, nothing else catches it
-            // either -- confirmed root cause of bots jumping straight off
+            // either - confirmed root cause of bots jumping straight off
             // the abyss_v4 ring while mid-reposition. Re-validate THIS
             // tick's real vel[] with the same authoritative check normal
             // walking already trusts before letting a jump carry it
@@ -1650,7 +1650,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
         return Plugin_Changed;
     }
 
-    // Realigned — clear any in-progress reposition evasion.
+    // Realigned - clear any in-progress reposition evasion.
     if (Evading[client] && CurrentEvadeAction[client] == EVADE_REPOSITION)
     {
         Evading[client] = false;
@@ -1662,7 +1662,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
     bool onCooldown = (now - LastAirblastTime[client] < AIRBLAST_COOLDOWN);
     if (onCooldown)
     {
-        // Recovery/delay strafe -- see TryEvadeStrafe. Rocket is already
+        // Recovery/delay strafe - see TryEvadeStrafe. Rocket is already
         // close and lined up (distance/alignment checked above); back off
         // and strafe clear instead of standing there waiting, aim staying
         // locked on the threat via SmoothAim below regardless of which
@@ -1680,11 +1680,11 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
             State_Move(client, buttons, vel, angles);
         }
 
-        // Smoothed, not a hard snap -- this can hold for up to 0.75s (many
+        // Smoothed, not a hard snap - this can hold for up to 0.75s (many
         // ticks), and the target angle drifts every tick as the rocket
         // moves, so a raw TeleportEntity here was a big source of the
         // "shaky screen" while tracking. Higher factor than the general
-        // tracking case since alignment already matters here -- about to fire.
+        // tracking case since alignment already matters here - about to fire.
         float aimAng[3];
         CalcAimAngles(botEye, rocketPos, aimAng);
         SmoothAim(client, aimAng, AimFactorForRocket(botType, distToRocket));
@@ -1697,7 +1697,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
         // engine fires it the instant cooldown expires". That hands the
         // decision of WHEN to blast to the engine's own timer, and the engine
         // does not know or care whether a rocket is in range and inside the
-        // cone at that instant. Result: bots blasting empty air, then dying --
+        // cone at that instant. Result: bots blasting empty air, then dying -
         // because the wasted blast starts a fresh 0.75s cooldown that the
         // actual incoming rocket arrives inside of.
         //
@@ -1712,7 +1712,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
         return Plugin_Changed;
     }
 
-    // Cooldown cleared -- about to fire this tick. Clear any in-progress
+    // Cooldown cleared - about to fire this tick. Clear any in-progress
     // strafe-evade episode so a stale commitment doesn't leak into the
     // next one.
     if (Evading[client] && CurrentEvadeAction[client] == EVADE_STRAFE)
@@ -1727,7 +1727,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
     if (Evading[client] && CurrentEvadeAction[client] == EVADE_JUMP)
     {
         // Jump-over deflect landing now: only the two moves that make sense
-        // coming down from a hop over a grounded rocket -- send it up and
+        // coming down from a hop over a grounded rocket - send it up and
         // over the opponent's head, or backfire it back the way it came.
         moveSet = (GetRandomInt(0, 1) == 0) ? view_as<int>(MOVE_UPSPIKE) : view_as<int>(MOVE_BACKFIRE);
         Evading[client] = false;
@@ -1773,7 +1773,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
     {
         case MOVE_NORMAL:
         {
-            // No drag — rocket goes straight toward enemy
+            // No drag - rocket goes straight toward enemy
             // Post-deflect aim: toward enemy
             float postAng[3];
             CalcAimAngles(botEye, enemyPos, postAng);
@@ -1782,18 +1782,18 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
         }
         case MOVE_WAVE:
         {
-            // Sine-wave drag — oscillating yaw after deflect
+            // Sine-wave drag - oscillating yaw after deflect
             PostDeflectAim[client][0] = aimAng[0];
             PostDeflectAim[client][1] = aimAng[1]; // will be oscillated in post-deflect tick
             PostDeflectWave[client] = true;
         }
         case MOVE_UPSPIKE:
         {
-            // Aim up after deflect — rocket goes off opponent's screen
+            // Aim up after deflect - rocket goes off opponent's screen
             // A spike is described as an "extremely fast upward flick" that
             // sends the rocket up in a high arch, specifically so the target
             // struggles to see and time it. -45 is not a spike, it is a
-            // gentle lob -- it barely changes the rocket's arc and gives the
+            // gentle lob - it barely changes the rocket's arc and gives the
             // opponent an easy read. Near-vertical is the actual technique
             // (the same value lzardy/tf2db-advancedbot uses).
             PostDeflectAim[client][0] = CfgSpikeUpPitch[botType];
@@ -1801,8 +1801,8 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
         }
         case MOVE_DOWNSPIKE:
         {
-            // Aim down after deflect — rocket hits ground near opponent
-            // Down spike drives the rocket into the ground to detonate it --
+            // Aim down after deflect - rocket hits ground near opponent
+            // Down spike drives the rocket into the ground to detonate it -
             // "useful when overwhelmed or for distraction". +30 doesn't reach
             // the floor at any useful range; it needs to be steep.
             PostDeflectAim[client][0] = CfgSpikeDownPitch[botType];
@@ -1822,7 +1822,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
         }
         case MOVE_DIRECT:
         {
-            // Aim straight at enemy after deflect — rocket flies directly at them
+            // Aim straight at enemy after deflect - rocket flies directly at them
             float postAng[3];
             CalcAimAngles(botEye, enemyPos, postAng);
             PostDeflectAim[client][0] = postAng[0];
@@ -1832,8 +1832,8 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
         {
             // Backfire aims AT the enemy, like every other move.
             //
-            // This used to do `postAng[1] += 180.0` -- the angle toward the
-            // enemy, flipped -- so the bot pointed directly AWAY from them and
+            // This used to do `postAng[1] += 180.0` - the angle toward the
+            // enemy, flipped - so the bot pointed directly AWAY from them and
             // the post-deflect drag sent the rocket back past itself. It would
             // then blast its own rocket again at point-blank, deflections
             // incrementing every cooldown, speed climbing 250 each time. That
@@ -1843,7 +1843,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
             //
             // The mistake was reading the technique's own description too
             // literally. "Orbit so rocket goes behind you, aim behind you and
-            // airblast" -- BEHIND YOU describes where the ROCKET is, not where
+            // airblast" - BEHIND YOU describes where the ROCKET is, not where
             // you send it. You circle until the rocket is at your back, turn to
             // face it, and blast it at the opponent from an angle they did not
             // expect. The destination was always the enemy.
@@ -1851,7 +1851,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
             // So what distinguishes a backfire is the SETUP (rocket behind you
             // when you fire), not the aim. The aim is the same as a direct.
             // Until State_Orbit is driving that setup deliberately, this behaves
-            // as a direct shot -- which is a correct shot, where the previous
+            // as a direct shot - which is a correct shot, where the previous
             // version was a self-inflicted one.
             float postAng[3];
             CalcAimAngles(botEye, enemyPos, postAng);
@@ -1895,7 +1895,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
     // by an attempted airblast that may have missed.
     // Note: DeflectCount is incremented by Event_ObjectDeflected (real deflect only)
 
-    // Activate post-deflect drag window — bot snaps to the move's direction
+    // Activate post-deflect drag window - bot snaps to the move's direction
     // for the next 0.15s so TFDB's delayed one-shot sample reads it as drag.
     // The default drag delay is 0.045s (about 3 ticks at 66Hz),
     // so 0.15s covers the read window with margin.
@@ -1903,7 +1903,7 @@ Action State_Deflect(int client, int &buttons, float vel[3], float angles[3])
     PostDeflectWave[client] = (view_as<int>(moveSet) == view_as<int>(MOVE_WAVE));
     // Remember which rocket this drag window belongs to. TFDB doesn't retarget
     // the rocket away from this bot until its own drag-delay deadline
-    // elapses (the same delay this drag window exists to exploit) -- so
+    // elapses (the same delay this drag window exists to exploit) - so
     // GetCachedRocketForClient() will keep reporting THIS rocket as "targeting
     // me" for the rocket's entire remaining flight-to-us window, not because
     // of stale caching but because TFDB genuinely hasn't reassigned it yet.
@@ -1970,7 +1970,7 @@ Action State_Dodge(int client, int &buttons, float vel[3])
     vel[0] = perp[0] * 300.0;
     vel[1] = perp[1] * 300.0;
 
-    // Both strafe directions blocked and rocket is slow — hop in place
+    // Both strafe directions blocked and rocket is slow - hop in place
     bool strafeBlocked = WallBlocked_[client][dirIdx] && WallBlocked_[client][altIdx];
     if (strafeBlocked && GetVectorLength(rocketVel) < 1500.0)
     {
@@ -1992,7 +1992,7 @@ Action State_Orbit(int client, int &buttons, float vel[3], float angles[3])
     // Initialize orbit if just entering
     if (OrbitEpisodeEnd[client] <= 0.0)
     {
-        // How many loops the bot would LIKE to attempt this time — randomized
+        // How many loops the bot would LIKE to attempt this time - randomized
         // per attempt (not always the configured max) so orbiting doesn't look
         // identical every time, then trimmed by wall space. This is only the
         // starting budget: OrbitStillSafe below can still cut it short every
@@ -2023,7 +2023,7 @@ Action State_Orbit(int client, int &buttons, float vel[3], float angles[3])
         // Reset phase-0 timing for THIS orbit. Without this, a bot's second
         // and later orbits inherited the stale timestamp from the end of
         // their previous orbit, making the very next "is this phase done"
-        // check true immediately — phase 0 (strafe right) got skipped or
+        // check true immediately - phase 0 (strafe right) got skipped or
         // cut short on every orbit after the bot's first.
         OrbitPhaseStart[client] = now;
 
@@ -2037,12 +2037,12 @@ Action State_Orbit(int client, int &buttons, float vel[3], float angles[3])
     if (phaseDuration < 0.15) phaseDuration = 0.15;
 
     // Re-check safety EVERY tick, not just at entry. A rocket's turn rate and
-    // speed both grow with deflections (see EstimateRocketTurnRate) — a rocket
+    // speed both grow with deflections (see EstimateRocketTurnRate) - a rocket
     // that was safe to orbit when this loop started can become unsafe mid-orbit
     // on a tight cfg, and the "about to hit" closing-speed check in
     // OrbitStillSafe means a bot on a tight cfg naturally bails after partial
     // or even zero loops, while a bot on a loose cfg can ride out its full
-    // randomized budget — no hardcoded loop cap needed either way.
+    // randomized budget - no hardcoded loop cap needed either way.
     bool stillSafe = (rocketEnt >= 0) && OrbitStillSafe(client, rocketEnt, phaseDuration);
 
     // End only after the selected loop budget, the absolute safety deadline,
@@ -2055,7 +2055,7 @@ Action State_Orbit(int client, int &buttons, float vel[3], float angles[3])
         strcopy(endReason, sizeof(endReason), !stillSafe ? "unsafe" : (timedOut ? "timeout" : "done"));
         FinishOrbitEpisode(client, endReason);
 
-        // Airblast at end of orbit -- but only if it can actually land.
+        // Airblast at end of orbit - but only if it can actually land.
         //
         // Orbiting deliberately runs the clock down, so this fires at whatever
         // moment the loop budget happens to expire. That instant has no reason
@@ -2063,7 +2063,7 @@ Action State_Orbit(int client, int &buttons, float vel[3], float angles[3])
         // that ends with a wasted press is strictly worse than one that ends
         // with none: the bot comes out of the circle already on cooldown, with
         // the rocket still inbound. The guide's version of this is "right
-        // click when the rocket is about to or is in front of you" -- in
+        // click when the rocket is about to or is in front of you" - in
         // front, not merely nearby.
         if (rocketEnt >= 0 && (now - LastAirblastTime[client]) >= AIRBLAST_COOLDOWN
             && AirblastWouldConnect(client, rocketEnt))
@@ -2130,7 +2130,7 @@ Action State_Orbit(int client, int &buttons, float vel[3], float angles[3])
         }
     }
 
-    // Wall check — if blocked, try alternate direction
+    // Wall check - if blocked, try alternate direction
     float moveAng[3];
     GetVectorAngles(vel, moveAng);
     int dirIdx = WorldYawToDirIndex(moveAng[1]);
@@ -2148,7 +2148,7 @@ Action State_Orbit(int client, int &buttons, float vel[3], float angles[3])
         {
             // All 8 directions read wall-blocked. Pushing through is only
             // safe if the direction we push into isn't actually a void
-            // edge — a wall bumps you to a stop, an edge doesn't stop
+            // edge - a wall bumps you to a stop, an edge doesn't stop
             // anything, it's a drop. Refuse to send the bot off a ledge
             // just because "some direction" was requested; only take a
             // confirmed non-edge direction, or stand still if truly none.
@@ -2175,7 +2175,7 @@ Action State_Orbit(int client, int &buttons, float vel[3], float angles[3])
         GetClientEyePosition(client, botEye);
         float aimAng[3];
         CalcAimAngles(botEye, rocketPos, aimAng);
-        // Range-scaled like every other rocket track -- an orbiting bot is
+        // Range-scaled like every other rocket track - an orbiting bot is
         // deliberately holding its blast, so there is no reason for it to
         // snap onto a rocket that is still far away.
         float botPosOrbit[3];
@@ -2221,7 +2221,7 @@ void UpdatePressureVector(int client)
         if (dist > maxDist) continue;
         if (dist < 1.0) dist = 1.0;
 
-        // Line of sight — skip enemies behind walls
+        // Line of sight - skip enemies behind walls
         float enemyEye[3];
         GetClientEyePosition(enemy, enemyEye);
         TR_TraceRay(botEye, enemyEye, MASK_VISIBLE, RayType_EndPoint);
@@ -2238,7 +2238,7 @@ void UpdatePressureVector(int client)
         push[0] /= len;
         push[1] /= len;
 
-        // Inverse square weight — closer enemies push harder
+        // Inverse square weight - closer enemies push harder
         float weight = 1.0 / (dist * dist);
         push[0] *= weight;
         push[1] *= weight;
@@ -2258,7 +2258,7 @@ void UpdatePressureVector(int client)
     //
     // This exists because the old flank test compared PressureMag against a
     // fixed 0.00001. Weights here are inverse-square (1/d^2), so that
-    // constant is not "about zero" at all -- solve 1/d^2 = 1e-5 and it is a
+    // constant is not "about zero" at all - solve 1/d^2 = 1e-5 and it is a
     // single enemy at 316 units. With cqc_min 300 / cqc_max 600, ANY lone
     // enemy in the normal fighting band read as "zero pressure" and the
     // break-flank branch won by default. Production data: 2,844 break_flank
@@ -2266,7 +2266,7 @@ void UpdatePressureVector(int client)
     //
     // A ratio has no scale to get wrong: ~1 means every enemy pushes the
     // same way (one side), ~0 means they cancel (genuinely surrounded).
-    // It also resolves the ambiguity the magnitude never could -- "nobody
+    // It also resolves the ambiguity the magnitude never could - "nobody
     // near" and "perfectly flanked" both produce a tiny vector, but only the
     // second produces a tiny vector from LARGE opposing contributions.
     PressureCancelRatio[client] =
@@ -2295,7 +2295,7 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
     float cqcRetreat = CfgCqcRetreatDist[botType];
 
     // === IDLE ROLL ===
-    // Only idle when already in the CQC band — a bot at 2000 units
+    // Only idle when already in the CQC band - a bot at 2000 units
     // should always be approaching, not standing still. The old code
     // rolled for idle at ANY distance, causing the bot to freeze at
     // spawn for idle_duration seconds 40% of the time.
@@ -2329,7 +2329,7 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
     // keep retreating until cqc_retreat_dist is reached, not just until
     // distance ticks back over the floor by a hair. Without this,
     // cqc_retreat_dist was parsed from config and validated but never
-    // actually consulted anywhere — the bot would immediately stop
+    // actually consulted anywhere - the bot would immediately stop
     // retreating the instant it cleared the floor, then get pushed straight
     // back under it as the enemy kept closing, causing rapid oscillation
     // right at the floor line.
@@ -2345,7 +2345,7 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
     if (RetreatingFromFloor[client])
     {
         strcopy(LastMoveReason[client], sizeof(LastMoveReason[]), "retreat_floor");
-        // Too close — move away (anti-face-hug), all the way out to cqc_retreat_dist
+        // Too close - move away (anti-face-hug), all the way out to cqc_retreat_dist
         moveDir[0] = botPos[0] - enemyPos[0];
         moveDir[1] = botPos[1] - enemyPos[1];
         NormalizeVector(moveDir, moveDir);
@@ -2354,7 +2354,7 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
         // --- Trapped against the rim: slide, don't freeze ---
         // Backing straight away from someone who is walking you toward a
         // ledge eventually asks for a step into the void. Every safety layer
-        // then correctly refuses it, and the bot ends up pinned in place --
+        // then correctly refuses it, and the bot ends up pinned in place -
         // which is exactly the reported exploit: walk at a bot near an edge
         // and it cannot escape.
         //
@@ -2390,7 +2390,7 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
             {
                 DirIndexToWorldVector(chosen, moveDir);
             }
-            // If BOTH slides are edges too, leave moveDir alone -- the step
+            // If BOTH slides are edges too, leave moveDir alone - the step
             // guard will stop it, and standing is genuinely correct when
             // every direction away is a drop.
         }
@@ -2403,7 +2403,7 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
         // is a statement about their ARRANGEMENT, not about any magnitude.
         //
         // This used to test PressureMag < 0.00001. Pushes are weighted
-        // 1/d^2, so that constant is a single enemy at 316 units -- inside
+        // 1/d^2, so that constant is a single enemy at 316 units - inside
         // the normal engagement band (cqc_min 300 / cqc_max 600). A lone
         // enemy therefore read as "zero pressure" and this branch beat all
         // real positioning: 2,844 break_flank samples vs ZERO sweet_spot in
@@ -2416,7 +2416,7 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
         // never flank you no matter how the arithmetic lands.
         strcopy(LastMoveReason[client], sizeof(LastMoveReason[]), "break_flank");
         // === BREAK-FLANK ===
-        // Enemies on opposite sides — move perpendicular to bot-enemy line
+        // Enemies on opposite sides - move perpendicular to bot-enemy line
         float toEnemy[3];
         toEnemy[0] = enemyPos[0] - botPos[0];
         toEnemy[1] = enemyPos[1] - botPos[1];
@@ -2445,7 +2445,7 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
     {
         strcopy(LastMoveReason[client], sizeof(LastMoveReason[]), "approach");
         // Toward the enemy's standoff ring. Speed is set proportionally
-        // below -- this branch only decides the DIRECTION.
+        // below - this branch only decides the DIRECTION.
         moveDir[0] = enemyPos[0] - botPos[0];
         moveDir[1] = enemyPos[1] - botPos[1];
         NormalizeVector(moveDir, moveDir);
@@ -2454,7 +2454,7 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
     else if (distToEnemy < cqcMin)
     {
         strcopy(LastMoveReason[client], sizeof(LastMoveReason[]), "back_off");
-        // Close — back off
+        // Close - back off
         moveDir[0] = botPos[0] - enemyPos[0];
         moveDir[1] = botPos[1] - enemyPos[1];
         NormalizeVector(moveDir, moveDir);
@@ -2471,7 +2471,7 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
         // direction, hold it for a short tap, then re-roll.
         //
         // The old code committed to left or right for 1.2-2.5 seconds
-        // continuously — that's a satellite orbiting, not a player dodging.
+        // continuously - that's a satellite orbiting, not a player dodging.
         float toEnemy[3];
         toEnemy[0] = enemyPos[0] - botPos[0];
         toEnemy[1] = enemyPos[1] - botPos[1];
@@ -2487,14 +2487,14 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
 
         if (WasdCommitted[client] && now2 < WasdTapUntil[client] && distDelta < CQC_COMMIT_BREAK_DIST)
         {
-            // Still mid-tap — continue current direction
+            // Still mid-tap - continue current direction
             // (fall through to direction execution below)
         }
         else
         {
             WasdCommitted[client] = false;
 
-            // Maybe pause between taps — a real player stops to read the play
+            // Maybe pause between taps - a real player stops to read the play
             if (WasdDirection[client] != 0 && GetRandomInt(1, 100) <= WASD_PAUSE_CHANCE)
             {
                 WasdDirection[client] = 0;  // stop
@@ -2525,12 +2525,12 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
                 {
                     roll -= WASD_WEIGHT_FWD;
                     if (roll <= 0)
-                        WasdDirection[client] = 3;  // forward (W) — close slightly
+                        WasdDirection[client] = 3;  // forward (W) - close slightly
                     else
                     {
                         roll -= WASD_WEIGHT_BACK;
                         if (roll <= 0)
-                            WasdDirection[client] = 4;  // back (S) — open slightly
+                            WasdDirection[client] = 4;  // back (S) - open slightly
                         else
                             WasdDirection[client] = 0;  // stop
                     }
@@ -2568,11 +2568,11 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
             {
                 moveDir[0] = -perp[0]; moveDir[1] = -perp[1];
             }
-            case 3: // forward (W) — close slightly
+            case 3: // forward (W) - close slightly
             {
                 moveDir[0] = toEnemyNorm[0]; moveDir[1] = toEnemyNorm[1];
             }
-            case 4: // back (S) — open slightly
+            case 4: // back (S) - open slightly
             {
                 moveDir[0] = -toEnemyNorm[0]; moveDir[1] = -toEnemyNorm[1];
             }
@@ -2646,7 +2646,7 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
     // controller was bang-bang. Cross cqc_max by a single unit and the bot
     // flipped from circling to a full sprint in one tick; cross back and it
     // flipped again. Those cliffs are what makes the movement read as
-    // twitchy -- it is not an animation artefact, it is the controller
+    // twitchy - it is not an animation artefact, it is the controller
     // changing mode discontinuously at a threshold.
     //
     // Instead, treat the enemy as carrying a standoff RING that the bot wants
@@ -2657,12 +2657,12 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
     //
     // Consequences that fall straight out, all of which were asked for:
     //  * the enemy drifting a little produces a gentle readjustment, not a
-    //    sprint -- the bot keeps doing what it was doing and eases back in;
+    //    sprint - the bot keeps doing what it was doing and eases back in;
     //  * the enemy leaving fast produces a real approach, scaled to the gap;
     //  * sitting near the ring produces NO correction at all (deadband), so
     //    the bot stops fidgeting over a few units;
     //  * there is no boundary to oscillate across, because there is no
-    //    boundary -- just an error that goes to zero.
+    //    boundary - just an error that goes to zero.
     //
     // The frame is the ENEMY's ring, not a band the bot tests around itself.
     // Same distance either way, but this way the bot has a place to be rather
@@ -2678,7 +2678,7 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
         if (radial > speed) radial = speed;   // never exceed the class's own max
 
         // Lateral (circling/mirroring) keeps its own pace, but fades out
-        // while the bot is genuinely out of position -- you do not strafe
+        // while the bot is genuinely out of position - you do not strafe
         // sideways while closing a 2,000-unit gap.
         bool inBand = (absErr <= deadband * 2.0);
         if (StrEqual(LastMoveReason[client], "sweet_spot"))
@@ -2695,7 +2695,7 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
 
     // === EDGE-COMFORT OVERRIDE ===
     // Bias away from the mapped boundary BEFORE the reactive wall-aware
-    // step below, not instead of it -- this is what makes bots generally
+    // step below, not instead of it - this is what makes bots generally
     // stay off the rim during normal play instead of only ever catching
     // themselves on the single step that would put them over the edge.
     // Takes priority over CQC positioning: a real player backs off a ledge
@@ -2705,7 +2705,7 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
     int edgeDist;
     LastEdgeDistKnown[client] = NavCache_GetEdgeDist(botPos, edgeDist);
     LastEdgeDist[client] = edgeDist;
-    // (cleared once per tick in ProcessBotTick -- only ever set true here)
+    // (cleared once per tick in ProcessBotTick - only ever set true here)
     if (LastEdgeDistKnown[client] && edgeDist < NAV_EDGE_COMFORT_CELLS)
     {
         float retreatDir[3];
@@ -2727,13 +2727,13 @@ Action State_Move(int client, int &buttons, float vel[3], float angles[3])
     {
         // All 8 sampled directions read as blocked. Freezing here used to be
         // the fallback, but the engine already handles an actual WALL on its
-        // own -- movement toward a real obstacle gets stopped/slid along at
+        // own - movement toward a real obstacle gets stopped/slid along at
         // the collision boundary, same as any player misjudging a corner. A
         // hard freeze only makes sense if walking really would clip through
         // something, which SourceMod movement output can't do anyway.
         //
         // BUT: "blocked" also covers void edges (see MaybeScanWalls), and an
-        // edge is not a wall -- nothing stops the bot there, it just falls.
+        // edge is not a wall - nothing stops the bot there, it just falls.
         // Only push through if there's a confirmed non-edge direction to
         // push into; if literally every direction is a drop, standing still
         // is the correct call, not a bug to route around.
@@ -2790,7 +2790,7 @@ Action State_Guard(int client, int &buttons, float vel[3], float angles[3])
 
     if (dist <= GUARD_ARRIVE_DIST)
     {
-        // Close enough — UpdateBotState will drop us back to IDLE next tick
+        // Close enough - UpdateBotState will drop us back to IDLE next tick
         // (ReturningToGuard already cleared there). Stand down now instead
         // of waiting a tick to avoid one frame of pointless residual motion.
         vel[0] = 0.0; vel[1] = 0.0;
@@ -2810,7 +2810,7 @@ Action State_Guard(int client, int &buttons, float vel[3], float angles[3])
     if (!FindUnblockedDir(client, desiredDir, actualDir))
     {
         // All 8 sampled directions read blocked. Only push through a
-        // confirmed non-edge direction -- a wall bumps to a stop, a void
+        // confirmed non-edge direction - a wall bumps to a stop, a void
         // edge does not. Better to sit one tick off-post than march a
         // pushed statue straight off a ledge trying to get back to it.
         int safeDir;
@@ -2841,7 +2841,7 @@ Action State_Guard(int client, int &buttons, float vel[3], float angles[3])
         vel[1] = moveDir[1] * speed;
     }
 
-    // Face the post while marching back to it, not the travel direction —
+    // Face the post while marching back to it, not the travel direction -
     // reads as "returning to my spot" rather than "wandering."
     float aimPoint[3];
     aimPoint[0] = BotGuardPos[client][0];
@@ -2860,7 +2860,7 @@ Action State_Idle(int client, float vel[3], float angles[3])
 {
     // Stand still. vel[] enters this function holding whatever the bot's own
     // native TF2 AI most recently wanted to do that tick (see the force-apply
-    // in ProcessBotTick) -- it is NOT already zero, despite the old comment
+    // in ProcessBotTick) - it is NOT already zero, despite the old comment
     // here claiming so. Zero it explicitly or "idle" silently inherits
     // leftover native-AI movement intent.
     vel[0] = 0.0;
@@ -2930,12 +2930,12 @@ Action State_Punish(int client, int &buttons, float vel[3], float angles[3])
     float now = GetGameTime();
     if (now >= EnemyMissWindow[client])
     {
-        // Punish window expired — back to normal
+        // Punish window expired - back to normal
         EnemyMissWindow[client] = 0.0;
         return State_Move(client, buttons, vel, angles);
     }
 
-    // Check if a rocket is incoming — if so, deflect it aggressively
+    // Check if a rocket is incoming - if so, deflect it aggressively
     int rocketEnt = GetCachedRocketForClient(client);
     if (rocketEnt >= 0)
     {
@@ -2959,7 +2959,7 @@ Action State_Punish(int client, int &buttons, float vel[3], float angles[3])
         toEnemy[2] = 0.0;
         NormalizeVector(toEnemy, toEnemy);
 
-        // Sprint toward the enemy — they can't deflect right now
+        // Sprint toward the enemy - they can't deflect right now
         vel[0] = toEnemy[0] * 300.0;
         vel[1] = toEnemy[1] * 300.0;
 
@@ -2976,7 +2976,7 @@ Action State_Punish(int client, int &buttons, float vel[3], float angles[3])
         return Plugin_Changed;
     }
 
-    // No rocket — just close distance
+    // No rocket - just close distance
     float botPos[3], enemyPos[3];
     GetClientAbsOrigin(client, botPos);
     GetClientAbsOrigin(enemy, enemyPos);
@@ -3006,11 +3006,11 @@ Action State_Reposition(int client, int &buttons, float vel[3], float angles[3])
 
     if (now >= PostDeflectRepositionUntil[client])
     {
-        // Reposition window expired — back to normal movement
+        // Reposition window expired - back to normal movement
         return State_Move(client, buttons, vel, angles);
     }
 
-    // Check if a new rocket is incoming — if so, handle it
+    // Check if a new rocket is incoming - if so, handle it
     int rocketEnt = GetCachedRocketForClient(client);
     if (rocketEnt >= 0)
     {
@@ -3020,7 +3020,7 @@ Action State_Reposition(int client, int &buttons, float vel[3], float angles[3])
         float dist = GetVectorDistance(botPos, rPos);
         if (dist <= CfgDeflectRange[botType] && CanDeflect(client))
         {
-            // A genuinely urgent rocket is back — handle it. Do not hand a
+            // A genuinely urgent rocket is back - handle it. Do not hand a
             // far engagement-range rocket to DEFLECT and freeze positioning.
             return State_Deflect(client, buttons, vel, angles);
         }
@@ -3034,7 +3034,7 @@ Action State_Reposition(int client, int &buttons, float vel[3], float angles[3])
     int edgeDist;
     if (NavCache_GetEdgeDist(botPos, edgeDist) && edgeDist < NAV_EDGE_COMFORT_CELLS)
     {
-        // Near edge — retreat toward center
+        // Near edge - retreat toward center
         float retreat[3];
         if (NavCache_RetreatDirection(botPos, retreat))
         {
@@ -3044,7 +3044,7 @@ Action State_Reposition(int client, int &buttons, float vel[3], float angles[3])
     }
     else
     {
-        // In good position — hold still and face the enemy
+        // In good position - hold still and face the enemy
         vel[0] = 0.0;
         vel[1] = 0.0;
     }
@@ -3073,7 +3073,7 @@ Action State_Feint(int client, int &buttons, float vel[3], float angles[3])
 
     if (now >= FeintUntil[client])
     {
-        // Feint done — actually deflect now
+        // Feint done - actually deflect now
         return State_Deflect(client, buttons, vel, angles);
     }
 
@@ -3158,7 +3158,7 @@ Action State_Steal(int client, int &buttons, float vel[3], float angles[3])
     GetEntPropVector(rocketEnt, Prop_Data, "m_vecOrigin", rPos);
     float dist = GetVectorDistance(botPos, rPos);
 
-    // If close enough to deflect — do it
+    // If close enough to deflect - do it
     if (dist <= CfgDeflectRange[botType] && CanDeflect(client))
     {
         PvB_Log("[PVB-STEAL] bot=%d stealing rocket from teammate", client);
@@ -3204,11 +3204,11 @@ Action State_EdgePressure(int client, int &buttons, float vel[3], float angles[3
     int eDist;
     if (!NavCache_GetEdgeDist(enemyPos, eDist) || eDist >= NAV_EDGE_COMFORT_CELLS)
     {
-        // Enemy moved away from edge — back to normal
+        // Enemy moved away from edge - back to normal
         return State_Move(client, buttons, vel, angles);
     }
 
-    // Check if a rocket is incoming — survival first
+    // Check if a rocket is incoming - survival first
     int rocketEnt = GetCachedRocketForClient(client);
     if (rocketEnt >= 0)
     {
@@ -3270,7 +3270,7 @@ Action State_EdgePressure(int client, int &buttons, float vel[3], float angles[3
 
 
 // ============================================================================
-// STATE_PANIC — multi-rocket + airblast cooldown → pure survival
+// STATE_PANIC - multi-rocket + airblast cooldown → pure survival
 // Triggered when: multiple rockets are inbound AND airblast is on cooldown
 // The bot runs to the safest direction, jumps, does anything to survive.
 // ============================================================================
@@ -3280,7 +3280,7 @@ Action State_Panic(int client, int &buttons, float vel[3], float angles[3])
     #pragma unused angles
     float gameTime = GetGameTime();
 
-    // Panic expires — return to normal state selection
+    // Panic expires - return to normal state selection
     if (gameTime >= PanicUntil[client])
     {
         PanicUntil[client] = 0.0;
@@ -3315,14 +3315,14 @@ Action State_Panic(int client, int &buttons, float vel[3], float angles[3])
             vel[1] = perp[1];
         }
 
-        // Jump if the rocket is LOW (near feet) — jump OVER it to survive.
-        // Do NOT jump when the rocket is at head/body height — that's jumping INTO it.
+        // Jump if the rocket is LOW (near feet) - jump OVER it to survive.
+        // Do NOT jump when the rocket is at head/body height - that's jumping INTO it.
         if (rPos[2] < botPos[2] + 40.0)
             buttons |= IN_JUMP;
     }
     else
     {
-        // No rocket tracked — run toward center (safest open space)
+        // No rocket tracked - run toward center (safest open space)
         float botPos[3];
         GetClientAbsOrigin(client, botPos);
         float centerDir[3];
@@ -3338,13 +3338,13 @@ Action State_Panic(int client, int &buttons, float vel[3], float angles[3])
         }
     }
 
-    // Don't aim at anything — just survive
+    // Don't aim at anything - just survive
 
     return Plugin_Changed;
 }
 
 // ============================================================================
-// STATE_CHASE — pursue a fleeing enemy aggressively
+// STATE_CHASE - pursue a fleeing enemy aggressively
 // Triggered when: enemy is moving away AND bot has deflect available
 // The bot collapses distance faster than STATE_MOVE would.
 // ============================================================================
@@ -3354,7 +3354,7 @@ Action State_Chase(int client, int &buttons, float vel[3], float angles[3])
     int botType = GetEffectiveBotType(client);
     float gameTime = GetGameTime();
 
-    // Chase expires — return to normal state
+    // Chase expires - return to normal state
     if (gameTime >= ChaseUntil[client])
     {
         ChaseUntil[client] = 0.0;
@@ -3381,7 +3381,7 @@ Action State_Chase(int client, int &buttons, float vel[3], float angles[3])
     if (dist < 0.1)
         return Plugin_Continue;
 
-    // Chase faster than normal move — 500 HU/s toward enemy
+    // Chase faster than normal move - 500 HU/s toward enemy
     ScaleVector(toEnemy, 500.0 / dist);
     vel[0] = toEnemy[0];
     vel[1] = toEnemy[1];
@@ -3406,7 +3406,7 @@ Action State_Chase(int client, int &buttons, float vel[3], float angles[3])
 }
 
 // ============================================================================
-// STATE_COUNTER — pre-aim where enemy's deflected rocket will come from
+// STATE_COUNTER - pre-aim where enemy's deflected rocket will come from
 // Triggered when: enemy just deflected AND bot rolls counter chance
 // The bot pre-aims at the predicted incoming direction for an instant deflect.
 // ============================================================================
@@ -3423,7 +3423,7 @@ Action State_Counter(int client, int &buttons, float vel[3], float angles[3])
         return Plugin_Continue;
     }
 
-    // Hold the pre-aim angle — don't move, just aim
+    // Hold the pre-aim angle - don't move, just aim
     vel[0] = 0.0;
     vel[1] = 0.0;
 
@@ -3470,7 +3470,7 @@ Action State_Counter(int client, int &buttons, float vel[3], float angles[3])
 }
 
 // ============================================================================
-// STATE_BAIT — bait enemy airblast early, then punish
+// STATE_BAIT - bait enemy airblast early, then punish
 // Triggered when: rocket is inbound AND bot is in deflect range AND
 // bot rolls bait chance. Bot sidesteps at the last moment to make the
 // enemy airblast too early, then deflects the still-incoming rocket.
@@ -3481,7 +3481,7 @@ Action State_Bait(int client, int &buttons, float vel[3], float angles[3])
     int botType = GetEffectiveBotType(client);
     float gameTime = GetGameTime();
 
-    // Bait expires — return to deflect
+    // Bait expires - return to deflect
     if (gameTime >= BaitUntil[client])
     {
         BaitUntil[client] = 0.0;
@@ -3517,7 +3517,7 @@ Action State_Bait(int client, int &buttons, float vel[3], float angles[3])
     float perpLen = GetVectorLength(perp);
     if (perpLen > 0.1)
     {
-        // Small sidestep — just enough to look like we're committing
+        // Small sidestep - just enough to look like we're committing
         ScaleVector(perp, 250.0 / perpLen);
         vel[0] = perp[0];
         vel[1] = perp[1];

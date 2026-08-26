@@ -42,12 +42,12 @@ stock void NotifyAdminsOfHoneypotDetection(int suspect, float weight, bool thres
 }
 
 // ============================================================================
-//  DetectHoneypotInteraction — the detection pipeline (read this first)
+//  DetectHoneypotInteraction - the detection pipeline (read this first)
 // ============================================================================
 //
 //  WHAT HAPPENS WHEN A PLAYER HITS THE HONEYPOT:
 //
-//  Phase 1 — CONTEXT (compute 3 groups of variables):
+//  Phase 1 - CONTEXT (compute 3 groups of variables):
 //    A. Targeting metrics:  dotHP (facing honeypot?), dotRK (facing real?),
 //                          hpDist / rkDist (which is closer?), closing (real rocket
 //                          approaching or retreating?)
@@ -57,14 +57,14 @@ stock void NotifyAdminsOfHoneypotDetection(int suspect, float weight, bool thres
 //    C. Input metrics:     mouseDeg (total mouse movement in window), flickNow
 //                          (large flick = real aim), pingMs (lag compensation)
 //
-//  Phase 2 — LEGITIMACY FILTER (if ANY condition is true → cleanup, no score):
+//  Phase 2 - LEGITIMACY FILTER (if ANY condition is true → cleanup, no score):
 //    - legitNow:  a real rocket is nearby, in front, unobstructed, and closer
 //                 than the honeypot → player was aiming at the real thing
 //    - flickNow:  large mouse movement in the last N ms → real airblast aim
 //    - realFar + realAway: real rocket is far AND moving away → no reason to
 //                          airblast toward the honeypot's direction
 //
-//  Phase 3 — SCORE (if all three legitimacy checks fail):
+//  Phase 3 - SCORE (if all three legitimacy checks fail):
 //    weight = 1.5 (damage) × speedMult × pingReduction
 //    detectionScore += weight  (one-way: only goes up, decays via OnGameFrame)
 //    If score crosses threshold → admin alert / kick / warn
@@ -100,7 +100,7 @@ public void DetectHoneypotInteraction(int client, int honeypotEntity, HoneypotDe
     weight *= speedMult;
 
     // Ping-based weight reduction: high-ping players have inherent server
-    // desync — their airblast may land at a stale position, hitting the
+    // desync - their airblast may land at a stale position, hitting the
     // honeypot instead of the real rocket they were aiming at. This is not
     // cheating; it's latency. Scale weight down proportionally above 100ms.
     // At 100ms: full weight. At 200ms: 75%. At 300ms: 50%. At 400ms+: 25%.

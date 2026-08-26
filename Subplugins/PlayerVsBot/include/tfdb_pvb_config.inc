@@ -1,4 +1,4 @@
-// tfdb_pvb_config.inc — auto-extracted from tfdb_pvb.sp
+// tfdb_pvb_config.inc - auto-extracted from tfdb_pvb.sp
 // Do not edit directly; this is a split of the PvB plugin.
 
 int GetEffectiveBotType(int client) {
@@ -75,14 +75,14 @@ int FindClassIndexByName(const char[] name) {
 }
 
 void InitClassDefaults(int t) {
-    // react_min / react_max removed — airblast fires at fixed 240 HU
+    // react_min / react_max removed - airblast fires at fixed 240 HU
     CfgMaxOrbitTime[t]        = 2.0;
     CfgMaxOrbitLoops[t]       = 3;
     CfgOrbitChance[t]         = 25;
     CfgMinOrbitTime[t]        = 0.5;
     CfgRocketEngageDist[t]    = 900.0;
     CfgDeflectRange[t]        = 300.0;
-    // angle_random_chance / angle_random_strength removed — unused in BT code
+    // angle_random_chance / angle_random_strength removed - unused in BT code
     CfgEvadeChance[t]         = 40.0;
     CfgCqcFloorDist[t]        = 250.0;
     CfgCqcMinDist[t]          = 300.0;
@@ -107,7 +107,7 @@ void InitClassDefaults(int t) {
     CfgRepositionChance[t]    = 0;
     CfgRepositionTime[t]      = 1.0;
     ClassIsStatueLike[t]     = false;
-    // Capabilities default ON — fallback class (see LoadPvBConfig error path)
+    // Capabilities default ON - fallback class (see LoadPvBConfig error path)
     // gets all behaviors enabled. LoadSingleClass will demote to FALSE when a
     // class config removes the relevant keys.
     CfgCanOrbit[t]    = true;
@@ -143,14 +143,14 @@ void LoadSingleClass(KeyValues kv, int t, const char[] sectionKey) {
     kv.GetString("bot_name", BotNames[t], sizeof(BotNames[]), displayBuf);
 
     // LEARNABLE tunings
-    // react_min / react_max removed — airblast fires at fixed 240 HU
-    // angle_random_chance / angle_random_strength removed — unused in BT code
+    // react_min / react_max removed - airblast fires at fixed 240 HU
+    // angle_random_chance / angle_random_strength removed - unused in BT code
 
     // -----------------------------------------------------------------------
     // Capability-by-presence detection.
     // KV readers return 0 / 0.0 when a key is absent. All our capability
     // values are strictly positive in normal use, so "value <= 0" cleanly
-    // means "key absent OR explicitly disabled" — treated identically.
+    // means "key absent OR explicitly disabled" - treated identically.
     // -----------------------------------------------------------------------
 
     // --- Orbit capability ---
@@ -213,7 +213,7 @@ void LoadSingleClass(KeyValues kv, int t, const char[] sectionKey) {
     CfgOrbitSpeedThreshold[t]     = kv.GetFloat("orbit_speed_threshold", 2000.0);
     // orbit_chance is finally load-bearing. It was read purely as a presence
     // marker for CfgCanOrbit while the actual "random chance gate" tested
-    // CfgMaxOrbitLoops <= 0 -- no roll anywhere. Server owners had 25/30/35
+    // CfgMaxOrbitLoops <= 0 - no roll anywhere. Server owners had 25/30/35
     // configured across three classes, doing nothing.
     CfgOrbitChance[t]             = kv.GetNum("orbit_chance", 25);
     if (CfgOrbitChance[t] < 0) CfgOrbitChance[t] = 0;
@@ -288,7 +288,7 @@ void LoadSingleClass(KeyValues kv, int t, const char[] sectionKey) {
     CfgMoveWeight[5][t] = kv.GetNum("move_direct",     10);  // MOVE_DIRECT
     CfgMoveWeight[6][t] = kv.GetNum("move_backfire",    5);  // MOVE_BACKFIRE
 
-    // If statue_like, force can_walk off. Same for evade_strafe -- a
+    // If statue_like, force can_walk off. Same for evade_strafe - a
     // statue is meant to hold its guard position and just deflect in
     // place; strafing off to the side to buy time on cooldown directly
     // contradicts that identity, so this is forced off regardless of the
@@ -469,13 +469,13 @@ void LoadSpeechConfig(KeyValues kv) {
         char resolved[PLATFORM_MAX_PATH];
         BuildPath(Path_SM, resolved, sizeof(resolved), playerDeathPath);
         if (!FileExists(resolved)) {
-            PvB_Log("[PvB] speech file missing for %s_playerdeath: %s — using universal fallback",
+            PvB_Log("[PvB] speech file missing for %s_playerdeath: %s - using universal fallback",
                 BotClassKey[t], playerDeathPath);
             strcopy(playerDeathPath, sizeof(playerDeathPath), defaultPlayerDeath);
         }
         BuildPath(Path_SM, resolved, sizeof(resolved), botDeathPath);
         if (!FileExists(resolved)) {
-            PvB_Log("[PvB] speech file missing for %s_botdeath: %s — using universal fallback",
+            PvB_Log("[PvB] speech file missing for %s_botdeath: %s - using universal fallback",
                 BotClassKey[t], botDeathPath);
             strcopy(botDeathPath, sizeof(botDeathPath), defaultBotDeath);
         }

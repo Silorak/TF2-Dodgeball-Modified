@@ -30,7 +30,7 @@ void EnableDodgeBall()
 
 	// Initialize the O(1) entity -> rocket-slot reverse-lookup cache.
 	// SourcePawn does not zero-init globals between map changes the way you'd
-	// expect, and 0 is a valid slot index — so explicitly fill with -1.
+	// expect, and 0 is a valid slot index - so explicitly fill with -1.
 	for (int i = 0; i < sizeof(g_EntityIndexToRocketSlot); i++)
 	{
 		g_EntityIndexToRocketSlot[i] = ROCKET_SLOT_NONE;
@@ -187,9 +187,9 @@ void DisableDodgeBall()
 }
 
 /**
- * Spawner bookkeeping timer — creates new rockets when NextSpawnTime elapses.
+ * Spawner bookkeeping timer - creates new rockets when NextSpawnTime elapses.
  * Per-rocket think (homing, legacy-behaviour step, shared logic) runs in
- * OnRocketThink, dispatched from OnGameFrame — not here.
+ * OnRocketThink, dispatched from OnGameFrame - not here.
  */
 public Action OnDodgeBallGameFrame(Handle timer, any data)
 {
@@ -239,7 +239,7 @@ public Action OnDodgeBallGameFrame(Handle timer, any data)
 
 	// Per-rocket think (legacy-behaviour step + shared logic) runs inside OnRocketThink,
 	// dispatched from OnGameFrame and gated internally to 10 Hz. This timer only handles
-	// spawner bookkeeping now — rockets manage their own cadence.
+	// spawner bookkeeping now - rockets manage their own cadence.
 
 	return Plugin_Continue;
 }

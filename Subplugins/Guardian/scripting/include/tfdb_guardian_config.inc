@@ -1,4 +1,4 @@
-// tfdb_guardian_config.inc — extracted from tfdb_guardian.sp
+// tfdb_guardian_config.inc - extracted from tfdb_guardian.sp
 
 void ParseAbilityConfig(KeyValues kv, GuardianAbility ability)
 {

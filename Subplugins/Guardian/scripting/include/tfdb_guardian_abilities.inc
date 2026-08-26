@@ -1,4 +1,4 @@
-// tfdb_guardian_abilities.inc — extracted from tfdb_guardian.sp
+// tfdb_guardian_abilities.inc - extracted from tfdb_guardian.sp
 
 void ActivateAbility(GuardianAbility ability, int slotIdx)
 {

@@ -1,4 +1,4 @@
-// tfdb_menu_chat.inc — Chat command handlers for menu shortcuts (trail color, sprite settings).
+// tfdb_menu_chat.inc - Chat command handlers for menu shortcuts (trail color, sprite settings).
 
 void ClearPendingMenuInput(int client)
 {

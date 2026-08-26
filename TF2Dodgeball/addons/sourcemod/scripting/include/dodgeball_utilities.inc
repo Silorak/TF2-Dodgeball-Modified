@@ -129,7 +129,7 @@ stock bool IsValidClientEx(int client, bool alive = false)
 }
 
 /**
- * Full recount of g_AliveCount[] from scratch. Authoritative reset path —
+ * Full recount of g_AliveCount[] from scratch. Authoritative reset path -
  * called at round_start, EnableDodgeBall, and as a safety net if drift is
  * ever suspected. Also refreshes the aggregate PlayerCount from the same
  * snapshot so native consumers cannot observe a stale total.
@@ -177,7 +177,7 @@ stock bool BothTeamsPlaying()
  * Counts the number of players currently alive.
  *
  * Fast-path: returns RED + BLU from the cached counters. Spectator (team 1)
- * is intentionally excluded — the original loop counted any in-game alive
+ * is intentionally excluded - the original loop counted any in-game alive
  * player, but in dodgeball spectators are never alive and team-0/1 alive
  * players don't exist in practice.
  */
@@ -279,19 +279,19 @@ stock int SelectTarget(int team, int rocket = -1,
 			float clientPosition[3]; GetClientEyePosition(client, clientPosition);
 			float directionToClient[3]; MakeVectorFromPoints(rocketPosition, clientPosition, directionToClient);
 
-			// Deliberately NOT normalized -- restored to the original 1.9.6
+			// Deliberately NOT normalized - restored to the original 1.9.6
 			// formula (github.com/Silorak/TF2-Dodgeball, tag v1.9.6,
 			// TF2Dodgeball.sp::SelectTarget) after the user directly
 			// compared the two and confirmed 1.9.6's targeting felt right
 			// while this normalized version felt "awful". The raw
 			// (unnormalized) directionToClient carries the distance in
 			// Hammer Units, so this dot product is distance * cos(angle),
-			// not just cos(angle) -- it dominates the 0-100 random roll
+			// not just cos(angle) - it dominates the 0-100 random roll
 			// above by design, producing decisive, predictable targeting
 			// (whoever's roughly in front and far away) rather than a
 			// muddier, closer-to-random pick. A later "fix" here
 			// normalized this vector on the reasoning that raw distance
-			// swamping the configured weight was a bug -- mathematically
+			// swamping the configured weight was a bug - mathematically
 			// true, but it made target selection noticeably more random
 			// and worse in actual play. Do not re-normalize without
 			// re-confirming against the original 1.9.6 feel first.

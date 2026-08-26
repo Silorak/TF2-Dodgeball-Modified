@@ -1,4 +1,4 @@
-// tfdb_pvb_helpers.inc — auto-extracted from tfdb_pvb.sp
+// tfdb_pvb_helpers.inc - auto-extracted from tfdb_pvb.sp
 // Do not edit directly; this is a split of the PvB plugin.
 
 int VecToDirIndex(const float vec[3])
@@ -49,7 +49,7 @@ float AimFactorForRocket(int botType, float distToRocket)
     float nearF = CfgAimRocketNear[botType];
     float farF  = CfgAimRocketFar[botType];
 
-    if (farD <= nearD) return nearF;          // misconfigured -- fail toward responsive
+    if (farD <= nearD) return nearF;          // misconfigured - fail toward responsive
     if (distToRocket <= nearD) return nearF;
     if (distToRocket >= farD)  return farF;
 
@@ -82,7 +82,7 @@ void SmoothAim(int client, float targetAngles[3], float factor) {
     }
 
     // Micro-jitter: hand tremor, HELD across ticks rather than re-rolled on
-    // each one. Fresh randomness every tick is white noise -- at 66 tick a
+    // each one. Fresh randomness every tick is white noise - at 66 tick a
     // +-0.8 degree yaw roll is ~53 degrees/second of direction changes, which
     // does not read as a steady hand, it reads as vibration. Real tremor
     // drifts. Re-roll on an interval and hold the value in between so the
@@ -119,7 +119,7 @@ void SmoothAim(int client, float targetAngles[3], float factor) {
     // and aimAng was left holding the RAW target, so each tick set the
     // entity's angles to the smoothed value via TeleportEntity above and the
     // usercmd to the unsmoothed one. Two different angles per tick, from two
-    // mechanisms, with the usercmd applied last -- the smoothing was thrown
+    // mechanisms, with the usercmd applied last - the smoothing was thrown
     // away and the view fought itself. Writing back means both paths carry
     // the same number, which is what makes the motion read as one hand
     // moving instead of two systems arguing.

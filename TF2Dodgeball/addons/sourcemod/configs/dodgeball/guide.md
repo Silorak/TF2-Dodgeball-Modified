@@ -1,8 +1,8 @@
-# TF2 Dodgeball — Rocket Class Design Guide
+# TF2 Dodgeball - Rocket Class Design Guide
 
 Everything you need to know to design rocket classes in `general.cfg`.
 
-Companion to the stripped-down `general.cfg` — that file is meant to be clean, this one explains **why** each field exists and **how** to combine them.
+Companion to the stripped-down `general.cfg` - that file is meant to be clean, this one explains **why** each field exists and **how** to combine them.
 
 ---
 
@@ -11,7 +11,7 @@ Companion to the stripped-down `general.cfg` — that file is meant to be clean,
 1. [Quick reference](#quick-reference)
 2. [How a rocket works](#how-a-rocket-works)
 3. [Field reference](#field-reference)
-4. [Recipes — designing by archetype](#recipes)
+4. [Recipes - designing by archetype](#recipes)
 5. [Advanced: dormant features](#advanced-dormant-features)
 6. [Troubleshooting](#troubleshooting)
 
@@ -23,19 +23,19 @@ The fields you'll tune 90% of the time, with a one-sentence description.
 
 | Field | What it does | Sane range |
 |---|---|---|
-| `speed` | Starting rocket speed in Hammer Units/second | 500–1500 |
-| `speed increment` | Speed added per deflection | 50–300 |
-| `speed limit` | Optional stricter per-class cap; 0 uses global `max velocity` | 0, 3000–3500 |
-| `turn rate` | How sharply the rocket turns per homing tick | 0.15–0.30 |
-| `turn rate increment` | Turn rate added per deflection | 0.01–0.03 |
-| `damage` | Base damage on hit | 40–200 |
-| `damage increment` | Damage added per deflection | 25–200 |
-| `drag delay` | Global fixed pre-read drag window in **seconds**; 0 selects legacy grid timing | 0 or 0.015–0.150 |
-| `drag grid interval` | Global shared bounce-grid interval in **milliseconds** | 10–100 |
+| `speed` | Starting rocket speed in Hammer Units/second | 500-1500 |
+| `speed increment` | Speed added per deflection | 50-300 |
+| `speed limit` | Optional stricter per-class cap; 0 uses global `max velocity` | 0, 3000-3500 |
+| `turn rate` | How sharply the rocket turns per homing tick | 0.15-0.30 |
+| `turn rate increment` | Turn rate added per deflection | 0.01-0.03 |
+| `damage` | Base damage on hit | 40-200 |
+| `damage increment` | Damage added per deflection | 25-200 |
+| `drag delay` | Global fixed pre-read drag window in **seconds**; 0 selects legacy grid timing | 0 or 0.015-0.150 |
+| `drag grid interval` | Global shared bounce-grid interval in **milliseconds** | 10-100 |
 | `think interval` | Homing cadence override (0 = per-tick, 0.05 = explicit 20Hz, 0.1 = 10Hz) | 0 or 0.05 |
-| `critical chance` | % chance the rocket is a crit | 0–100 |
+| `critical chance` | % chance the rocket is a crit | 0-100 |
 
-Everything else is tuned rarely — see full reference below.
+Everything else is tuned rarely - see full reference below.
 
 ---
 
@@ -43,20 +43,20 @@ Everything else is tuned rarely — see full reference below.
 
 A rocket's life, in order:
 
-1. **Spawn** — `on spawn` fires. Speed, turn rate, damage are set from class defaults.
-2. **Fly** — per tick (or per `think interval`), the rocket turns toward its target by `turn rate` degrees.
-3. **Player airblasts** — the rocket enters the drag window.
+1. **Spawn** - `on spawn` fires. Speed, turn rate, damage are set from class defaults.
+2. **Fly** - per tick (or per `think interval`), the rocket turns toward its target by `turn rate` degrees.
+3. **Player airblasts** - the rocket enters the drag window.
    - For the global `drag delay` duration, the rocket flies its current direction (blind)
    - At window expiry, the plugin reads the player's **eye angles once** and commits that direction
    - The default fixed 0.045s window is consistent; `drag delay 0` opts into the variable legacy grid
    - If per-class `control delay > 0`, it adds extra blind time after the eye read
-4. **Deflect** — `on deflect` fires. Speed, turn rate, damage each increase by their `increment`. Rocket re-targets an enemy.
+4. **Deflect** - `on deflect` fires. Speed, turn rate, damage each increase by their `increment`. Rocket re-targets an enemy.
 5. **Wall bounce** (if it hits a surface):
-   - Velocity reflects off the surface normal via `v' = v − 2(v·n)n` — pure physics, magnitude preserved by default
+   - Velocity reflects off the surface normal via `v' = v − 2(v·n)n` - pure physics, magnitude preserved by default
    - The rocket flies blind until the next shared `drag grid interval` boundary (phase-dependent, practically about one tick through ~100ms)
    - At that boundary, homing resumes toward the target; all bounces share the same clock
    - `max bounces` caps how many bounces before the rocket explodes
-6. **Target hit or expired** — `on kill` / `on explode` / `on destroyed` fires.
+6. **Target hit or expired** - `on kill` / `on explode` / `on destroyed` fires.
 
 ### The drag and bounce windows explained
 
@@ -65,7 +65,7 @@ TFDB intentionally uses two different schedules:
 | Window | When | Field | Typical |
 |---|---|---|---|
 | **Fixed pre-read drag** | Between airblast and the one-shot eye-angle read | global `drag delay` (seconds) | 0.045 (~45ms) |
-| **Grid-gated bounce** | Between surface reflection and homing resume | global `drag grid interval` (milliseconds) | phase-dependent, ~one tick–100ms |
+| **Grid-gated bounce** | Between surface reflection and homing resume | global `drag grid interval` (milliseconds) | phase-dependent, ~one tick-100ms |
 | (Optional) **Post-read commit** | AFTER eye read, before homing | per-class `control delay` (seconds) | 0 |
 
 This split makes player flicks learnable while retaining the unpredictable, synchronized bounce behavior. Setting `drag delay` to 0 restores legacy grid timing for drags without changing bounce behavior.
@@ -78,7 +78,7 @@ This split makes player flicks learnable while retaining the unpredictable, sync
 
 | seconds | feel |
 |---|---|
-| 0.000 | legacy shared-grid drag — variable, not instant |
+| 0.000 | legacy shared-grid drag - variable, not instant |
 | 0.015 | very tight |
 | 0.030 | tight |
 | **0.045** | **balanced fixed endpoint (default)** |
@@ -87,13 +87,13 @@ This split makes player flicks learnable while retaining the unpredictable, sync
 | **0.091** | **heavy drag** |
 | 0.106 | sluggish |
 | 0.121 | very sluggish |
-| 0.150 | maximum — laggy-feeling |
+| 0.150 | maximum - laggy-feeling |
 
 #### v1.9.6 conversion warning
 
-Version 1.9.6's `drag time min` / `drag time max` were not a random range. The normal defaults were `.05/.05`: the first frame that noticed a deflection sampled immediately, then later frames sampled again between the min and `max + one tick`. The final `.05/.05` sample often landed roughly **62–76ms after the actual deflection** at 66–128 tick. That is why the current fixed `.060`–`.070` range—and the later public v2.2 beta's tick-rounded `.074` one-shot setting—can feel closer to old 1.9.6 than a literal modern `.050`. Because the current deadline rounds upward rather than to the nearest tick, use `.070` as the closer current cross-tick-rate starting point instead of copying `.074` blindly.
+Version 1.9.6's `drag time min` / `drag time max` were not a random range. The normal defaults were `.05/.05`: the first frame that noticed a deflection sampled immediately, then later frames sampled again between the min and `max + one tick`. The final `.05/.05` sample often landed roughly **62-76ms after the actual deflection** at 66-128 tick. That is why the current fixed `.060`-`.070` range-and the later public v2.2 beta's tick-rounded `.074` one-shot setting-can feel closer to old 1.9.6 than a literal modern `.050`. Because the current deadline rounds upward rather than to the nearest tick, use `.070` as the closer current cross-tick-rate starting point instead of copying `.074` blindly.
 
-If by “0.6/0.7” you mean `.060/.070`, those are valid moderate current settings. If an old min/max server literally used `.06/.07`, its repeated late samples and finalization ran later; start the current one-shot comparison near `.075` (or `.090` if matching homing-resume time). Literal `0.600/0.700` means 600–700ms and the current parser clamps either to 150ms. For *less* player drag, move downward through `.030`, `.020`, then `.015`; do not use zero, because zero selects variable grid timing.
+If by “0.6/0.7” you mean `.060/.070`, those are valid moderate current settings. If an old min/max server literally used `.06/.07`, its repeated late samples and finalization ran later; start the current one-shot comparison near `.075` (or `.090` if matching homing-resume time). Literal `0.600/0.700` means 600-700ms and the current parser clamps either to 150ms. For *less* player drag, move downward through `.030`, `.020`, then `.015`; do not use zero, because zero selects variable grid timing.
 
 The old min/max model continuously reread eye angles and was tick-rate dependent, so it remains deliberately removed rather than being restored just for familiar key names. See [`docs/drag-design.md`](../../../../../docs/drag-design.md) for source citations, conversion tables, rejected designs, and the live-test protocol.
 
@@ -112,7 +112,7 @@ The old min/max model continuously reread eye angles and was tick-rate dependent
 
 | Field | Type | Description |
 |---|---|---|
-| `speed` | float | Initial speed in HU/s. Community range 600–1300. |
+| `speed` | float | Initial speed in HU/s. Community range 600-1300. |
 | `speed increment` | float | Added per deflection. Higher = faster rallies. |
 | `speed limit` | float | Optional per-class cap. 0 means no stricter class cap; TFDB still pre-clamps to global/server `max velocity`. |
 | `turn rate` | float | Radians-ish per homing tick. 0.2 is vanilla-feel; >0.30 is sharp. |
@@ -124,7 +124,7 @@ The old min/max model continuously reread eye angles and was tick-rate dependent
 | Field | Type | Description |
 |---|---|---|
 | `drag delay` | global float seconds | Fixed pre-read drag window. 0 selects legacy shared-grid timing; 0.045 is the consistent default. |
-| `drag grid interval` | global int milliseconds | Shared bounce clock (10–100ms). Bounces always use it; drags use it only when `drag delay` is 0. |
+| `drag grid interval` | global int milliseconds | Shared bounce clock (10-100ms). Bounces always use it; drags use it only when `drag delay` is 0. |
 | `control delay` | per-class float seconds | Extra blind period AFTER the eye-angle read. Most classes use 0. |
 | `think interval` | float seconds | Homing cadence. 0 = per-tick (smooth, default). 0.05 = explicit 20Hz. 0.1 = 10Hz. Historical lzardy requested 20Hz but SourceMod 1.9 actually dispatched its shared timer at ~10Hz; neither override alone is a complete authenticity preset. |
 | `max bounces` | int | How many wall bounces before the rocket explodes. 0 = never bounces (explodes on first contact). |
@@ -140,8 +140,8 @@ Drag min/max, fixed endpoint timing, zero-delay compatibility behavior, and reje
 |---|---|---|
 | `damage` | float | Base damage. Multiplied by 3 if crit. |
 | `damage increment` | float | Added per deflection. |
-| `critical chance` | int % | 0–100. 100 = always crit. |
-| `crit glow stack` | int | Number of fake-crit glow particles stacked on the rocket's trail attachment. `1` = default single glow. `2-10` = denser visual glow (useful for low-damage rockets that want a "charged" look). Clamped to 1–10. Cosmetic only; does not affect damage. |
+| `critical chance` | int % | 0-100. 100 = always crit. |
+| `crit glow stack` | int | Number of fake-crit glow particles stacked on the rocket's trail attachment. `1` = default single glow. `2-10` = denser visual glow (useful for low-damage rockets that want a "charged" look). Clamped to 1-10. Cosmetic only; does not affect damage. |
 | `crit glow particle red` | string | Per-class crit glow particle override for Red team. Empty = engine default. |
 | `crit glow particle blue` | string | Per-class crit glow particle override for Blue team. Empty = engine default. |
 | `crit glow particle neutral` | string | Per-class crit glow particle override for neutral (FFA) rockets. Empty = engine default. |
@@ -179,7 +179,7 @@ Drag min/max, fixed endpoint timing, zero-delay compatibility behavior, and reje
 |---|---|---|
 | `trail particle` | string | Particle name (e.g. "superrare_burning1") |
 | `trail sprite` | path | VMT path for sprite trail |
-| `custom color` | "R G B" | 0–255 each, e.g. `"255 100 50"` |
+| `custom color` | "R G B" | 0-255 each, e.g. `"255 100 50"` |
 | `sprite lifetime` | float | Seconds the trail segment lingers |
 | `sprite start width` / `sprite end width` | float | Width at head / tail |
 | `texture resolution` | float | UV scale |
@@ -271,12 +271,12 @@ Color tags for `tf_dodgeball_print`:
 `{default}` `{darkred}` `{red}` `{lightred}` `{pink}` `{orange}` `{yellow}` `{olive}` `{green}` `{lime}` `{lightgreen}` `{cyan}` `{blue}` `{lightblue}` `{purple}` `{darkmagenta}` `{grey}` `{grey2}` `{black}` `{bluegrey}` `{white}`
 
 Player name color substitutions:
-- `##@owner##` / `##@target##` / `##@dead##` — render with team color
+- `##@owner##` / `##@target##` / `##@dead##` - render with team color
 
-**`on kill` vs `on spawn kill` — mutually exclusive:**
+**`on kill` vs `on spawn kill` - mutually exclusive:**
 - `on kill` fires only when the victim was killed by a **deflected** rocket (`@deflections > 0`).
 - `on spawn kill` fires only when the victim was killed by an **undeflected** rocket (`@deflections == 0`). Used for "X died to a spawn rocket" messages.
-- Exactly ONE of the two fires per kill — never both, never neither (if the matching event key is defined). Each is optional; leave the key blank or omit it to suppress that case.
+- Exactly ONE of the two fires per kill - never both, never neither (if the matching event key is defined). Each is optional; leave the key blank or omit it to suppress that case.
 
 ---
 
@@ -284,7 +284,7 @@ Player name color substitutions:
 
 Ready-made designs. Drop into `general.cfg` as new class blocks.
 
-### Fast and snappy — "Sniper rocket"
+### Fast and snappy - "Sniper rocket"
 
 Fast rocket with tight control. Rewards quick reflexes.
 
@@ -307,7 +307,7 @@ Fast rocket with tight control. Rewards quick reflexes.
 }
 ```
 
-### Heavy and dodgeable — "Boulder"
+### Heavy and dodgeable - "Boulder"
 
 Slow, high damage, committed direction.
 
@@ -319,7 +319,7 @@ Slow, high damage, committed direction.
     "speed"                  "700"
     "speed increment"        "80"
     "speed limit"            "2000"
-    "turn rate"              "0.32"       // sharp — intense orbits
+    "turn rate"              "0.32"       // sharp - intense orbits
     "turn rate increment"    "0.025"
     "damage"                 "150"
     "damage increment"       "100"
@@ -330,7 +330,7 @@ Slow, high damage, committed direction.
 }
 ```
 
-### Damizean-authentic — "Legacy"
+### Damizean-authentic - "Legacy"
 
 20Hz think cadence. Classic 2010s YADB feel.
 
@@ -352,7 +352,7 @@ Slow, high damage, committed direction.
 }
 ```
 
-### Kill-everyone — "Nuke"
+### Kill-everyone - "Nuke"
 
 Single-hit lethal. Slow but relentless.
 
@@ -379,7 +379,7 @@ Single-hit lethal. Slow but relentless.
 }
 ```
 
-### Master-tier — "Competitive default"
+### Master-tier - "Competitive default"
 
 The community-standard middle ground. What `common` is set to in shipped config.
 
@@ -455,7 +455,7 @@ Makes elevation ramp continuously per-frame instead of stepped ~10Hz. Visual cha
 ### "My rocket is uncatchable"
 
 Usually the global `drag delay` is too long combined with a high per-class `turn rate`. Try:
-- Lower `drag delay` toward 0.030–0.045 (do not use 0 unless you want legacy grid randomness)
+- Lower `drag delay` toward 0.030-0.045 (do not use 0 unless you want legacy grid randomness)
 - Lower `turn rate` below 0.25
 - Keep `control delay` at 0 unless you intentionally want an extra post-read pause
 
@@ -483,7 +483,7 @@ The global `max velocity` is both the engine cap and TFDB's internal pre-write c
 ```
 sm_reloadplugin dodgeball
 ```
-or just change map — config reloads at map start.
+or just change map - config reloads at map start.
 
 ---
 

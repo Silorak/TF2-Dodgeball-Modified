@@ -44,7 +44,7 @@ int RocketSlotByEntity     [2049] = {-1, ...};
 
 // Per-rocket tracking of every info_particle_system / env_spritetrail entity
 // we spawn. When TrailFlag_RemoveParticles is UNSET, the trail entity is
-// parented directly to the real rocket — and Source does NOT cascade-delete
+// parented directly to the real rocket - and Source does NOT cascade-delete
 // SetParent children, so without explicit reaping these orphan and walk the
 // edict count toward 2048 on long-running servers. We store entrefs (not raw
 // indices) so stale-entity reads are safe.
@@ -159,7 +159,7 @@ public void OnMapEnd()
 
 	Loaded = false;
 
-	// Do NOT UnhookEvent here — SM auto-cleans on plugin unload.
+	// Do NOT UnhookEvent here - SM auto-cleans on plugin unload.
 	// Manual unhooking causes "has no active hook" errors that cascade
 	// into the core dodgeball plugin and permanently break it.
 
@@ -169,7 +169,7 @@ public void OnMapEnd()
 		RocketClassSpriteTrie[index] = null;
 	}
 	// Reap any fake entities still parented to dead rockets. Children of a
-	// dead parent are orphaned (not auto-killed) in Source — without this
+	// dead parent are orphaned (not auto-killed) in Source - without this
 	// pass, prop_dynamic / info_particle_system / env_spritetrail entities
 	// leak across map changes.
 	for (int i = 0; i < MAX_ROCKETS; i++)
@@ -182,7 +182,7 @@ public void OnMapEnd()
 		RocketFakeEntity[i] = -1;
 		RocketRealEntity[i] = -1;
 
-		// Reap any trail/sprite entities parented to the real rocket — these
+		// Reap any trail/sprite entities parented to the real rocket - these
 		// don't die with the fake (which only takes its own children).
 		KillRocketTrailEntities(i);
 	}
@@ -246,7 +246,7 @@ void KillRocketTrailEntities(int index)
 }
 
 // Push a freshly-spawned trail/sprite entity onto the per-rocket tracking
-// list. Bounded by MAX_TRAILS_PER_ROCKET — overflow is silently ignored
+// list. Bounded by MAX_TRAILS_PER_ROCKET - overflow is silently ignored
 // (defensive; with the current two spawn sites we cap at 2 per rocket).
 void TrackRocketTrailEntity(int index, int trailEntity)
 {
@@ -293,7 +293,7 @@ public void OnPlayerTeam(Event event, char[] eventName, bool dontBroadcast)
 
 	// Client may have disconnected between event fire and handler dispatch, or
 	// the userid may resolve to 0 (engine sentinel). Either case means nothing
-	// to send particles to — bail before TE_SendToClient(0) errors the frame.
+	// to send particles to - bail before TE_SendToClient(0) errors the frame.
 	if (client <= 0 || !IsClientInGame(client)) return;
 
 	int fakeEntity = -1;
@@ -335,7 +335,7 @@ public void OnPlayerTeam(Event event, char[] eventName, bool dontBroadcast)
 public void TFDB_OnRocketCreated(int index, int entity)
 {
 	// Remember the real rocket so OnEntityDestroyed can reap the fake when
-	// the rocket dies — Source does not cascade-delete SetParent children.
+	// the rocket dies - Source does not cascade-delete SetParent children.
 	int previousEntity = EntRefToEntIndex(RocketRealEntity[index]);
 	if (previousEntity > 0 && previousEntity < sizeof(RocketSlotByEntity)) RocketSlotByEntity[previousEntity] = -1;
 	RocketRealEntity[index] = EntIndexToEntRef(entity);
@@ -397,7 +397,7 @@ public void TFDB_OnRocketCreated(int index, int entity)
 			ActivateEntity(trailEntity);
 
 			// Track for cleanup. Required when this trail ends up parented to
-			// the real rocket (RemoveParticles unset) — Source orphans rather
+			// the real rocket (RemoveParticles unset) - Source orphans rather
 			// than cascade-deletes children. Tracking the parented-to-fake
 			// case is harmless: the redundant kill is gated by IsValidEntity.
 			TrackRocketTrailEntity(index, trailEntity);
@@ -494,7 +494,7 @@ public void TFDB_OnRocketCreated(int index, int entity)
 			DispatchSpawn(spriteEntity);
 			SDKHook(spriteEntity, SDKHook_SetTransmit, SpriteSetTransmit);
 
-			// Track for cleanup — same reasoning as the info_particle_system
+			// Track for cleanup - same reasoning as the info_particle_system
 			// branch above. Without this, sprites parented to the real
 			// rocket (RemoveParticles unset) leak edicts on every rocket.
 			TrackRocketTrailEntity(index, spriteEntity);
@@ -797,9 +797,9 @@ stock void CreateTempParticle(const char[] particleName,
 	if (particleIndex == INVALID_STRING_INDEX)
 	{
 		// Previously this was ThrowError, which crashed the Trails subplugin whenever a
-		// trail config referenced a missing particle. Now it logs and skips — missing
+		// trail config referenced a missing particle. Now it logs and skips - missing
 		// particles just mean no trail for that rocket, not a plugin death.
-		LogError("[TFDB Trails] Missing precached particle: \"%s\" — skipping this trail.", particleName);
+		LogError("[TFDB Trails] Missing precached particle: \"%s\" - skipping this trail.", particleName);
 		return;
 	}
 	

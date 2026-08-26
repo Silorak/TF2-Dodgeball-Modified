@@ -10,7 +10,7 @@
 #include <multicolors>
 
 #include <tfdb>
-// DM is mutex with Guardian + PvB only. DM and FFA coexist intentionally —
+// DM is mutex with Guardian + PvB only. DM and FFA coexist intentionally -
 // different layers (team swaps vs neutral rockets) that don't fight each other.
 #include <tfdb_guardian>
 #include <tfdb_pvb>
@@ -70,27 +70,27 @@ bool       SoloEnabled[MAXPLAYERS + 1];
 bool  RoundStarted    = false;
 int   LastDeadTeam    = view_as<int>(TFTeam_Red);
 
-// Per-client respawn-protection window. Global was a bug in v1.5.3 — it granted
+// Per-client respawn-protection window. Global was a bug in v1.5.3 - it granted
 // 2s of immunity to ALL players whenever anyone respawned, which let the server
 // briefly be a safe-zone every time NER fired.
 float ClientRespawnTime[MAXPLAYERS + 1];
 bool   NERRespawnQueued[MAXPLAYERS + 1];  // legacy: cleared on disconnect; kept for save-state safety
 
-// NER lifecycle roster (v3 'gamedata NER' — the real engine fight):
+// NER lifecycle roster (v3 'gamedata NER' - the real engine fight):
 //   !dm  -> detour CTFGameRules::SetWinningTeam + ::SetStalemate with
 //           MRES_Supercede while NER is active. The round PHYSICALLY cannot
 //           end: no death-tick race, no restart gap, kills always land.
 //   roster: every Red/Blue player (never spectators); joiners captured on
 //           team join, released on spectate/disconnect.
-//   death STICKS — no respawn-on-death (strong players would dominate).
+//   death STICKS - no respawn-on-death (strong players would dominate).
 //   When a side reaches 0 alive -> RESOLVE: reshuffle all DEAD roster
 //           members into balanced teams (safe: everyone's dead) and respawn
 //           them. The killer's side keeps its survivors. Loop continues.
 bool NERLifecycle[MAXPLAYERS + 1];
 
 // Spawned-this-round discriminator: set by player_spawn, cleared at round
-// start/disconnect. Separates KILLED players (spawned then died — deaths
-// STICK per the game loop) from BENCHED joiners (on a team, never spawned —
+// start/disconnect. Separates KILLED players (spawned then died - deaths
+// STICK per the game loop) from BENCHED joiners (on a team, never spawned -
 // must enter play). Timing-based checks failed three times live because
 // fresh joins read IsPlayerAlive==true in the transition window.
 bool SpawnedThisRound[MAXPLAYERS + 1];
@@ -99,7 +99,7 @@ bool SpawnedThisRound[MAXPLAYERS + 1];
 // joined a playing team (set in Event_PlayerTeam). Used to distinguish a
 // just-joined benched player from an established one in the NER logs and to
 // sanity-check SpawnedThisRound (a benched joiner may fire a PHANTOM
-// player_spawn while being seated — hypothesis under live investigation).
+// player_spawn while being seated - hypothesis under live investigation).
 float JoinTeamTime[MAXPLAYERS + 1];
 
 // Bench sweep timer + census throttle
@@ -107,7 +107,7 @@ Handle       g_hBenchSweep    = null;
 float        g_fLastSweepCensus = 0.0;
 
 // Game-rules detours (symbols from the server binary's .symtab, resolved at
-// runtime via gamedata — see gamedata/tfdb_dm.games.txt)
+// runtime via gamedata - see gamedata/tfdb_dm.games.txt)
 Handle g_hGamedata         = null;
 
 DynamicDetour g_detSetWin  = null;
@@ -122,7 +122,7 @@ ConVar CvarSoloEnabled;
 ConVar CvarRespawnProtection;
 ConVar CvarVerbose;
 
-// FFA cache — FFA is allowed to coexist; NER switches behavior when it's on.
+// FFA cache - FFA is allowed to coexist; NER switches behavior when it's on.
 // Retried on null so late-load order is handled cleanly.
 
 // ============================================================================
@@ -157,7 +157,7 @@ public void OnPluginStart()
     CvarNEREnabled.AddChangeHook(OnCvarChanged);
     CvarSoloEnabled.AddChangeHook(OnCvarChanged);
 
-    // Events are plugin-lifetime — hook once, SourceMod auto-unhooks on unload.
+    // Events are plugin-lifetime - hook once, SourceMod auto-unhooks on unload.
     HookEvent("arena_round_start",         Event_RoundStart, EventHookMode_PostNoCopy);
     HookEvent("player_death",              Event_PlayerDeath, EventHookMode_Pre);
     HookEvent("player_spawn",              Event_PlayerSpawnDM, EventHookMode_Post);
@@ -171,15 +171,15 @@ public void OnPluginStart()
     // NER is active, so the engine can never end the round on us. Symbols
     // resolve from the server binary's symtab via gamedata (Linux). Server
     // builds differ (live-verified: one build resolved SetStalemate's symbol,
-    // another didn't) — candidate symbols are tried in order.
+    // another didn't) - candidate symbols are tried in order.
     g_hGamedata = LoadGameConfigFile("tfdb_dm.games");
     if (g_hGamedata == null)
     {
-        LogError("[TFDB-DM] gamedata/tfdb_dm.games.txt missing or unreadable — NER round-end detours NOT installed");
+        LogError("[TFDB-DM] gamedata/tfdb_dm.games.txt missing or unreadable - NER round-end detours NOT installed");
     }
     else
     {
-        // REQUIRED — blocks round-end by elimination (the NER core).
+        // REQUIRED - blocks round-end by elimination (the NER core).
         Address addrWin = Address_Null;
         for (int c = 1; c <= 2 && addrWin == Address_Null; c++)
         {
@@ -189,7 +189,7 @@ public void OnPluginStart()
 
         if (addrWin == Address_Null)
         {
-            LogError("[TFDB-DM] SetWinningTeam NOT resolved — NER cannot block round-end on this server build");
+            LogError("[TFDB-DM] SetWinningTeam NOT resolved - NER cannot block round-end on this server build");
         }
         else
         {
@@ -204,14 +204,14 @@ public void OnPluginStart()
                 DHookAddParam(g_detSetWin, HookParamType_Bool);   // bDontAddScore
                 DHookAddParam(g_detSetWin, HookParamType_Bool);   // bFinal
                 if (DHookEnableDetour(g_detSetWin, false, Detour_SetWinningTeam))
-                    LogMessage("[DM-NER] SetWinningTeam detour OK — elimination round-ends blocked while NER is active");
+                    LogMessage("[DM-NER] SetWinningTeam detour OK - elimination round-ends blocked while NER is active");
                 else
                     LogError("[TFDB-DM] failed to enable SetWinningTeam detour");
             }
             else LogError("[TFDB-DM] failed to create SetWinningTeam detour");
         }
 
-        // OPTIONAL — blocks the rare timelimit/empty-server stalemate end.
+        // OPTIONAL - blocks the rare timelimit/empty-server stalemate end.
         // If no candidate resolves on this build, NER still fully works
         // (SetWinningTeam covers elimination); log and continue.
         Address addrSt = Address_Null;
@@ -223,7 +223,7 @@ public void OnPluginStart()
 
         if (addrSt == Address_Null)
         {
-            LogMessage("[DM-NER] SetStalemate not resolved on this build — optional detour skipped (timelimit stalemates may still end a round)");
+            LogMessage("[DM-NER] SetStalemate not resolved on this build - optional detour skipped (timelimit stalemates may still end a round)");
         }
         else
         {
@@ -235,9 +235,9 @@ public void OnPluginStart()
                 DHookAddParam(g_detStale, HookParamType_Bool);    // bForceMapReset
                 DHookAddParam(g_detStale, HookParamType_Bool);    // bSwitchTeams
                 if (DHookEnableDetour(g_detStale, false, Detour_SetStalemate))
-                    LogMessage("[DM-NER] SetStalemate detour OK — stalemate round-ends blocked while NER is active");
+                    LogMessage("[DM-NER] SetStalemate detour OK - stalemate round-ends blocked while NER is active");
                 else
-                    LogMessage("[DM-NER] SetStalemate detour enable failed — optional, continuing");
+                    LogMessage("[DM-NER] SetStalemate detour enable failed - optional, continuing");
             }
         }
     }
@@ -259,16 +259,16 @@ void SetNERActive(bool active)
     if (active)
     {
         // Canary: if the SetWinningTeam detour didn't install (gamedata
-        // missing, symbol not found, wrong build), NER is a lie — the round
+        // missing, symbol not found, wrong build), NER is a lie - the round
         // WILL end normally. Log loudly so the admin knows immediately.
         if (g_detSetWin == null)
-            LogError("[TFDB-DM] NER activated but SetWinningTeam detour is NOT installed — round-end blocking will NOT work! Check gamedata/tfdb_dm.games.txt and the load-time log.");
+            LogError("[TFDB-DM] NER activated but SetWinningTeam detour is NOT installed - round-end blocking will NOT work! Check gamedata/tfdb_dm.games.txt and the load-time log.");
 
         // Capture the roster: everyone currently on a playing team.
         for (int client = 1; client <= MaxClients; client++)
             NERLifecycle[client] = IsClientInGame(client) && !IsSpectatorTeam(client);
 
-        LogMessage("[DM-NER] active — game-rules detours engaged, roster of %d captured",
+        LogMessage("[DM-NER] active - game-rules detours engaged, roster of %d captured",
             CountLifecycleRoster());
     }
     else
@@ -279,13 +279,13 @@ void SetNERActive(bool active)
 
 // Engine fight: block round-end by elimination and stalemate while NER owns
 // the mode. Symbols: CTFGameRules::SetWinningTeam / ::SetStalemate (see
-// gamedata/tfdb_dm.games.txt — resolved from the server .symtab at runtime).
+// gamedata/tfdb_dm.games.txt - resolved from the server .symtab at runtime).
 public MRESReturn Detour_SetWinningTeam(int pThis, DHookParam hParams)
 {
     if (!NERActive || !RoundStarted)
         return MRES_Ignored;
     int winTeam = -1; if (hParams != null) winTeam = hParams.Get(1);
-    DMDebugLog("BLOCKED SetWinningTeam(team=%d) — NER owns the round", winTeam);
+    DMDebugLog("BLOCKED SetWinningTeam(team=%d) - NER owns the round", winTeam);
     return MRES_Supercede;
 }
 
@@ -293,7 +293,7 @@ public MRESReturn Detour_SetStalemate(int pThis, DHookParam hParams)
 {
     if (!NERActive || !RoundStarted)
         return MRES_Ignored;
-    DMDebugLog("BLOCKED SetStalemate — NER owns the round");
+    DMDebugLog("BLOCKED SetStalemate - NER owns the round");
     return MRES_Supercede;
 }
 
@@ -329,7 +329,7 @@ public void OnConfigsExecuted()
     g_hBenchSweep = CreateTimer(2.0, Timer_BenchSweep, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
-// No OnMapEnd manual UnhookEvent — that anti-pattern crashes when other
+// No OnMapEnd manual UnhookEvent - that anti-pattern crashes when other
 // subplugins unhook shared events first. SourceMod handles cleanup on unload.
 
 public void OnPluginEnd()
@@ -354,7 +354,7 @@ public void OnClientDisconnect(int client)
     SpawnedThisRound[client]  = false;
 
     // If NER is active and the round is live, a disconnect may have emptied
-    // their side — run the side-emptied logic next frame (move or resolve).
+    // their side - run the side-emptied logic next frame (move or resolve).
     if (NERActive && RoundStarted && leavingRoster)
     {
         int team = GetClientTeam(client);
@@ -362,7 +362,7 @@ public void OnClientDisconnect(int client)
             RequestFrame(Frame_HandleSideEmptied, team);
     }
 
-    // If only 1 human remains, disable NER — there's nobody to play against.
+    // If only 1 human remains, disable NER - there's nobody to play against.
     // Players can still vote to re-enable with !votedm or use !dm when more
     // people join. Bots don't count (CvarSeeBotsAsPlayers handles debug mode).
     if (NERActive)
@@ -374,10 +374,10 @@ public void OnClientDisconnect(int client)
 void Frame_CheckMinPlayers(any userid)
 {
     #pragma unused userid
-    // The disconnecting client is already gone — we don't need their index.
+    // The disconnecting client is already gone - we don't need their index.
     // Count the remaining humans and disable NER if only 1 (or 0) is left.
     if (!NERActive) return;
-    // Don't disable during map transitions or between rounds —
+    // Don't disable during map transitions or between rounds -
     // OnClientDisconnect fires for all clients on map change.
     // NER persistence is handled by OnConfigsExecuted.
     if (!RoundStarted) return;
@@ -404,7 +404,7 @@ void Frame_CheckMinPlayers(any userid)
 
 /**
  * DeathMatch is mutually exclusive with PvB and Guardian (team-management
- * conflicts). FFA is compatible — NER adapts its team-swap logic when FFA
+ * conflicts). FFA is compatible - NER adapts its team-swap logic when FFA
  * is active. See frameworks/deathmatch-mutual-exclusion in the wiki.
  */
 bool CanActivateDeathMatch()
@@ -417,8 +417,8 @@ bool CanActivateDeathMatch()
     {
         if (GetFeatureStatus(FeatureType_Native, "TFDB_IsPvBDebugStates") == FeatureStatus_Available
             && TFDB_IsPvBDebugStates())
-            return false;  // Debug-states mode — block DM (cascade risk)
-        // PvB normal mode (1v1 bot) — allow DM for NER
+            return false;  // Debug-states mode - block DM (cascade risk)
+        // PvB normal mode (1v1 bot) - allow DM for NER
     }
 
     if (LibraryExists("tfdb_guardian") &&
@@ -430,7 +430,7 @@ bool CanActivateDeathMatch()
 
     // NOTE: FFA and DM coexist intentionally. FFA makes rockets neutral; DM
     // swaps players between RED/BLU on death to keep small-server rounds going.
-    // These layers don't fight each other — DM's team-swap still works while
+    // These layers don't fight each other - DM's team-swap still works while
     // FFA is on, and FFA's neutral-rocket logic still works during NER swaps.
     // Do NOT add an FFA gate here.
 
@@ -534,7 +534,7 @@ public void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 
         // Keep one non-soloer per team alive so the round isn't empty.
         int clientTeam = GetClientTeam(client);
-        int remaining  = (clientTeam == view_as<int>(TFTeam_Red)) ? --redCount : --blueCount;
+        int remaining  = (clientTeam == view_as<int>(TFTeam_Red)) ? -redCount : -blueCount;
 
         if (remaining > 0)
         {
@@ -572,7 +572,7 @@ public void Event_PlayerSpawnDM(Event event, const char[] name, bool dontBroadca
         && GetGameTime() - JoinTeamTime[client] < 2.0)
     {
         if (CvarVerbose.BoolValue)
-                    LogMessage("[DM-NER] spawn: %N within %.2fs of team join — PHANTOM BENCH SPAWN (flag stays %s)",
+                    LogMessage("[DM-NER] spawn: %N within %.2fs of team join - PHANTOM BENCH SPAWN (flag stays %s)",
             client, GetGameTime() - JoinTeamTime[client],
             SpawnedThisRound[client] ? "true" : "false");
         SpawnedThisRound[client] = false;   // bench seating is NOT real play
@@ -580,16 +580,16 @@ public void Event_PlayerSpawnDM(Event event, const char[] name, bool dontBroadca
     else
     {
         if (CvarVerbose.BoolValue)
-                    LogMessage("[DM-NER] spawn: %N (real — flag now true)", client);
+                    LogMessage("[DM-NER] spawn: %N (real - flag now true)", client);
     }
 }
 
 // Bench sweep (backstop, 2s while NER owns a round): any roster member who is
 // on a team, not solo, never spawned this round, and currently dead is a
-// benched joiner or a failed respawn — bring them in. Killed players are
+// benched joiner or a failed respawn - bring them in. Killed players are
 // excluded by SpawnedThisRound (their deaths stick by design).
 // NER resolution (v3): a side just emptied and no spares to move. Everyone
-// NOT on the surviving side is dead or benched — team changes are safe.
+// NOT on the surviving side is dead or benched - team changes are safe.
 // Shuffle all dead roster members, assign them balanced around the
 // survivors, respawn them. The round keeps running: SetWinningTeam is
 // blocked, so the engine never even noticed the empty side.
@@ -597,14 +597,14 @@ void Frame_ResolveCycle(any userid)
 {
     if (!NERActive || !RoundStarted) return;
     if (CountLifecycleRoster() == 0) return;   // kick-all / empty server noise
-    // A move may have repaired the side between queueing and now — no full
+    // A move may have repaired the side between queueing and now - no full
     // respawn needed in that case.
     if (GetTeamAliveCount(view_as<int>(TFTeam_Red)) > 0 && GetTeamAliveCount(view_as<int>(TFTeam_Blue)) > 0)
         return;
 
     int victim = GetClientOfUserId(userid);
 
-    // Survivors (alive, roster) stay put — their team shapes the refill.
+    // Survivors (alive, roster) stay put - their team shapes the refill.
     int aliveRed = 0, aliveBlue = 0;
     for (int client = 1; client <= MaxClients; client++)
     {
@@ -623,11 +623,11 @@ void Frame_ResolveCycle(any userid)
         if (!IsClientInGame(client))        continue;
         if (SoloEnabled[client])            continue;   // soloers sit out by choice
         if (SpawnedThisRound[client] && IsPlayerAlive(client))
-            continue;                                    // genuine survivor — stays
+            continue;                                    // genuine survivor - stays
         if (IsSpectatorTeam(client) && GetEntProp(client, Prop_Send, "m_lifeState") == 0)
-            continue;                                    // living spectator — released
+            continue;                                    // living spectator - released
         // Includes killed players (flag set, dead) AND benched joiners
-        // (flag clear — IsPlayerAlive reads TRUE for them with no pawn).
+        // (flag clear - IsPlayerAlive reads TRUE for them with no pawn).
         pool[count++] = client;
     }
 
@@ -639,7 +639,7 @@ void Frame_ResolveCycle(any userid)
     }
 
     // Assign balanced around survivors, then respawn OUTSIDE the death tick
-    // (this is a frame callback — TF2_RespawnPlayer is reliable here).
+    // (this is a frame callback - TF2_RespawnPlayer is reliable here).
     int placedRed = aliveRed, placedBlue = aliveBlue;
     for (int i = 0; i < count; i++)
     {
@@ -706,11 +706,11 @@ public Action Timer_BenchSweep(Handle timer)
         if (!NERLifecycle[client])       continue;
         if (!IsClientInGame(client))     continue;
         if (SoloEnabled[client])         continue;
-        if (SpawnedThisRound[client])    continue;   // played this round — kills stick
+        if (SpawnedThisRound[client])    continue;   // played this round - kills stick
         if (IsSpectatorTeam(client))     continue;
 
         // NOTE: no IsPlayerAlive check. A benched arena joiner has
-        // m_lifeState=0 with no pawn — IsPlayerAlive reads TRUE forever
+        // m_lifeState=0 with no pawn - IsPlayerAlive reads TRUE forever
         // (live-proven 14:00 & 14:08: every alive-gated filter skipped the
         // benched bot). SpawnedThisRound is the sole discriminator; a forced
         // respawn sets the correct state, and if they were genuinely mid-
@@ -738,13 +738,13 @@ public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast
                     LogMessage("[DM-NER] death: %N team=%d | roster=%d spawned=%d alive=%d",
             client, LastDeadTeam, NERLifecycle[client], SpawnedThisRound[client], IsPlayerAlive(client));
 
-    // NER v3 (gamedata detours): the round cannot end while NER is active —
+    // NER v3 (gamedata detours): the round cannot end while NER is active -
     // SetWinningTeam/SetStalemate are superseded. Deaths STICK (no
     // respawn-on-death). When a side reaches 0 alive, move-or-resolve.
     //
     // MUST defer to the next frame: this is the PRE hook, the victim still
     // reads ALIVE in GetTeamAliveCount, and HandleSideEmptied's "already
-    // repaired" guard would see 1 alive and bail — the live bug where the
+    // repaired" guard would see 1 alive and bail - the live bug where the
     // last death never resolved and the dead bot stayed benched forever.
     // One frame later the death has settled and the counts are accurate.
     if (NERActive && RoundStarted)
@@ -753,10 +753,10 @@ public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast
 
 // Side emptied. The game loop (user spec, final):
 //   other side has 2+ alive  -> MOVE one of them over (instant m_lifeState-
-//                                spoofed team change — the proven technique;
+//                                spoofed team change - the proven technique;
 //                                player keeps position, dead STAY dead) so a
 //                                1v1 duel forms with real stakes.
-//   other side has <= 1      -> the duel kill landed: FULL resolve — respawn
+//   other side has <= 1      -> the duel kill landed: FULL resolve - respawn
 //                                every dead roster member, reshuffled into
 //                                balanced teams around the survivor.
 // Detours guarantee the round cannot end either way, so timing is free.
@@ -806,7 +806,7 @@ int PickAliveMover(int team)
 
 // Instant alive-player team change (proven live): spoof dead so the engine's
 // team-change path doesn't kill/respawn us, change team, restore, recount.
-// The mover keeps their position — the 1v1 forms seamlessly.
+// The mover keeps their position - the 1v1 forms seamlessly.
 void MoveAliveClient(int client, int toTeam)
 {
     SetEntProp(client, Prop_Send, "m_lifeState", 2);
@@ -815,7 +815,7 @@ void MoveAliveClient(int client, int toTeam)
     TFDB_RecountAlive();
 
     // Crossfire protection: rocket targets lock at spawn and only re-pick on
-    // deflection — a rocket locked on this player BEFORE the move still flies
+    // deflection - a rocket locked on this player BEFORE the move still flies
     // at him mid-transition (live-observed: moved player standing on his old
     // side with an inbound rocket). The respawn-protection window keeps the
     // freshly moved duelist alive through that one crossing instead of
@@ -840,10 +840,10 @@ public void Event_PlayerTeam(Event event, const char[] name, bool dontBroadcast)
     int client = GetClientOfUserId(event.GetInt("userid"));
     if (client <= 0 || client > MaxClients || !IsClientInGame(client)) return;
 
-    // TF2's player_team fields are "team"/"oldteam" (NOT "newteam" — that is
+    // TF2's player_team fields are "team"/"oldteam" (NOT "newteam" - that is
     // the CS:S name; reading it returned 0 for every event and silently broke
     // ALL mid-round roster capture: joiners were treated as spectators and
-    // never rostered — live-proven 14:00/14:08/14:14/14:21 bench bugs).
+    // never rostered - live-proven 14:00/14:08/14:14/14:21 bench bugs).
     int newTeam = event.GetInt("team");
     int oldTeam = event.GetInt("oldteam");
 
@@ -869,7 +869,7 @@ public void Event_PlayerTeam(Event event, const char[] name, bool dontBroadcast)
 
         // Bench override: arena seats mid-round joiners DEAD until next round,
         // but NER rounds don't end. IsPlayerAlive is NOT a valid gate here
-        // (fresh joins read alive in the transition window — live bug 14:00).
+        // (fresh joins read alive in the transition window - live bug 14:00).
         // Gate on the spawned-this-round flag after a short settle delay; the
         // 2s bench sweep is the backstop either way.
         if (RoundStarted && !SpawnedThisRound[client] && !SoloEnabled[client])
@@ -920,7 +920,7 @@ public Action Timer_BenchOverride(Handle timer, any data)
 }
 
 // ============================================================================
-//  Damage hook — NER lethal prevention + respawn protection
+//  Damage hook - NER lethal prevention + respawn protection
 // ============================================================================
 
 public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage,
@@ -929,7 +929,7 @@ public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &dam
     if (victim <= 0 || victim > MaxClients)             return Plugin_Continue;
     if (!IsClientInGame(victim))                        return Plugin_Continue;
 
-    // NER v3: no damage blocking. Kills ALWAYS land — the round cannot end
+    // NER v3: no damage blocking. Kills ALWAYS land - the round cannot end
     // while NER is active (CTFGameRules::SetWinningTeam/SetStalemate are
     // detoured and superseded), so there is no death-tick race to dodge.
     // When a kill empties a side, Event_PlayerDeath resolves the cycle:
@@ -991,7 +991,7 @@ public Action Cmd_Solo(int client, int args)
         return Plugin_Handled;
     }
 
-    // Toggle on — if alive, sit out immediately (resolution skips soloers)
+    // Toggle on - if alive, sit out immediately (resolution skips soloers)
     if (IsAliveInGame(client) && RoundStarted)
     {
         ForcePlayerSuicide(client);
@@ -1022,7 +1022,7 @@ public Action Cmd_ToggleDeathMatch(int client, int args)
 
 public Action Cmd_VoteDeathMatch(int client, int args)
 {
-    // Guard quartet — was missing all four. console (client=0) hitting this
+    // Guard quartet - was missing all four. console (client=0) hitting this
     // would crash on the FormatEx %T path with an invalid client.
     if (client == 0)
     {
@@ -1054,7 +1054,7 @@ public Action Cmd_VoteDeathMatch(int client, int args)
         return Plugin_Handled;
     }
 
-    // Cooldown check — the original logic was inverted (treated "never voted"
+    // Cooldown check - the original logic was inverted (treated "never voted"
     // as "on cooldown"). Fixed: reject if LastVoteTime > 0 AND cooldown window unexpired.
     if (LastVoteTime > 0.0 && LastVoteTime + CvarNERVoteTimeout.FloatValue > GetGameTime())
     {
@@ -1074,7 +1074,7 @@ public Action Cmd_VoteDeathMatch(int client, int args)
 
     // Menu title is seen by whoever called the vote; route through translation.
     // Per-client %T would be better for multi-language servers, but Menu.SetTitle
-    // is a single string — use the caller's language, fall back to "server language".
+    // is a single string - use the caller's language, fall back to "server language".
     char titleBuffer[64];
     FormatEx(titleBuffer, sizeof(titleBuffer), "%T", NERActive ? "DeathMatch_Vote_Menu_Title_Disable" : "DeathMatch_Vote_Menu_Title_Enable", client);
     menu.SetTitle(titleBuffer);
@@ -1146,10 +1146,10 @@ public void VoteResult_NER(Menu menu, int numVotes, int numClients, const int[][
 
 // Visual marker for the NER respawn-protection window. Live-verified bug:
 // TFCond_UberchargedHidden (51) renders NOTHING (it exists precisely to be
-// invisible for out-of-bounds MvM robots) — users saw no effect. Use
+// invisible for out-of-bounds MvM robots) - users saw no effect. Use
 // TFCond_UberchargedCanteen (52): visible invulnerability effect, and unlike
 // plain TFCond_Ubercharged (5) it is not stripped by healing or other uber
-// effects. Purely cosmetic — the actual immunity is damage=0 in OnTakeDamage,
+// effects. Purely cosmetic - the actual immunity is damage=0 in OnTakeDamage,
 // which survives any condition being stripped. Re-applied every sweep tick
 // while the window is open so the visual tracks the real protection.
 void ApplyRespawnShieldVisual(int client)
@@ -1199,7 +1199,7 @@ public Action Cmd_DMDebug(int client, int args)
         CvarVerbose.SetInt(StringToInt(arg) != 0);
     }
 
-    // Full NER state dump — one line per in-game client.
+    // Full NER state dump - one line per in-game client.
     ReplyToCommand(client, "[DM-NER] state dump (NER=%d round=%d):", NERActive, RoundStarted);
     ReplyToCommand(client, "  #  name                 team roster spawned alive hp class tSinceJoin");
     for (int c = 1; c <= MaxClients; c++)

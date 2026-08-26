@@ -1,4 +1,4 @@
-// tfdb_guardian_hud.inc — extracted from tfdb_guardian.sp
+// tfdb_guardian_hud.inc - extracted from tfdb_guardian.sp
 
 void Frame_ApplyGuardianHealth(int userId)
 {
@@ -177,7 +177,7 @@ public Action Timer_Update(Handle timer)
 void UpdateBossHealthBar()
 {
 	// monsterResource is stored as an EntRef (via EntIndexToEntRef). Must resolve
-	// it back to a raw entity index before calling IsValidEntity/SetEntProp — those
+	// it back to a raw entity index before calling IsValidEntity/SetEntProp - those
 	// natives expect edict indices, not EntRefs.
 	int resourceEntity = EntRefToEntIndex(monsterResource);
 	if (resourceEntity == INVALID_ENT_REFERENCE || !IsValidEntity(resourceEntity)) return;

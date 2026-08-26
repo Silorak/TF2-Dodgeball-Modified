@@ -35,7 +35,7 @@ float LastVoteClassTime;
 float LastVoteCountTime;
 float LastVotePresetTime;
 
-// Per-client spam throttle — prevents a single player from spamming any vote
+// Per-client spam throttle - prevents a single player from spamming any vote
 // command the instant a server-wide cooldown elapses. Enforced across ALL vote
 // commands so griefers can't chain-call vrb / vrc / vrp.
 #define CLIENT_VOTE_COOLDOWN 10.0
@@ -49,7 +49,7 @@ bool IsClientVoteThrottled(int client)
 }
 
 // Returns true if client is on a play team (RED or BLU). Use to gate vote
-// commands that mutate live gameplay — spectators/unassigned can't call them.
+// commands that mutate live gameplay - spectators/unassigned can't call them.
 // Replies with the standard message and expects caller to early-return.
 bool IsCallerOnPlayingTeam(int client)
 {
@@ -765,12 +765,12 @@ public void TFDB_OnRocketCreated(int index, int entity)
  *
  * Why: rocket classes with `"reset bounces" "1"` (RocketFlag_ResetBounces) zero
  * the rocket's bounce counter on every deflect (`dodgeball_events.inc:248-251`).
- * Without this hook, a no-bounce-mode vote ONLY affects the spawn rocket — the
+ * Without this hook, a no-bounce-mode vote ONLY affects the spawn rocket - the
  * moment a player airblasts it, the deflect-reset undoes the vote and the
  * rocket bounces freely. Re-locking on every deflect makes the vote stick.
  *
  * Forward fires AFTER core's deflect processing, so RocketBounces[i] is
- * already 0 by the time this runs — we restore it to MaxBounces[class].
+ * already 0 by the time this runs - we restore it to MaxBounces[class].
  */
 public void TFDB_OnRocketDeflect(int index, int entity, int owner)
 {

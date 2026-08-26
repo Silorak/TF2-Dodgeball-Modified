@@ -35,7 +35,7 @@
 #define GUARDIAN_LOG_FILE    "logs/tfdb_guardian/debug.log"
 #define GUARDIAN_SEL_FILE    "logs/tfdb_guardian/select.log"
 
-// Resolved at plugin start via BuildPath — writes to addons/sourcemod/logs/
+// Resolved at plugin start via BuildPath - writes to addons/sourcemod/logs/
 char GUARDIAN_LOG[PLATFORM_MAX_PATH];
 char GUARDIAN_SEL[PLATFORM_MAX_PATH];
 
@@ -89,7 +89,7 @@ int           activeClassIndex;
 int           guardianMaxHP;
 int           guardianCurrentHP;
 bool          botMessageShown;
-bool          ffaMessageShown;  // dedup the "Guardian blocked: FFA active" chat — was firing every CanActivateGuardian call (multiple per round)
+bool          ffaMessageShown;  // dedup the "Guardian blocked: FFA active" chat - was firing every CanActivateGuardian call (multiple per round)
 
 // Admin force for next round (stored as userid to prevent slot reuse)
 int           forcedClientUserId  = 0;
@@ -225,7 +225,7 @@ void GuardianDebugLog(const char[] format, any ...)
 public void OnPluginStart()
 {
 	// Guardian depends on the TF2Attributes extension for ability attributes.
-	// Log a warning if missing/broken so admins know, but don't SetFailState —
+	// Log a warning if missing/broken so admins know, but don't SetFailState -
 	// boss HP bar + team management still work without TF2Attrib_* calls. This
 	// matches AntiSnipe's permissive pattern for CollisionHook (graceful degrade).
 	int tf2AttribStatus = GetExtensionFileStatus("tf2attributes.ext");
@@ -235,7 +235,7 @@ public void OnPluginStart()
 	}
 
 	// Resolve log paths to addons/sourcemod/logs/tfdb_guardian/ via BuildPath.
-	// LogToFileEx takes raw paths — without BuildPath it resolves
+	// LogToFileEx takes raw paths - without BuildPath it resolves
 	// relative to the game directory (tf/) which may not have a logs/ folder.
 	// Create the per-plugin log folder first; LogToFile won't create it.
 	char guardianLogDir[PLATFORM_MAX_PATH];
@@ -290,10 +290,10 @@ public void OnPluginStart()
 public void OnAllPluginsLoaded()
 {
 	// Guardian hard-requires the tfdb core. Without it, every TFDB_* native
-	// call would throw "missing native" at runtime — fail loudly instead.
+	// call would throw "missing native" at runtime - fail loudly instead.
 	if (!LibraryExists("tfdb"))
 	{
-		SetFailState("[Guardian] tfdb core plugin not loaded — Guardian cannot function.");
+		SetFailState("[Guardian] tfdb core plugin not loaded - Guardian cannot function.");
 	}
 
 	// Initial population of the FFA cache. From now on it's maintained by
@@ -302,7 +302,7 @@ public void OnAllPluginsLoaded()
 
 	// Initial population of the bot counter for late-load. Without this, if
 	// Guardian loads mid-round with bots already on RED/BLU, g_ActiveBotCount
-	// stays at 0 until OnRoundStart fires — meaning HasActiveBots() returns
+	// stays at 0 until OnRoundStart fires - meaning HasActiveBots() returns
 	// false and Guardian can wrongly activate over a PvB round.
 	// (Audit finding 2026-04-26.)
 	RecountActiveBots();
@@ -321,12 +321,12 @@ public void OnLibraryAdded(const char[] name)
 public void OnLibraryRemoved(const char[] name)
 {
 	// If the core unloads at runtime, disable ourselves gracefully rather than
-	// SetFailState'ing — a SetFailState here cascades when the core crashes
+	// SetFailState'ing - a SetFailState here cascades when the core crashes
 	// (both plugins error into the log at once, tangling the root cause).
 	// We'll simply stop reacting; subsequent native calls are guarded below.
 	if (StrEqual(name, "tfdb"))
 	{
-		LogMessage("[Guardian] tfdb core unloaded — disabling Guardian.");
+		LogMessage("[Guardian] tfdb core unloaded - disabling Guardian.");
 		enabled      = false;
 		guardianActive = false;
 	}
@@ -581,8 +581,8 @@ public void OnClientDisconnect(int client)
 public void OnClientPostAdminCheck(int client)
 {
 	// Maintain g_ActiveBotCount: bot just authenticated. If they're on a play
-	// team (>1) — uncommon at PostAdminCheck since bots usually start as
-	// unassigned, but possible — count them. The player_team handler covers
+	// team (>1) - uncommon at PostAdminCheck since bots usually start as
+	// unassigned, but possible - count them. The player_team handler covers
 	// the normal case where the bot is later assigned to RED/BLU.
 	if (IsFakeClient(client) && IsClientInGame(client) && GetClientTeam(client) > 1)
 	{
@@ -645,7 +645,7 @@ bool HasActiveBots()
 
 /**
  * Recount active bots from scratch. Called on map start / round start as a
- * defensive resync — the per-event maintenance in OnClientPostAdminCheck /
+ * defensive resync - the per-event maintenance in OnClientPostAdminCheck /
  * OnClientDisconnect / OnPlayerTeamChange should keep g_ActiveBotCount
  * accurate, but a full rescan costs nothing on map boundaries and prevents
  * permanent drift if any event was missed.
@@ -715,7 +715,7 @@ void RebuildGuardianHudCache()
 bool IsFFAActive()
 {
 	// Prefer the proper three-gate native (LibraryExists + FeatureStatus +
-	// native call) — same pattern Guardian uses for PvB and DeathMatch. This
+	// native call) - same pattern Guardian uses for PvB and DeathMatch. This
 	// reads FFA's actual `FFAEnabled` flag, not the indirect mp_friendlyfire
 	// signal which is fragile (admins can flip mp_friendlyfire manually,
 	// and FFA's "disable on bot join" path also flips it).
@@ -776,7 +776,7 @@ bool CanActivateGuardian()
 	// Bots are gone - reset so the message shows again if bots rejoin
 	botMessageShown = false;
 
-	// Explicit PvB mutual exclusion — HasActiveBots() is imprecise (a PvB round
+	// Explicit PvB mutual exclusion - HasActiveBots() is imprecise (a PvB round
 	// with 0 live bots between spawns wouldn't trip it). See
 	// frameworks/guardian-pvb-mutual-exclusion.md in the wiki.
 	if (LibraryExists("tfdb_pvb") &&
@@ -787,7 +787,7 @@ bool CanActivateGuardian()
 		return false;
 	}
 
-	// DeathMatch mutual exclusion — NER swaps teams, which conflicts with
+	// DeathMatch mutual exclusion - NER swaps teams, which conflicts with
 	// Guardian's boss-on-BLU rule. See frameworks/deathmatch-mutual-exclusion.
 	if (LibraryExists("tfdb_deathmatch") &&
 	    GetFeatureStatus(FeatureType_Native, "TFDB_IsDeathMatchActive") == FeatureStatus_Available &&
@@ -810,7 +810,7 @@ bool CanActivateGuardian()
 		return false;
 	}
 
-	// FFA is off — clear the dedup so the next FFA flip re-announces.
+	// FFA is off - clear the dedup so the next FFA flip re-announces.
 	ffaMessageShown = false;
 
 	// Need at least 2 eligible players: 1 for guardian + 1 for RED
@@ -1061,7 +1061,7 @@ public void OnRoundStart(Event event, const char[] name, bool dontBroadcast)
 	// Aggressive hard reset every round start
 	ResetAllState(true);
 
-	// Refresh perf caches at round boundary. Cheap defensive resync —
+	// Refresh perf caches at round boundary. Cheap defensive resync -
 	// keeps g_ActiveBotCount and g_FFAActiveCached honest in case any event
 	// went missed between rounds (plugin reload, late-load, etc).
 	RecountActiveBots();
@@ -1389,7 +1389,7 @@ void ActivateGuardian(int client, int classIndex)
 
 	// Build the static HUD string cache once, here, before the 10Hz timer starts
 	// hammering Timer_Update. activeClassIndex is fixed for the duration of this
-	// guardian round, so the strings derived from it never change — caching saves
+	// guardian round, so the strings derived from it never change - caching saves
 	// the per-tick CharToUpper loops and GetButtonLabel calls.
 	RebuildGuardianHudCache();
 
@@ -1498,7 +1498,7 @@ void Frame_MoveToRed(int userId)
  *
  * Engine's mp_autoteambalance fires on player_team/player_disconnect events,
  * NOT on round transitions. After a guardian round where the guardian died and
- * was moved to RED, both humans can end up on RED with BLU empty — arena
+ * was moved to RED, both humans can end up on RED with BLU empty - arena
  * warmup then refuses to start the round ("Waiting for 1 more player").
  *
  * Move one player from the over-stuffed team to the empty one. Picks a random
@@ -1525,7 +1525,7 @@ void EnsureTeamBalance()
 		}
 	}
 
-	// Only act when one team is empty and the other has 2+ — otherwise leave alone.
+	// Only act when one team is empty and the other has 2+ - otherwise leave alone.
 	if (redCount >= 2 && bluCount == 0)
 	{
 		int target = redCandidates[GetRandomInt(0, redCount - 1)];

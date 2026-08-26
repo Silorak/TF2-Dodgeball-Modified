@@ -1,4 +1,4 @@
-// tfdb_pvb_menus.inc — auto-extracted from tfdb_pvb.sp
+// tfdb_pvb_menus.inc - auto-extracted from tfdb_pvb.sp
 // Do not edit directly; this is a split of the PvB plugin.
 
 public Action Cmd_BotAdmin(int client, int args) {
@@ -307,7 +307,7 @@ public Action Cmd_BotVote(int client, int args) {
     }
 
     // Spectators can't start a vote that affects active gameplay state. They
-    // CAN view stats via sm_botstats / sm_botmenu — that path doesn't gate on
+    // CAN view stats via sm_botstats / sm_botmenu - that path doesn't gate on
     // team. This only blocks vote initiation.
     if (GetClientTeam(client) <= view_as<int>(TFTeam_Spectator)) {
         if (TranslationPhraseExists("PvB_Vote_MustBeOnTeam")) {
@@ -318,9 +318,9 @@ public Action Cmd_BotVote(int client, int args) {
         return Plugin_Handled;
     }
 
-    // Preemptive mutex check — reject the vote up-front if a partner mode is
+    // Preemptive mutex check - reject the vote up-front if a partner mode is
     // active (Guardian / DeathMatch / FFA). Without this the vote runs to
-    // completion, then EnablePvB() silently fails on the same gates inside —
+    // completion, then EnablePvB() silently fails on the same gates inside -
     // bot never spawns and players are confused. Better to tell them now.
     if (LibraryExists("tfdb_guardian") &&
         GetFeatureStatus(FeatureType_Native, "TFDB_IsGuardianActive") == FeatureStatus_Available &&
@@ -347,14 +347,14 @@ public Action Cmd_BotVote(int client, int args) {
         return Plugin_Handled;
     }
 
-    // Preemptive check vs CfgMaxPlayers — if the vote would pass but the bot
+    // Preemptive check vs CfgMaxPlayers - if the vote would pass but the bot
     // would auto-kick the next tick due to humans > max_players, tell the
     // player upfront with the actual cap instead of running the silent
     // enable-then-disable cycle. Only enforce when bot is OFF (enabling); a
     // vote to DISABLE while humans > max is fine. Skip when bot is already on
     // and the vote could be a hot-swap or disable.
     if (!BotEnabled && CfgMaxPlayers > 0 && currentPlayers > CfgMaxPlayers) {
-        // Guard the translation lookup — same rationale as other PvB phrases
+        // Guard the translation lookup - same rationale as other PvB phrases
         // (stale global phrase cache could throw before the user runs
         // sm_reload_translations). See sourcemod-practices/translations.md.
         if (TranslationPhraseExists("PvB_Vote_AbovePvBLimit")) {
@@ -462,7 +462,7 @@ public int MenuHandler_ClassPick(Menu menu, MenuAction action, int param1, int p
 void StartClassVote() {
     if (ClassVoteActive) return;
 
-    // Zero tallies + per-client ballot BEFORE flipping the active flag — if any
+    // Zero tallies + per-client ballot BEFORE flipping the active flag - if any
     // call below throws (e.g. stale translation cache in ShowClassVoteMenu),
     // the flag stays false so the next !votepvb can retry cleanly.
     for (int t = 0; t <= NumBotTypes; t++) {  // +1 covers the "disable" slot
@@ -475,7 +475,7 @@ void StartClassVote() {
     CPrintToChatAll("%t", "PvB_ClassVote_Start");
 
     // Show ballot only to players on RED or BLU. Spectators don't get to vote
-    // on active gameplay state — same rationale as the starter gate above.
+    // on active gameplay state - same rationale as the starter gate above.
     for (int i = 1; i <= MaxClients; i++) {
         if (TFDB_IsRealHumanPlaying(i)) {
             ShowClassVoteMenu(i);
@@ -499,7 +499,7 @@ void ShowClassVoteMenu(int client) {
         IntToString(t, info, sizeof(info));
         menu.AddItem(info, BotDisplayName[t]);
     }
-    // "Disable bot" menu entry — only when the bot is currently active. No
+    // "Disable bot" menu entry - only when the bot is currently active. No
     // point offering "disable" when nothing is running. Uses project translation
     // convention (shared `tfdb.phrases.txt`, PvB_* prefix). TranslationPhraseExists
     // guards a stale translation cache (SM's global phrase cache doesn't auto-
@@ -532,7 +532,7 @@ public int MenuHandler_ClassVote(Menu menu, MenuAction action, int param1, int p
         int type = StringToInt(info);
 
         // Clamp: valid type (0..NumBotTypes-1), or PVB_VOTE_DISABLE (-1).
-        // Disable votes are tallied in ClassVotes[NumBotTypes] — the slot
+        // Disable votes are tallied in ClassVotes[NumBotTypes] - the slot
         // just past the last real type. MAX_BOT_TYPES leaves room for it.
         int voteSlot;
         if (type == PVB_VOTE_DISABLE) {
@@ -558,7 +558,7 @@ public int MenuHandler_ClassVote(Menu menu, MenuAction action, int param1, int p
         CPrintToChatAll("%t", "PvB_ClassVote_Voted", param1, typeName);
 
         // Early-resolve: if every human in game has voted, skip the remaining
-        // timer — no point waiting 20s when the result is already decided.
+        // timer - no point waiting 20s when the result is already decided.
         // Count live non-fake clients directly (don't rely on CachedRealCount
         // which updates on a separate tick).
         int humans = 0, voted = 0;
@@ -579,13 +579,13 @@ public int MenuHandler_ClassVote(Menu menu, MenuAction action, int param1, int p
         // -2 is distinct from -1 (never voted) so they can't re-open + vote.
         if (param1 >= 1 && param1 <= MaxClients && ClassVoted[param1] == -1) {
             ClassVoted[param1] = -2;
-            // Guard the translation lookup — same reason as PvB_Menu_Vote_Disable_Option,
+            // Guard the translation lookup - same reason as PvB_Menu_Vote_Disable_Option,
             // stale global phrase cache could throw. See sourcemod-practices/translations.md.
             if (TranslationPhraseExists("PvB_ClassVote_Abstained")) {
                 CPrintToChatAll("%t", "PvB_ClassVote_Abstained", param1);
             }
 
-            // Same early-resolve check as MenuAction_Select — if every human
+            // Same early-resolve check as MenuAction_Select - if every human
             // has either voted or abstained, wrap the vote now.
             int humans = 0, done = 0;
             for (int i = 1; i <= MaxClients; i++) {
@@ -626,10 +626,10 @@ void ResolveClassVote() {
     }
 
     if (maxVotes == 0) {
-        // No one voted — keep current state. If bot wasn't on, don't enable.
+        // No one voted - keep current state. If bot wasn't on, don't enable.
         CPrintToChatAll("%t", "PvB_ClassVote_NoVotes");
         if (!BotEnabled) LoadBotTypeSettings(CfgBotType);
-        // Don't call EnablePvB() in no-vote case — silent cancel.
+        // Don't call EnablePvB() in no-vote case - silent cancel.
         return;
     }
 
@@ -656,17 +656,17 @@ void ResolveClassVote() {
         return;
     }
 
-    // Bot-type winner — switch (or enable) to that type.
+    // Bot-type winner - switch (or enable) to that type.
     char typeName[32];
     GetBotTypeNameSafe(winnerSlot, typeName, sizeof(typeName));
 
     if (!BotEnabled) {
-        // Bot is OFF — vote enables it. Apply type immediately + spawn the bot.
+        // Bot is OFF - vote enables it. Apply type immediately + spawn the bot.
         LoadBotTypeSettings(winnerSlot);
         CPrintToChatAll("%t", "PvB_ClassVote_Result", typeName, maxVotes);
         EnablePvB();
     } else if (winnerSlot == CfgBotType) {
-        // Vote winner is already the active type — nothing to do, no respawn needed.
+        // Vote winner is already the active type - nothing to do, no respawn needed.
         CPrintToChatAll("%t", "PvB_ClassVote_Result", typeName, maxVotes);
     } else {
         // Hot-swap to a DIFFERENT type while bot is running. Defer to round end
@@ -681,7 +681,7 @@ void ResolveClassVote() {
                 CPrintToChatAll("[TFDB] Vote passed: bot will switch to %s at end of this round.", typeName);
             }
         } else {
-            // Already between rounds — apply now, no rally to interrupt.
+            // Already between rounds - apply now, no rally to interrupt.
             ApplyHotSwap();
         }
     }
@@ -775,7 +775,7 @@ void StopPvBProfile() {
     float elapsed = TFDB_ProfileStop(g_PvBProfileWindow);
     // Deliberately NOT PvB_Log. Every TFDB component emits its own
     // [TFDB-PROFILE] line and they're meant to be read together against one
-    // timeline -- splitting PvB's into a plugin-private file would break the
+    // timeline - splitting PvB's into a plugin-private file would break the
     // one thing this output is for. Plugin-scoped logging is for PvB's own
     // narrative (nav, states, falls); cross-component telemetry stays shared.
     LogMessage("[TFDB-PROFILE] component=pvb elapsed=%.3f frames=%d commands=%d eligible=%d rocketScans=%d threatScans=%d events=%d dropped=%d debug=%d",

@@ -45,7 +45,7 @@ public void OnPluginStart()
 		if (!TFDB_IsValidRocket(index)) continue;
 
 		// TFDB_GetRocketEntity already unwraps the ent ref internally and returns
-		// an entity INDEX. Do NOT wrap it in EntRefToEntIndex again — double-wrapping
+		// an entity INDEX. Do NOT wrap it in EntRefToEntIndex again - double-wrapping
 		// a raw index returns INVALID_ENT_REFERENCE (raw indices lack the ent-ref magic
 		// bits), which makes SDKHook(-1, ...) silently fail on plugin late-load.
 		int entity = TFDB_GetRocketEntity(index);
@@ -81,7 +81,7 @@ public void OnMapEnd()
 
 	RocketClassCount = 0;
 
-	// Reset dedupe flags — any RequestFrame still in flight will be discarded
+	// Reset dedupe flags - any RequestFrame still in flight will be discarded
 	// on map change, so flags stuck at true would block touches on the next map.
 	for (int i = 0; i < sizeof(g_TouchPending); i++) g_TouchPending[i] = false;
 }
@@ -251,7 +251,7 @@ public void TouchRequestFrame(DataPack touchInfo)
 
 	int index           = touchInfo.ReadCell();
 	// Clear the per-rocket dedupe flag first thing, regardless of which branch
-	// below we take — if we early-return without clearing, future touches on
+	// below we take - if we early-return without clearing, future touches on
 	// this rocket index would never re-arm.
 	if (index >= 0 && index < MAX_ROCKETS) g_TouchPending[index] = false;
 
@@ -259,7 +259,7 @@ public void TouchRequestFrame(DataPack touchInfo)
 	int rocket          = EntRefToEntIndex(touchInfo.ReadCell());
 	int owner           = EntRefToEntIndex(touchInfo.ReadCell());
 	// Re-validate the owner: if the player disconnected between frames,
-	// EntRefToEntIndex returns -1 and `@owner` would expand to "-1" —
+	// EntRefToEntIndex returns -1 and `@owner` would expand to "-1" -
 	// clamp to 0 so substituted commands receive a sentinel instead.
 	if (owner < 1 || owner > MaxClients || !IsClientInGame(owner))
 	{

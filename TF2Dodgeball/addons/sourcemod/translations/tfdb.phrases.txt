@@ -33,7 +33,7 @@
 	
 	"Command_DBHideParticles_Usage"
 	{
-		"en"		"[{olive}TFDB{default}] Usage: {darkorange}sm_rockettrails{default} — toggles custom particle trails."
+		"en"		"[{olive}TFDB{default}] Usage: {darkorange}sm_rockettrails{default} - toggles custom particle trails."
 	}
 	
 	"Command_DBHideSprites_Hidden"
@@ -48,7 +48,7 @@
 	
 	"Command_DBHideSprites_Usage"
 	{
-		"en"		"[{olive}TFDB{default}] Usage: {darkorange}sm_rocketspritetrails{default} — toggles custom sprite trails."
+		"en"		"[{olive}TFDB{default}] Usage: {darkorange}sm_rocketspritetrails{default} - toggles custom sprite trails."
 	}
 	
 	"DBSteal_Warning_Client"
@@ -764,17 +764,17 @@
 	
 	"Guardian_BlockedBot"
 	{
-		"en"		"[{olive}TFDB{default}] {red}Guardian mode unavailable{default} — bots are active."
+		"en"		"[{olive}TFDB{default}] {red}Guardian mode unavailable{default} - bots are active."
 	}
 	
 	"Guardian_BlockedFFA"
 	{
-		"en"		"[{olive}TFDB{default}] {red}Guardian mode unavailable{default} — FFA is active."
+		"en"		"[{olive}TFDB{default}] {red}Guardian mode unavailable{default} - FFA is active."
 	}
 	
 	"Guardian_BotJoined"
 	{
-		"en"		"[{olive}TFDB{default}] {red}Guardian disabled{default} — a bot joined the server."
+		"en"		"[{olive}TFDB{default}] {red}Guardian disabled{default} - a bot joined the server."
 	}
 
 	// ---- Anti-Cheat subplugin phrases ----
@@ -1023,7 +1023,7 @@
 
 	"PvB_ClassVote_NoVotes"
 	{
-		"en"		"[{olive}TFDB{default}] No votes cast. Vote cancelled — bot state unchanged."
+		"en"		"[{olive}TFDB{default}] No votes cast. Vote cancelled - bot state unchanged."
 	}
 
 	"PvB_ClassVote_Result"
@@ -1109,12 +1109,12 @@
 
 	"DeathMatch_Solo_Not_Possible_Last_Alive"
 	{
-		"en"		"[{olive}TFDB{default}] {darkmagenta}Solo{default} can {red}not{default} be enabled — you are the last player alive."
+		"en"		"[{olive}TFDB{default}] {darkmagenta}Solo{default} can {red}not{default} be enabled - you are the last player alive."
 	}
 
 	"DeathMatch_Solo_Not_Possible_No_Teammates"
 	{
-		"en"		"[{olive}TFDB{default}] Your {darkmagenta}solo{default} was {red}disabled{default} — no alive teammates."
+		"en"		"[{olive}TFDB{default}] Your {darkmagenta}solo{default} was {red}disabled{default} - no alive teammates."
 	}
 
 

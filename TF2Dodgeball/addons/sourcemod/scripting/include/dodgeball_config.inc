@@ -162,17 +162,17 @@ void PopulateSpawnPoints()
 	// Spawn-point failures are NON-FATAL: admins can load non-TFDB maps with
 	// tf_dodgeball_enabled=1 without taking down the entire plugin. Rockets
 	// just won't spawn (downstream code already guards on zero counts).
-	// LogMessage (not LogError) — plugin may run on non-dodgeball maps where
+	// LogMessage (not LogError) - plugin may run on non-dodgeball maps where
 	// missing TFDB spawn entities is an expected condition, not a configuration
 	// error. LogError would trigger false alarms in monitoring dashboards.
 	if (SpawnPointsRedCount == 0 && SpawnPointsBluCount == 0)
 	{
-		LogMessage("[TFDB] No 'info_target' entities found on this map — rocket spawning disabled for this map.");
+		LogMessage("[TFDB] No 'info_target' entities found on this map - rocket spawning disabled for this map.");
 		return;
 	}
 
-	if (SpawnPointsRedCount == 0) LogMessage("[TFDB] No RED spawn points found on this map — rockets won't spawn for RED.");
-	if (SpawnPointsBluCount == 0) LogMessage("[TFDB] No BLU spawn points found on this map — rockets won't spawn for BLU.");
+	if (SpawnPointsRedCount == 0) LogMessage("[TFDB] No RED spawn points found on this map - rockets won't spawn for RED.");
+	if (SpawnPointsBluCount == 0) LogMessage("[TFDB] No BLU spawn points found on this map - rockets won't spawn for BLU.");
 }
 
 /**
@@ -383,7 +383,7 @@ void ExecuteCommands(DataPack dataPack, int rocketClass, int rocket, int owner, 
  * Loads general settings, rocket classes, and spawner classes.
  *
  * IMPORTANT: per-map cfgs (`tfdb_mapname.cfg`) ADD to and override the classes
- * loaded from `general.cfg` — they do NOT replace them. Wiping state here
+ * loaded from `general.cfg` - they do NOT replace them. Wiping state here
  * between `general.cfg` and `mapname.cfg` parses would leave the server with
  * zero classes on maps whose cfg only overrides spawners or a subset.
  *
@@ -401,7 +401,7 @@ void ParseConfigurations(char[] configFile = "general.cfg")
 	if (!FileExists(path, true))
 	{
 		// Per-map cfgs are optional. general.cfg missing will be caught downstream
-		// by "no rocket classes defined" — but we log a hint so admins aren't lost.
+		// by "no rocket classes defined" - but we log a hint so admins aren't lost.
 		LogMessage("[TFDB] Config file not found, skipping: %s", path);
 		return;
 	}
@@ -623,7 +623,7 @@ void ParseClasses(KeyValues config)
 		// Per-class crit glow particle override per team. Empty string = use the
 		// engine default for that team (red/blue/neutral; see UpdateCritGlow).
 		// Particle name MUST exist in the ParticleEffectNames string table or it
-		// renders nothing — use stock TF2 particle names.
+		// renders nothing - use stock TF2 particle names.
 		OverlayRocketString(config, "crit glow particle red", RocketClassCritGlowParticleRed[index], 32);
 		OverlayRocketString(config, "crit glow particle blue", RocketClassCritGlowParticleBlue[index], 32);
 		OverlayRocketString(config, "crit glow particle neutral", RocketClassCritGlowParticleNeutral[index], 32);

@@ -3,7 +3,7 @@
 #endif
 #define _tfdb_included
 
-/** API version — bumped when the native surface changes. Subplugins can call
+/** API version - bumped when the native surface changes. Subplugins can call
  *  TFDB_GetVersion() at AskPluginLoad2 to verify compatibility. */
 #define TFDB_API_VERSION 2
 
@@ -12,7 +12,7 @@
 //   Timer rate vs OnGameFrame:
 //   SourceMod's TimerSys.cpp defines TIMER_MIN_ACCURACY = 0.1 (seconds).
 //   The timer processing loop (RunFrame) only fires every ~0.1s regardless of
-//   the interval passed to CreateTimer — so the logic timer runs at ~10Hz.
+//   the interval passed to CreateTimer - so the logic timer runs at ~10Hz.
 //   The actual fire interval is NOT exactly 0.1s: it depends on tickrate since
 //   0.1s must be rounded up to the next tick boundary (e.g. 7 ticks on 66-tick
 //   = 0.1061s, 13 ticks on 128-tick = 0.1016s).
@@ -20,7 +20,7 @@
 //   OnGameFrame fires every server tick (~66Hz on 66-tick, ~128Hz on 128-tick).
 //   We use it for smooth per-frame homing. Turn rate and elevation values in the
 //   config are calibrated as "amount per 0.1s" for backwards compatibility.
-//   Per-frame scaling uses GetTickInterval() directly — no derived magic numbers.
+//   Per-frame scaling uses GetTickInterval() directly - no derived magic numbers.
 //
 #define FPS_LOGIC_INTERVAL      0.1
 
@@ -810,7 +810,7 @@ native void TFDB_GetRocketClassCritGlowParticle(int iClass, int iTeam, char[] st
  *                   and revert to the engine default for that team.
  *
  * Particle name MUST exist in the ParticleEffectNames string table or it renders
- * nothing. Takes effect on the NEXT rocket spawn — existing rockets keep their
+ * nothing. Takes effect on the NEXT rocket spawn - existing rockets keep their
  * spawn-time particle.
  */
 native void TFDB_SetRocketClassCritGlowParticle(int iClass, int iTeam, const char[] strBuffer);

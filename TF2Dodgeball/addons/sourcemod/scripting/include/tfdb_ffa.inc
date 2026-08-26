@@ -6,7 +6,7 @@
 /**
  * Returns whether FFA mode is currently active.
  *
- * Used by Guardian / PvB / DeathMatch to refuse to coexist with FFA — FFA flips
+ * Used by Guardian / PvB / DeathMatch to refuse to coexist with FFA - FFA flips
  * rocket teams to neutral which breaks the team-vs-team semantics those modes
  * assume.
  *

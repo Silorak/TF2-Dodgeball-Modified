@@ -4,7 +4,7 @@
 #define _tfdb_clientcheck_included
 
 /**
- * tfdb_clientcheck.inc — single source of truth for client-state predicates.
+ * tfdb_clientcheck.inc - single source of truth for client-state predicates.
  *
  * The plugin tree had ~131 IsClientInGame, 75 team-checks, 66 IsFakeClient,
  * and 4 BROKEN IsClientObserver calls scattered across 14 files. This include
@@ -16,7 +16,7 @@
  * they're not yet alive). That confused multiple branches in PvB before
  * 2026-04-24. Use `TFDB_IsSpectator(c)` here, which checks team explicitly.
  *
- * All helpers are `stock` — they inline at compile time; zero runtime cost.
+ * All helpers are `stock` - they inline at compile time; zero runtime cost.
  */
 
 #include <sourcemod>
@@ -62,7 +62,7 @@ stock bool TFDB_IsRealHumanAlive(int client)
 }
 
 /**
- * True spectator — team-based check, NOT observer-mode based.
+ * True spectator - team-based check, NOT observer-mode based.
  *
  * Use for: "is this client on the spectator team?" THE CORRECT CHECK.
  * Replaces: `IsClientObserver(c)` everywhere it was being misused
@@ -75,7 +75,7 @@ stock bool TFDB_IsSpectator(int client)
 }
 
 /**
- * In-game bot (fake client) that's actually playable — excludes replay/SourceTV.
+ * In-game bot (fake client) that's actually playable - excludes replay/SourceTV.
  *
  * Use for: PvB bot targeting, debug-states mode bot iteration, any code that
  * needs to find "the bot" rather than just "any non-human client."
@@ -88,7 +88,7 @@ stock bool TFDB_IsLiveBot(int client)
 
 /**
  * Hot-loop variant of TFDB_IsRealHumanPlaying. Skips IsClientReplay and
- * IsClientSourceTV checks — use ONLY inside per-tick OnGameFrame loops where
+ * IsClientSourceTV checks - use ONLY inside per-tick OnGameFrame loops where
  * you can guarantee replay/SourceTV bots can't reach the code path.
  *
  * Saves two function calls per client per tick. Negligible per-call but

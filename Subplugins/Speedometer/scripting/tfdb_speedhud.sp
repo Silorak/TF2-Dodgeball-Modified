@@ -120,7 +120,7 @@ public void OnClientCookiesCached(int client)
 
 public Action Command_ToggleHud(int client, int args)
 {
-	// Per-client toggle — must reject server console (no cookie/state slot)
+	// Per-client toggle - must reject server console (no cookie/state slot)
 	// AND fake clients (a bot somehow invoking this would write to a slot
 	// it can't observe).
 	if (client == 0 || !IsClientInGame(client) || IsFakeClient(client))
