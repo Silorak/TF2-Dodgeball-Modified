@@ -19,27 +19,22 @@ public void Frame_EnsureHoneypotNonSolid(int entityRef)
     EnsureHoneypotNonSolid(honeypotEntity);
 }
 
-stock bool IsHoneypotOverlappingPlayerAtPos(float pos[3], int client)
+stock bool IsHoneypotOverlappingPlayerAtPos(float pos[3], int client, const float feetOrigin[3])
 {
     if (!IsValidClientEx(client, true)) {
         return false;
     }
 
+    // Standard TF2 player hull (was probed via 4 HasEntProp per call; players
+    // are always the same hull in practice, and this function is on the
+    // per-honeypot-per-tick cleanup path - review F5).
     float playerOrigin[3];
-    GetClientAbsOrigin(client, playerOrigin);
+    playerOrigin[0] = feetOrigin[0];
+    playerOrigin[1] = feetOrigin[1];
+    playerOrigin[2] = feetOrigin[2];
 
     float playerMins[3] = {-24.0, -24.0, 0.0};
     float playerMaxs[3] = {24.0, 24.0, 82.0};
-    if (HasEntProp(client, Prop_Send, "m_vecMins")) {
-        GetEntPropVector(client, Prop_Send, "m_vecMins", playerMins);
-    } else if (HasEntProp(client, Prop_Data, "m_vecMins")) {
-        GetEntPropVector(client, Prop_Data, "m_vecMins", playerMins);
-    }
-    if (HasEntProp(client, Prop_Send, "m_vecMaxs")) {
-        GetEntPropVector(client, Prop_Send, "m_vecMaxs", playerMaxs);
-    } else if (HasEntProp(client, Prop_Data, "m_vecMaxs")) {
-        GetEntPropVector(client, Prop_Data, "m_vecMaxs", playerMaxs);
-    }
 
     float safetyPad = 6.0;
     float plyMin[3], plyMax[3];
@@ -70,7 +65,9 @@ stock bool IsHoneypotSpawnClearOfPlayers(float pos[3])
         if (!IsValidClientEx(i, true)) {
             continue;
         }
-        if (IsHoneypotOverlappingPlayerAtPos(pos, i)) {
+        float feet[3];
+        GetClientAbsOrigin(i, feet);
+        if (IsHoneypotOverlappingPlayerAtPos(pos, i, feet)) {
             return false;
         }
     }
@@ -88,12 +85,11 @@ stock bool ShouldCleanupHoneypotForNearbyPlayers(float hpPos[3])
             continue;
         }
 
-        if (IsHoneypotOverlappingPlayerAtPos(hpPos, i)) {
-            return true;
-        }
-
         float feet[3];
         GetClientAbsOrigin(i, feet);
+        if (IsHoneypotOverlappingPlayerAtPos(hpPos, i, feet)) {
+            return true;
+        }
         float center[3];
         center[0] = feet[0];
         center[1] = feet[1];
@@ -414,6 +410,10 @@ public void OnGameFrame() {
         }
     }
 
+    // Entry-cross detection needs at least one real rocket; with zero rockets
+    // every client would pay 4 eye/angle natives only to skip per candidate
+    // (review F10).
+    if (realRocketCount > 0)
     for (int client = 1; client <= MaxClients; client++) {
         if (!IsClientInGame(client) || !IsPlayerAlive(client)) continue;
         float eye[3], angles[3], fwd[3];
@@ -782,7 +782,7 @@ public void CreateInvisibleHoneypotForTarget(int realRocketEntity, int target) {
     
     // Much lighter cleanup - just in case any stragglers appear
     // Schedule cleanup
-    g_Honeypots[honeypotIndex].cleanupTimer = CreateTimer(g_hHoneypotLifetime.FloatValue, CleanupHoneypotTimer, honeypotIndex);
+    g_Honeypots[honeypotIndex].cleanupTimer = CreateTimer(g_hHoneypotLifetime.FloatValue, CleanupHoneypotTimer, honeypotIndex, TIMER_FLAG_NO_MAPCHANGE);
     
     // Single cleanup pass on next frame just in case
     RequestFrame(Frame_KillInitialParticles, EntIndexToEntRef(honeypotEntity));
@@ -828,11 +828,10 @@ public void SetupHoneypotProperties(int honeypotEntity, int target, int realRock
     SetEntPropEnt(honeypotEntity, Prop_Send, "m_hOwnerEntity", target);
     SetEntPropEnt(honeypotEntity, Prop_Send, "m_hOriginalLauncher", weapon == -1 ? honeypotEntity : weapon);
     SetEntPropEnt(honeypotEntity, Prop_Send, "m_hLauncher", weapon == -1 ? honeypotEntity : weapon);
-    SetEntProp(honeypotEntity, Prop_Data, "m_takedamage", 1);
-    
-    float damage = 0.0;
-    SetEntDataFloat(honeypotEntity, FindSendPropInfo("CTFProjectile_Rocket", "m_iDeflected") + 4, damage, true);
- 
+    // (review F18) removed: an early m_takedamage=1 write superseded below,
+    // and a raw FindSendPropInfo+4 offset write that assumed m_flDamage layout;
+    // the named-prop writes below cover both.
+
     if (HasEntProp(honeypotEntity, Prop_Send, "m_hRocketTrail")) {
         SetEntPropEnt(honeypotEntity, Prop_Send, "m_hRocketTrail", -1);
     }

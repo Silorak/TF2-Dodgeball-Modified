@@ -13,6 +13,9 @@
 public Action Hook_NormalSound(int clients[MAXPLAYERS], int &numClients, char sample[PLATFORM_MAX_PATH], 
                                 int &entity, int &channel, float &volume, int &level, int &pitch, int &flags,
                                 char soundEntry[PLATFORM_MAX_PATH], int &seed) {
+    // Every EmitSound on the server passes here; skip all work when idle.
+    if (!g_HoneypotsActive && g_HoneypotCount == 0) return Plugin_Continue;
+
     // Check if this sound is from a honeypot
     if (entity > MaxClients) {
         if (IsSuppressedHoneypotEntity(entity)) {
@@ -42,20 +45,25 @@ public Action Hook_NormalSound(int clients[MAXPLAYERS], int &numClients, char sa
     return Plugin_Continue;
 }
 
-public void OnParticleSpawn(const char[] output, int caller, int activator, float delay) {
-}
+
+
+// Resolved once: different TempEntity types name the entity index differently.
+// Probing TE_IsValidProp on every broadcast was 1-3 wasted natives per TE.
+static const char g_TEEntityProps[][] = { "entindex", "m_nEntIndex", "m_hEntity" };
 
 public Action Hook_BlockParticleEffects(const char[] te_name, const int[] Players, int numClients, float delay)
 {
+    // Nothing to filter when no honeypot is live or suppressing visuals.
+    if (!g_HoneypotsActive && g_HoneypotCount == 0) return Plugin_Continue;
+
     // --- Try to get the entity index (different TempEntity types use different property names) ---
     int entity = -1;
 
-    if (TE_IsValidProp("entindex")) {
-        entity = TE_ReadNum("entindex");
-    } else if (TE_IsValidProp("m_nEntIndex")) {
-        entity = TE_ReadNum("m_nEntIndex");
-    } else if (TE_IsValidProp("m_hEntity")) {
-        entity = TE_ReadNum("m_hEntity");
+    for (int p = 0; p < sizeof(g_TEEntityProps); p++) {
+        if (TE_IsValidProp(g_TEEntityProps[p])) {
+            entity = TE_ReadNum(g_TEEntityProps[p]);
+            break;
+        }
     }
 
     if (entity > MaxClients && IsValidEntity(entity))
@@ -144,33 +152,18 @@ public Action OnHoneypotSetTransmit(int entity, int client)
     return Plugin_Handled;
 }
 
-public Action OnPlayerAttack2(int client, const char[] command, int argc) {
-    if (!g_hEnabled.BoolValue || !g_HoneypotsActive) return Plugin_Continue;
-    if (!IsValidClientEx(client, true)) return Plugin_Continue;
-
-    // Record last attack2 time for attribution
-    g_Clients[client].lastAttack2Time = GetGameTime();
-    g_PressTimes[client][3] = g_PressTimes[client][2];
-    g_PressTimes[client][2] = g_PressTimes[client][1];
-    g_PressTimes[client][1] = g_PressTimes[client][0];
-    g_PressTimes[client][0] = g_Clients[client].lastAttack2Time;
-
-    // Check for flamethrower
-    int weapon = GetPlayerWeaponSlot(client, TFWeaponSlot_Primary);
-    if (weapon == -1) return Plugin_Continue;
-
-    char weaponClass[32];
-    GetEntityClassname(weapon, weaponClass, sizeof(weaponClass));
-    if (StrContains(weaponClass, "flamethrower", false) == -1) return Plugin_Continue;
-
-    return Plugin_Continue;
-}
-
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3],
                              int &weapon, int &subtype, int &cmdnum, int &tickcount, int &seed, int mouse[2])
 {
     // Track previous button state so we only log when the key is *pressed* (not held)
     static int lastButtons[MAXPLAYERS + 1];
+
+    // AC disabled: clear the press-edge state and skip all bookkeeping
+    // (~2,100 calls/s at 32p pay one bool compare instead of the full chain).
+    if (!g_hEnabled.BoolValue) {
+        lastButtons[client] = 0;
+        return Plugin_Continue;
+    }
 
     if (!IsClientInGame(client) || !IsPlayerAlive(client))
         return Plugin_Continue;
@@ -207,12 +200,15 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
         GetAngleVectors(ang, fwd, NULL_VECTOR, NULL_VECTOR);
         NormalizeVector(fwd, fwd);
         float bestDist = -1.0;
-        int maxEnt = GetMaxEntities();
-        for (int e = MaxClients + 1; e < maxEnt; e++) {
-            if (!IsValidEntity(e)) continue;
-            char cls[64];
-            if (!GetEntityClassname(e, cls, sizeof(cls))) continue;
-            if (!StrEqual(cls, "tf_projectile_rocket")) continue;
+        // Registry iteration: O(rockets) instead of an O(GetMaxEntities)
+        // classname scan per airblast press. Honeypots are not in the
+        // registry, so they can never satisfy this check.
+        int rocketCount = TFDB_GetRocketCount();
+        for (int i = 0; i < MAX_ROCKETS && rocketCount > 0; i++) {
+            if (!TFDB_IsValidRocket(i)) continue;
+            rocketCount--;
+            int e = TFDB_GetRocketEntity(i);
+            if (e == -1 || !IsValidEntity(e)) continue;
             float rkPos[3], toRK[3];
             GetEntPropVector(e, Prop_Send, "m_vecOrigin", rkPos);
             VectorSubtract(rkPos, eye, toRK);
@@ -234,12 +230,6 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
     lastButtons[client] = buttons;
     g_Clients[client].holdingAttack2 = (buttons & IN_ATTACK2) != 0;
     return Plugin_Continue;
-}
-
-public void OnEntityCreated(int entity, const char[] classname) {
-    if (!g_hEnabled.BoolValue || g_HoneypotCount <= 0) {
-        return;
-    }
 }
 
 public Action OnHoneypotPreSpawn(int honeypotEntity)
@@ -349,9 +339,6 @@ public Action OnRealRocketDamaged(int victim, int &attacker, int &inflictor, flo
 
 public Action OnHoneypotPreventTouch(int honeypotEntity, int other) {
     SuppressHoneypotEffects(honeypotEntity);
-    if (other > 0 && other <= MaxClients) {
-        return Plugin_Handled;
-    }
     return Plugin_Handled;
 }
 
@@ -501,14 +488,17 @@ public void OnPlayerDeath(Event event, const char[] name, bool dontBroadcast) {
 
 public void OnRoundStart(Event event, const char[] name, bool dontBroadcast) {
     g_HoneypotsActive = true;
-    g_HoneypotCount = 0;
     
+    // Cleanup BEFORE resetting the count: CleanupHoneypot decrements
+    // g_HoneypotCount unconditionally, so zeroing first drove the counter
+    // negative and defeated the concurrent-honeypot cap (review F4).
     for (int i = 0; i < MAX_ROCKETS; i++) {
         if (g_Honeypots[i].isActive) {
             CleanupHoneypot(i);
         }
         g_PendingSpawns[i].active = false;
     }
+    g_HoneypotCount = 0;
     
     // Start SourceTV recording
     if (g_hSourceTVEnable.BoolValue && g_hSourceTVAutoRecord.BoolValue) {
@@ -531,11 +521,53 @@ public void OnRoundEnd(Event event, const char[] name, bool dontBroadcast) {
         CreateTimer(2.0, Timer_CloseSourceTVBookmarkSession, _, TIMER_FLAG_NO_MAPCHANGE);
     }
 }
+public void OnMapEnd() {
+    // Changelevel without teamplay_round_win leaves stale slots whose raw
+    // entity indices the next map reuses; wipe all state at the map boundary
+    // so no cleanup path can touch a reused index (review F3).
+    for (int i = 0; i < MAX_ROCKETS; i++) {
+        g_Honeypots[i].isActive = false;
+        g_Honeypots[i].visualActive = false;
+        g_Honeypots[i].entity = -1;
+        g_Honeypots[i].visualEntity = -1;
+        g_Honeypots[i].target = -1;
+        g_Honeypots[i].realRocketEntity = -1;
+        if (g_Honeypots[i].cleanupTimer != null) {
+            KillTimer(g_Honeypots[i].cleanupTimer);
+            g_Honeypots[i].cleanupTimer = null;
+        }
+        if (g_Honeypots[i].particleKillTimer != null) {
+            KillTimer(g_Honeypots[i].particleKillTimer);
+            g_Honeypots[i].particleKillTimer = null;
+        }
+        g_PendingSpawns[i].active = false;
+    }
+    g_HoneypotCount = 0;
+    g_HoneypotsActive = false;
+}
+
 
 public void OnClientDisconnect(int client) {
+    // Full per-slot reset (review F9): the next occupant of this slot must not
+    // inherit the previous player's aim history or detection state. A stale
+    // g_LastAngles pair produces one huge ghost "flick" sample on the first
+    // tick, which can mask one real cheat detection.
     g_Clients[client].honeypotDetections = 0;
     g_Clients[client].lastDetectionTime = 0.0;
     g_Clients[client].consecutiveDetections = 0;
+    g_Clients[client].lastAttack2Time = 0.0;
+    g_Clients[client].holdingAttack2 = false;
+    g_Clients[client].lastTargetedTime = 0.0;
+    g_Clients[client].detectionScore = 0.0;
+    g_Clients[client].lastPressRocketDist = -1.0;
+    g_LastAngles[client][0] = 0.0;
+    g_LastAngles[client][1] = 0.0;
+    for (int mi = 0; mi < 20; mi++) { g_MouseDegTimes[client][mi] = 0.0; g_MouseDegMag[client][mi] = 0.0; }
+    g_MouseDegCount[client] = 0;
+    g_LastRocketDist[client] = -1.0;
+    g_LastEntryCrossTime[client] = 0.0;
+    for (int pidx = 0; pidx < 4; pidx++) g_PressTimes[client][pidx] = 0.0;   // [MAXPLAYERS+1][4]
+    g_HpDebugDraw[client] = false;
     
     // Stop recording if all real players have left
     if (g_hSourceTVEnable.BoolValue && g_hSourceTVAutoRecord.BoolValue && !IsFakeClient(client)) {

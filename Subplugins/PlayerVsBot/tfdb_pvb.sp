@@ -449,6 +449,26 @@ float AimJitterUntil[MAXPLAYERS + 1];
 #define NAV_DRAW_MAX_RADIUS 10    // 21x21 = 441 cells; each is one probe + one beam
 #define NAV_DRAW_INTERVAL   0.4
 #define NAV_DRAW_HEIGHT     28.0  // beam height; tall enough to read at a glance, short enough not to curtain the view
+
+// Cached movement cvars (review-pvb F1: ProcessBotTick read 3 .FloatValue per
+// bot tick; at 32p/66t that is ~800-3200 native reads/s for constants). (review-pvb F1: ProcessBotTick read 3 .FloatValue per
+// bot tick; at 32p/66t that is ~800-3200 native reads/s for constants).
+float g_CachedAccel = 10.0;
+float g_CachedFriction = 4.0;
+float g_CachedStop = 100.0;
+
+void RefreshPvBMovementCvars()
+{
+    g_CachedAccel  = (g_cvAccelerate != null) ? g_cvAccelerate.FloatValue : 10.0;
+    g_CachedFriction = (g_cvFriction   != null) ? g_cvFriction.FloatValue   : 4.0;
+    g_CachedStop   = (g_cvStopspeed  != null) ? g_cvStopspeed.FloatValue  : 100.0;
+}
+
+public void OnPvBMovementCvarChanged(ConVar cvar, const char[] oldValue, const char[] newValue)
+{
+    RefreshPvBMovementCvars();
+}
+
 bool  NavDrawEnabled[MAXPLAYERS + 1];
 int   NavDrawRadius[MAXPLAYERS + 1];
 float NextNavDraw[MAXPLAYERS + 1];

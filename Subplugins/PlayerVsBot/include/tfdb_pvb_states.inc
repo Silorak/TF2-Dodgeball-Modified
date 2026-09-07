@@ -513,9 +513,9 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
         float maxSpeed = GetEntPropFloat(client, Prop_Data, "m_flMaxspeed");
         if (maxSpeed <= 0.0) maxSpeed = 300.0;
 
-        float svAccel  = (g_cvAccelerate != null) ? g_cvAccelerate.FloatValue : 10.0;
-        float svFric   = (g_cvFriction   != null) ? g_cvFriction.FloatValue   : 4.0;
-        float svStop   = (g_cvStopspeed  != null) ? g_cvStopspeed.FloatValue  : 100.0;
+        float svAccel  = g_CachedAccel;
+        float svFric   = g_CachedFriction;
+        float svStop   = g_CachedStop;
 
         float curX = actualVel[0], curY = actualVel[1];
         float curLen = SquareRoot(curX * curX + curY * curY);
@@ -571,6 +571,14 @@ Action ProcessBotTick(PvBCommandContext ctx, int &buttons, float vel[3], float a
         DebugLogBotTick(client, vel, angles, buttons);
         DebugDrawBotState(client, vel, angles);
     }
+
+    // Per-frame cache invalidation (review-pvb V1): the Cached* values are
+    // tick-scoped by contract. Without this reset the first tick latches
+    // enemy/threat/position for the bot's whole lifetime - state selection
+    // then runs on day-old data.
+    CachedTickPosValid[client] = false;
+    CachedFrameEnemyValid[client] = false;
+    CachedFrameThreatsValid[client] = false;
 
     return result;
 }

@@ -252,7 +252,15 @@ public void DeferredFFATeamBalance(DataPack pack)
 	int team = pack.ReadCell();
 	delete pack;
 
-	if (!FFAEnabled || !TFDB_GetRoundStarted()) return;
+	// Full guard, matching the synchronous path (review F2): the frame window
+	// can see a cvar flip or bot join that the original check did not see.
+	if (!FFAEnabled ||
+	    !CvarSwitchTeams.BoolValue ||
+	    (CvarDisableOnBot.BoolValue && BotCount) ||
+	    !TFDB_GetRoundStarted())
+	{
+		return;
+	}
 
 	int otherTeam = GetAnalogueTeam(team);
 

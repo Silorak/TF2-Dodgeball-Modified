@@ -219,11 +219,7 @@ public void OnPluginStart()
   AddTempEntHook("World Decal", Hook_BlockParticleEffects);
   AddTempEntHook("BeamFollow", Hook_BlockParticleEffects);
 
-  // CRITICAL: Hook entity outputs to block particle spawning
-  HookEntityOutput("info_particle_system", "OnUser1", OnParticleSpawn);
-  HookEntityOutput("info_particle_system", "OnUser2", OnParticleSpawn);
-  HookEntityOutput("info_particle_system", "OnUser3", OnParticleSpawn);
-  HookEntityOutput("info_particle_system", "OnUser4", OnParticleSpawn);
+  // CRITICAL: Hook entity outputs to block particle spawning;;;;
 
   for (int i = 0; i < MAX_ROCKETS; i++)
   {

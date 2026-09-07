@@ -94,6 +94,7 @@ public Action CmdPrintMessageClient(int client, int cmdArgs)
 	GetCmdArgString(CmdBuffer, sizeof(CmdBuffer));
 	
 	int length = BreakString(CmdBuffer, buffer, sizeof(buffer));
+	if (length == -1) return Plugin_Handled;   // no separator: avoid CmdBuffer[-1]
 	int target = StringToInt(buffer);
 	
 	TrimString(CmdBuffer[length]);

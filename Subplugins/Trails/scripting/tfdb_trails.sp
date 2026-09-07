@@ -305,8 +305,10 @@ public void OnPlayerTeam(Event event, char[] eventName, bool dontBroadcast)
 	{
 		for (int rocket = 0; rocket < MAX_ROCKETS; rocket++)
 		{
+			int trailClassIndex = TFDB_GetRocketClass(rocket);
 			if (!(TFDB_IsValidRocket(rocket) &&
-			    (RocketClassTrailFlags[TFDB_GetRocketClass(rocket)] & TrailFlag_ReplaceParticles))) continue;
+			    trailClassIndex >= 0 && trailClassIndex < RocketClassCount &&
+			    (RocketClassTrailFlags[trailClassIndex] & TrailFlag_ReplaceParticles))) continue;
 			
 			fakeEntity = EntRefToEntIndex(RocketFakeEntity[rocket]);
 			
@@ -411,8 +413,7 @@ public void TFDB_OnRocketCreated(int index, int entity)
 					SetVariantString("!activator");
 					AcceptEntityInput(trailEntity, "SetParent", fakeEntity, trailEntity);
 					
-					SetVariantString("trail");
-					AcceptEntityInput(trailEntity, "SetParentAttachment", fakeEntity, trailEntity);
+					AttachToRocketEmission(trailEntity, fakeEntity);
 					
 					AcceptEntityInput(trailEntity, "Start");
 				}
@@ -422,8 +423,7 @@ public void TFDB_OnRocketCreated(int index, int entity)
 				SetVariantString("!activator");
 				AcceptEntityInput(trailEntity, "SetParent", entity, trailEntity);
 				
-				SetVariantString("trail");
-				AcceptEntityInput(trailEntity, "SetParentAttachment", entity, trailEntity);
+				AttachToRocketEmission(trailEntity, entity);
 				
 				AcceptEntityInput(trailEntity, "Start");
 			}
@@ -478,8 +478,7 @@ public void TFDB_OnRocketCreated(int index, int entity)
 					SetVariantString("!activator");
 					AcceptEntityInput(spriteEntity, "SetParent", fakeEntity, spriteEntity);
 					
-					SetVariantString("trail");
-					AcceptEntityInput(spriteEntity, "SetParentAttachment", fakeEntity, spriteEntity);
+					AttachToRocketEmission(spriteEntity, fakeEntity);
 				}
 			}
 			else
@@ -487,8 +486,7 @@ public void TFDB_OnRocketCreated(int index, int entity)
 				SetVariantString("!activator");
 				AcceptEntityInput(spriteEntity, "SetParent", entity, spriteEntity);
 				
-				SetVariantString("trail");
-				AcceptEntityInput(spriteEntity, "SetParentAttachment", entity, spriteEntity);
+				AttachToRocketEmission(spriteEntity, entity);
 			}
 			
 			DispatchSpawn(spriteEntity);
@@ -784,7 +782,22 @@ stock int GetPrecachedGeneric(const char[] generic)
 
 // https://forums.alliedmods.net/showthread.php?t=75102
 
-stock void CreateTempParticle(const char[] particleName,
+stock // Parents an already-SetParent'ed effect/sprite entity to the rocket emission
+// attachment. Stock w_rocket.mdl names it "trail"; TFDB's notrail variant
+// renames the same attachment (identical transform) to "tdb" so the client's
+// C_TFBaseRocket::CreateTrails() LookupAttachment("trail") fails and no
+// engine trail is ever created - the whole point of that model. Custom class
+// models may lack either name; the entity then just follows parent origin.
+bool AttachToRocketEmission(int effectEntity, int parentEntity)
+{
+	char modelName[PLATFORM_MAX_PATH];
+	GetEntPropString(parentEntity, Prop_Data, "m_ModelName", modelName, sizeof(modelName));
+
+	SetVariantString((StrContains(modelName, "notrail") != -1) ? "tdb" : "trail");
+	return AcceptEntityInput(effectEntity, "SetParentAttachment", parentEntity, effectEntity);
+}
+
+void CreateTempParticle(const char[] particleName,
                               const float vecOrigin[3] = NULL_VECTOR,
                               const float vecStart[3] = NULL_VECTOR,
                               const float vecAngles[3] = NULL_VECTOR,

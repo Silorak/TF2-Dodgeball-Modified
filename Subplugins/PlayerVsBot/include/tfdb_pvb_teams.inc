@@ -43,6 +43,10 @@ public void OnPluginStart() {
     g_cvAccelerate = FindConVar("sv_accelerate");
     g_cvFriction   = FindConVar("sv_friction");
     g_cvStopspeed  = FindConVar("sv_stopspeed");
+    RefreshPvBMovementCvars();
+    g_cvAccelerate.AddChangeHook(OnPvBMovementCvarChanged);
+    g_cvFriction.AddChangeHook(OnPvBMovementCvarChanged);
+    g_cvStopspeed.AddChangeHook(OnPvBMovementCvarChanged);
 
     // Per-plugin log folder. Heatmap dumps + debug traces go here so they
     // don't pollute the shared addons/sourcemod/logs/ root. Mirrors the
@@ -128,6 +132,7 @@ public void OnPluginStart() {
     // Check if TFDB is already loaded (late load support)
     TFDBAvailable = LibraryExists("tfdb");
 }
+
 
 public void OnMapStart() {
     bool wasDebugStates = DebugStatesMode;  // Remember if we were in debug-states

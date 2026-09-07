@@ -34,6 +34,7 @@
 #define GUARDIAN_LOG_DIR     "logs/tfdb_guardian"
 #define GUARDIAN_LOG_FILE    "logs/tfdb_guardian/debug.log"
 #define GUARDIAN_SEL_FILE    "logs/tfdb_guardian/select.log"
+#define GUARDIAN_BTN_TAUNT 1000000   // taunt-key sentinel used in button masks
 
 // Resolved at plugin start via BuildPath - writes to addons/sourcemod/logs/
 char GUARDIAN_LOG[PLATFORM_MAX_PATH];
@@ -339,7 +340,7 @@ public void OnLibraryRemoved(const char[] name)
 
 public Action Listener_BlockGuardianCommands(int client, const char[] command, int argc)
 {
-	if (!guardianActive || client < 1 || client > MaxClients || !IsClientInGame(client) || client != guardianClient || !IsPlayerAlive(client))
+	if (!guardianActive || client != guardianClient || !IsClientInGame(client) || !IsPlayerAlive(client))
 	{
 		return Plugin_Continue;
 	}
@@ -1665,7 +1666,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 	int btn1 = guardianClasses[activeClassIndex].PrimaryAbility.Button;
 	int btn2 = guardianClasses[activeClassIndex].SecondaryAbility.Button;
 
-	if (btn1 > 0 && btn1 != 1000000)
+	if (btn1 > 0 && btn1 != GUARDIAN_BTN_TAUNT)
 	{
 		if ((currentButtons & btn1) && !(oldButtons & btn1))
 		{
@@ -1688,7 +1689,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 // G key - Taunt (detected via condition)
 public void TF2_OnConditionAdded(int client, TFCond condition)
 {
-	if (!guardianActive || !IsPlayerAlive(client) || !TFDB_GetRoundStarted()) return;
+	if (!guardianActive || client != guardianClient || !IsPlayerAlive(client) || !TFDB_GetRoundStarted()) return;
 
 	if (condition == TFCond_Taunting && client == guardianClient)
 	{
@@ -1698,7 +1699,7 @@ public void TF2_OnConditionAdded(int client, TFCond condition)
 		int btn1 = guardianClasses[activeClassIndex].PrimaryAbility.Button;
 		int btn2 = guardianClasses[activeClassIndex].SecondaryAbility.Button;
 
-		if (btn1 == 1000000 && !primaryActive && now >= primaryNextUseTime) ActivateAbility(guardianClasses[activeClassIndex].PrimaryAbility, 1);
+		if (btn1 == GUARDIAN_BTN_TAUNT && !primaryActive && now >= primaryNextUseTime) ActivateAbility(guardianClasses[activeClassIndex].PrimaryAbility, 1);
 		else if (btn2 == 1000000 && !secondaryActive && now >= secondaryNextUseTime) ActivateAbility(guardianClasses[activeClassIndex].SecondaryAbility, 2);
 	}
 }

@@ -214,6 +214,8 @@ public void TFDB_OnRocketCreated(int index, int entity)
 
 public Action OnTouch(int entity, int other)
 {
+	if (RocketClassCount == 0) return Plugin_Continue;   // feature unconfigured - skip the scan
+
 	int index = TFDB_FindRocketByEntity(entity);
 	
 	if (index == -1) return Plugin_Continue;

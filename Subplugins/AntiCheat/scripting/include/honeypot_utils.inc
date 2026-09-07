@@ -83,13 +83,14 @@ stock void SuppressHoneypotEffects(int entity, float duration = 0.35)
         return;
     }
 
-    float until = GetGameTime() + duration;
+    float now = GetGameTime();
+    float until = now + duration;
     int ref = IsValidEntity(entity) ? EntIndexToEntRef(entity) : INVALID_ENT_REFERENCE;
     int best = 0;
     float oldest = g_SuppressedHoneypotUntil[0];
 
     for (int i = 0; i < HONEYPOT_SUPPRESS_SLOTS; i++) {
-        if (g_SuppressedHoneypotUntil[i] <= GetGameTime()) {
+        if (g_SuppressedHoneypotUntil[i] <= now) {
             best = i;
             oldest = -1.0;
             break;

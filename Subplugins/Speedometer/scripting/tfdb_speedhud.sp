@@ -245,6 +245,10 @@ public Action DisplayHud(Handle timer)
 	int rocketCount = 0;
 	int topCount = 0;
 
+	// Feature status cannot change mid-map; resolve once instead of per rocket.
+	// GetFeatureStatus is a string-keyed share-system lookup.
+	bool rawSpeedAvailable = (GetFeatureStatus(FeatureType_Native, "TFDB_GetRocketRawMphSpeed") == FeatureStatus_Available);
+
 	for (int index = 0; index < MAX_ROCKETS; index++)
 	{
 		if (!TFDB_IsValidRocket(index)) continue;
@@ -252,7 +256,7 @@ public Action DisplayHud(Handle timer)
 
 		float speed = TFDB_GetRocketMphSpeed(index);
 		// Show uncapped MPH if available (keeps stacking past sv_maxvelocity)
-		if (GetFeatureStatus(FeatureType_Native, "TFDB_GetRocketRawMphSpeed") == FeatureStatus_Available)
+		if (rawSpeedAvailable)
 			speed = TFDB_GetRocketRawMphSpeed(index);
 		int insertAt = topCount;
 		for (int rank = 0; rank < topCount; rank++)

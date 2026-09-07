@@ -31,7 +31,6 @@ public Plugin myinfo =
     url         = PLUGIN_URL
 };
 
-#define SOUND_RESPAWN ")ambient/alarms/doomsday_lift_alarm.wav"
 
 // AnalogueTeam: TFTeam_Red (2) ^ 1 = 3 (Blue), TFTeam_Blue (3) ^ 1 = 2 (Red)
 #define AnalogueTeam(%1) ((%1) ^ 1)
@@ -270,6 +269,12 @@ void SetNERActive(bool active)
 
         LogMessage("[DM-NER] active - game-rules detours engaged, roster of %d captured",
             CountLifecycleRoster());
+
+        // Instant bring-in: if the round is already live, roster members who
+        // have not played this round spawn on the very next frame instead of
+        // waiting up to a full 2s sweep tick.
+        if (RoundStarted)
+            RequestFrame(Frame_BenchRespawnBurst);
     }
     else
     {
@@ -313,7 +318,6 @@ public void OnConfigsExecuted()
     if (CvarForceNERStartMap.BoolValue && CanActivateDeathMatch())
         SetNERActive(true);
 
-    PrecacheSound(SOUND_RESPAWN, true);
 
     RoundStarted = false;
     for (int c = 0; c <= MaxClients; c++) ClientRespawnTime[c] = 0.0;
@@ -519,12 +523,16 @@ public void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
         SetNERActive(false);
         CPrintToChatAll("%t", "DeathMatch_NER_Disabled_Conflict");
     }
+    else if (NERActive)
+    {
+        // NER was armed before this round started (e.g. !dm during the
+        // previous intermission): bring not-yet-played roster members in on
+        // the next frame rather than the next sweep tick.
+        RequestFrame(Frame_BenchRespawnBurst);
+    }
 
     char listBuffer[512];
     char nameBuffer[64];
-
-    int redCount  = GetTeamClientCount(view_as<int>(TFTeam_Red));
-    int blueCount = GetTeamClientCount(view_as<int>(TFTeam_Blue));
 
     for (int client = 1; client <= MaxClients; client++)
     {
@@ -533,8 +541,18 @@ public void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
         if (IsSpectatorTeam(client)) continue;
 
         // Keep one non-soloer per team alive so the round isn't empty.
+        // (Review F2: the old expression "-teamCount" was always negative, so
+        // this branch was dead and every soloer was force-un-soloed.)
         int clientTeam = GetClientTeam(client);
-        int remaining  = (clientTeam == view_as<int>(TFTeam_Red)) ? -redCount : -blueCount;
+        int remaining  = 0;
+        for (int other = 1; other <= MaxClients; other++)
+        {
+            if (other == client)                continue;
+            if (!IsAliveInGame(other))          continue;
+            if (SoloEnabled[other])             continue;
+            if (GetClientTeam(other) != clientTeam) continue;
+            remaining++;
+        }
 
         if (remaining > 0)
         {
@@ -701,6 +719,23 @@ public Action Timer_BenchSweep(Handle timer)
             roster, spawned, aliveR, aliveB);
     }
 
+    RunBenchRespawnPass("bench sweep");
+    return Plugin_Continue;
+}
+
+// Single respawn pass over the roster: everyone not yet in play this round
+// (SpawnedThisRound false) gets force-respawned with protection. Shared by
+// the 2s bench sweep (backstop) and the immediate activation/round-start
+// bursts so nobody waits up to a full sweep tick just for the clock.
+//
+// NOTE: no IsPlayerAlive check. A benched arena joiner has m_lifeState=0
+// with no pawn - IsPlayerAlive reads TRUE forever (live-proven 14:00 &
+// 14:08: every alive-gated filter skipped the benched bot).
+// SpawnedThisRound is the sole discriminator; a forced respawn sets the
+// correct state, and if they were genuinely mid-spawn the engine no-ops
+// harmlessly.
+void RunBenchRespawnPass(const char[] source)
+{
     for (int client = 1; client <= MaxClients; client++)
     {
         if (!NERLifecycle[client])       continue;
@@ -709,19 +744,22 @@ public Action Timer_BenchSweep(Handle timer)
         if (SpawnedThisRound[client])    continue;   // played this round - kills stick
         if (IsSpectatorTeam(client))     continue;
 
-        // NOTE: no IsPlayerAlive check. A benched arena joiner has
-        // m_lifeState=0 with no pawn - IsPlayerAlive reads TRUE forever
-        // (live-proven 14:00 & 14:08: every alive-gated filter skipped the
-        // benched bot). SpawnedThisRound is the sole discriminator; a forced
-        // respawn sets the correct state, and if they were genuinely mid-
-        // spawn the engine no-ops harmlessly.
         TF2_RespawnPlayer(client);
         ClientRespawnTime[client] = GetGameTime();
         ApplyRespawnShieldVisual(client);
         if (CvarVerbose.BoolValue)
-                    LogMessage("[DM-NER] bench sweep: %N entered play", client);
+                    LogMessage("[DM-NER] %s: %N entered play", source, client);
     }
-    return Plugin_Continue;
+}
+
+// One-frame-delayed burst: commands and round events run inside engine
+// callbacks; TF2_RespawnPlayer is reliable here but one frame of settle is
+// free insurance. Fires the shared pass immediately instead of waiting for
+// the next 2s sweep tick.
+public void Frame_BenchRespawnBurst(any unused)
+{
+    if (!NERActive || !RoundStarted) return;
+    RunBenchRespawnPass("activation burst");
 }
 
 public void Event_PlayerDeath(Event event, const char[] name, bool dontBroadcast)

@@ -323,7 +323,7 @@ static bool IsAutoAirblastPattern(int client) {
     }
     if (t2 > 0.0) {
         float d12 = t1 - t2;
-        if (d12 >= min && d12 <= max && (t1 <= 0.0 || AbsFloat((t0 - t1) - d12) <= jit)) count++;
+        if (d12 >= min && d12 <= max && AbsFloat((t0 - t1) - d12) <= jit) count++;
     }
     if (t3 > 0.0) {
         float d23 = t2 - t3;
@@ -347,12 +347,15 @@ static bool IsLegitAirblastContext(int client, int honeypotEntity) {
     float legitDot = g_hLegitDot.FloatValue;
     float legitRange = g_hLegitRange.FloatValue;
 
-    int maxEntities = GetMaxEntities();
-    for (int entity = MaxClients + 1; entity < maxEntities; entity++) {
-        if (!IsValidEntity(entity) || entity == honeypotEntity) continue;
-        char classname[64];
-        if (!GetEntityClassname(entity, classname, sizeof(classname))) continue;
-        if (!StrEqual(classname, "tf_projectile_rocket")) continue;
+    // Registry iteration (F1/F15): O(rockets) not O(GetMaxEntities); honeypots
+    // are not in the registry so another honeypot can never count as a "real"
+    // rocket excuse.
+    int rocketCount = TFDB_GetRocketCount();
+    for (int ri = 0; ri < MAX_ROCKETS && rocketCount > 0; ri++) {
+        if (!TFDB_IsValidRocket(ri)) continue;
+        rocketCount--;
+        int entity = TFDB_GetRocketEntity(ri);
+        if (entity == -1 || !IsValidEntity(entity) || entity == honeypotEntity) continue;
 
         float rkPos[3], toRK[3];
         GetEntPropVector(entity, Prop_Send, "m_vecOrigin", rkPos);
