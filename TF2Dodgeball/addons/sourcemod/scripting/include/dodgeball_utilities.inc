@@ -143,7 +143,7 @@ void RecountAlive()
 	{
 		if (!IsClientInGame(i) || !IsPlayerAlive(i)) continue;
 		int t = GetClientTeam(i);
-		if (t == 2 || t == 3) g_AliveCount[t]++;
+		if (t == view_as<int>(TFTeam_Red) || t == view_as<int>(TFTeam_Blue)) g_AliveCount[t]++;
 	}
 	PlayerCount = g_AliveCount[2] + g_AliveCount[3];
 }
@@ -159,18 +159,6 @@ void RecountAlive()
 stock bool BothTeamsPlaying()
 {
 	return (g_AliveCount[2] > 0 && g_AliveCount[3] > 0);
-
-	// --- DORMANT: original linear-scan implementation. Kept for reference /
-	// quick revert if the cached counters ever drift. ---
-	// bool redFound, bluFound;
-	// for (int client = 1; client <= MaxClients; client++)
-	// {
-	// 	if (!IsValidClientEx(client, true)) continue;
-	// 	int team = GetClientTeam(client);
-	// 	if (team == view_as<int>(TFTeam_Red)) redFound = true;
-	// 	if (team == view_as<int>(TFTeam_Blue)) bluFound = true;
-	// }
-	// return redFound && bluFound;
 }
 
 /**
@@ -184,14 +172,6 @@ stock bool BothTeamsPlaying()
 stock int CountAlivePlayers()
 {
 	return g_AliveCount[2] + g_AliveCount[3];
-
-	// --- DORMANT: original linear-scan implementation. ---
-	// int count = 0;
-	// for (int client = 1; client <= MaxClients; client++)
-	// {
-	// 	if (IsValidClientEx(client, true)) count++;
-	// }
-	// return count;
 }
 
 /**
@@ -492,7 +472,11 @@ stock void PrecacheModelEx(char[] fileName, bool preload = false, bool addToDown
 		char buffer[PLATFORM_MAX_PATH];
 		stream.ReadLine(buffer, sizeof(buffer));
 		CleanString(buffer);
-		
+
+		// .res files authored on Windows list paths with backslashes; those
+		// fail FileExists on Linux and silently skip the download table.
+		ReplaceString(buffer, sizeof(buffer), "\\", "/");
+
 		if (!FileExists(buffer, true)) continue;
 		
 		if (StrContains(buffer, ".vmt", false) != -1)      PrecacheDecal(buffer, true);

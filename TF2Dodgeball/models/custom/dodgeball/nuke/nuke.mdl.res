@@ -1,0 +1,12 @@
+materials/models/custom/dodgeball/nuke/nuke_blu.vmt
+materials/models/custom/dodgeball/nuke/nuke_blu.vtf
+materials/models/custom/dodgeball/nuke/nuke_red.vmt
+materials/models/custom/dodgeball/nuke/nuke_red.vtf
+materials/models/custom/dodgeball/nuke/nuke_neutral.vmt
+materials/models/custom/dodgeball/nuke/nuke_neutral.vtf
+models/custom/dodgeball/nuke/nuke.dx80.vtx
+models/custom/dodgeball/nuke/nuke.dx90.vtx
+models/custom/dodgeball/nuke/nuke.mdl
+models/custom/dodgeball/nuke/nuke.phy
+models/custom/dodgeball/nuke/nuke.sw.vtx
+models/custom/dodgeball/nuke/nuke.vvd

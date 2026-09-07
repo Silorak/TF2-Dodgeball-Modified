@@ -269,6 +269,9 @@ void UpdateCritGlow(int index, int entity, int team)
 {
 	int rocketClass = RocketClass[index];
 	int stack = RocketClassCritGlowStack[rocketClass];
+	// 0 = glow disabled entirely (crit damage is applied independently in
+	// CalculateRocketDamage); clamp only the upper bound.
+	if (stack == 0) return;
 	if (stack < 1)              stack = 1;
 	if (stack > MAX_CRIT_STACK) stack = MAX_CRIT_STACK;
 
@@ -322,11 +325,18 @@ void UpdateCritGlow(int index, int entity, int team)
 		RocketCritGlow[index][i] = INVALID_ENT_REFERENCE;
 	}
 
-	// Spawn N parented particles at the rocket's "trail" attachment (or origin
-	// fallback). All emit from the same spot → denser/brighter glow.
+	// Spawn N parented particles at the rocket's emission attachment (or origin
+	// fallback). All emit from the same spot → denser/brighter glow. Stock
+	// w_rocket names it "trail"; the notrail variant renames it "tdb" so the
+	// client's CreateTrails() never fires (see docs: no-stack model).
+	char rocketModel[PLATFORM_MAX_PATH];
+	GetEntPropString(entity, Prop_Data, "m_ModelName", rocketModel, sizeof(rocketModel));
+	char anchor[16] = "trail";
+	if (StrContains(rocketModel, "notrail") != -1) anchor = "tdb";
+
 	for (int i = 0; i < stack; i++)
 	{
-		int newGlow = SpawnParticleSystem(particleName, NULL_VECTOR, NULL_VECTOR, entity, "trail", 0.0, 0.0);
+		int newGlow = SpawnParticleSystem(particleName, NULL_VECTOR, NULL_VECTOR, entity, anchor, 0.0, 0.0);
 		if (newGlow == -1) continue;
 		RocketCritGlow[index][i] = EntIndexToEntRef(newGlow);
 	}
@@ -534,7 +544,7 @@ bool ProcessDeflection(int index, int entity, int rocketClass, RocketFlags flags
 	EmitRocketSound(RocketSound_Alert, rocketClass, entity, target, flags);
 	if (TestFlags(flags, RocketFlag_OnDeflectCmd))
 	{
-		ExecuteCommands(RocketClassCmdsOnDeflect[rocketClass], rocketClass, entity, client, target, LastDeadClient, RocketSpeed[index], deflectionCount, RocketMphSpeed[index]);
+		ExecuteCommands(RocketClassCmdsOnDeflect[rocketClass], rocketClass, entity, client, target, LastDeadClient, RocketSpeed[index], deflectionCount, RocketRawMphSpeed[index]);
 	}
 	Forward_OnRocketDeflect(index, entity, client);
 	return true;
@@ -582,6 +592,7 @@ void ApplyHomingLerp(int index, int entity, int rocketClass, int target,
 {
 	if ((now - RocketLastDeflectionTime[index]) < RocketClassControlDelay[rocketClass]) return;
 
+
 	// tickScale: 1.0 for gated think (Damizean raw-lerp), else GetTickInterval()/TICK_BASE_INTERVAL.
 	float tickScale = gatedThink ? 1.0 : tickScaleConst;
 	float turnRate = CalculateRocketTurnRate(rocketClass, modifier) * tickScale;
@@ -614,6 +625,7 @@ void ApplySmoothElevation(int index, int rocketClass, float now, float tickScale
 	if (!UseSmoothElevation) return;
 	if (!(RocketInstanceFlags[index] & RocketFlag_Elevating)) return;
 	if ((now - RocketLastDeflectionTime[index]) < RocketClassControlDelay[rocketClass]) return;
+
 
 	float elevRate = RocketClassElevationRate[rocketClass] * tickScaleConst;
 	if (RocketDirection[index][2] < RocketClassElevationLimit[rocketClass])
@@ -1062,7 +1074,7 @@ void CheckRoundDelays(int index)
 
 	if (!(RocketInstanceState[index] & RocketState_Delayed))
 	{
-		if (CvarDelayMessage.BoolValue)
+		if (g_CacheDelayMessage)
 		{
 			CPrintToChatAll("%t", "DBDelay_Announce_All", target);
 		}
@@ -1074,7 +1086,7 @@ void CheckRoundDelays(int index)
 	{
 		int rocketClass = RocketClass[index];
 		RocketSpeed[index] = LimitRocketSpeed(rocketClass, RocketInstanceFlags[index],
-			RocketSpeed[index] + CvarDelayPreventionSpeedup.FloatValue);
+			RocketSpeed[index] + g_CacheDelayPreventionSpeedup);
 		RocketMphSpeed[index] = RocketSpeed[index] * HAMMER_TO_MPH;
 	}
 }

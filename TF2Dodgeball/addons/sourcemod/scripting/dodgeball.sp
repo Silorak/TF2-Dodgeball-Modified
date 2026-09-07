@@ -58,6 +58,8 @@ bool  g_CacheStealPreventionDamage;
 bool  g_CacheNoTargetRedirectDamage;
 bool  g_CacheDelayPrevention;
 float g_CacheDelayPreventionTime;
+bool  g_CacheDelayMessage;
+float g_CacheDelayPreventionSpeedup;
 
 // Per-team alive counts. [0]=unused, [1]=spectator (unused), [2]=RED, [3]=BLU.
 // Maintained incrementally via player_spawn / player_death / player_team /
@@ -324,6 +326,8 @@ public void OnPluginStart()
 	CvarNoTargetRedirectDamage.AddChangeHook(OnCachedCvarChanged);
 	CvarDelayPrevention.AddChangeHook(OnCachedCvarChanged);
 	CvarDelayPreventionTime.AddChangeHook(OnCachedCvarChanged);
+	CvarDelayMessage.AddChangeHook(OnCachedCvarChanged);
+	CvarDelayPreventionSpeedup.AddChangeHook(OnCachedCvarChanged);
 
 	RegisterCommands();
 }
@@ -334,6 +338,8 @@ void RefreshCachedCvars()
 	g_CacheNoTargetRedirectDamage = CvarNoTargetRedirectDamage.BoolValue;
 	g_CacheDelayPrevention        = CvarDelayPrevention.BoolValue;
 	g_CacheDelayPreventionTime    = CvarDelayPreventionTime.FloatValue;
+	g_CacheDelayMessage           = CvarDelayMessage.BoolValue;
+	g_CacheDelayPreventionSpeedup = CvarDelayPreventionSpeedup.FloatValue;
 }
 
 public void OnCachedCvarChanged(ConVar cvar, const char[] oldVal, const char[] newVal)

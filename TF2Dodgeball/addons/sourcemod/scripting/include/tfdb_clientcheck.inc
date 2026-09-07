@@ -16,7 +16,7 @@
  * they're not yet alive). That confused multiple branches in PvB before
  * 2026-04-24. Use `TFDB_IsSpectator(c)` here, which checks team explicitly.
  *
- * All helpers are `stock` - they inline at compile time; zero runtime cost.
+ * Unused helpers are not compiled (stock suppresses the unused-symbol warning); each call is a cheap local call, not zero-cost and not inlined - spcomp has no inliner.
  */
 
 #include <sourcemod>

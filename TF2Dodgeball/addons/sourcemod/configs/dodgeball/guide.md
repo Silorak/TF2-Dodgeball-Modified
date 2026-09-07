@@ -352,6 +352,37 @@ Slow, high damage, committed direction.
 }
 ```
 
+### Custom trails on the real rocket - "notrail" model
+
+The engine trail (the smoke ribbon every stock rocket emits) is created
+client-side and can never be removed by the server once the client spawns it.
+Historically that forced a workaround: hide the real rocket and drag a fake
+prop_dynamic behind it with custom particles.
+
+The shipped `w_rocket_notrail` model removes that constraint. It is byte
+identical to the stock `w_rocket.mdl` except the emission attachment is
+renamed `"trail"` -> `"tdb"` (same bone, same transform). The client's
+`C_TFBaseRocket::CreateTrails()` looks up `"trail"`, does not find it, and
+returns before creating any trail. No engine trail exists, so nothing can
+stack, and the visible rocket is the real one.
+
+To use it on a class:
+
+```
+"myclass"
+{
+    "model"                  "models/custom/dodgeball/w_rocket_notrail/w_rocket_notrail.mdl"
+    "trail particle"         "drg_cow_rockettrail_normal"   // any precached system
+    // do NOT set "remove particles" - there is nothing to remove,
+    // and setting it would hide the real rocket again.
+}
+```
+
+The trail entity parents to the real rocket and anchors at the renamed
+attachment automatically. Players download the model set once (~75 KB).
+Classes that keep `model ""` keep the stock engine trail; the per-deflect
+`m_iDeflected` freeze in the core already prevents that trail from stacking.
+
 ### Kill-everyone - "Nuke"
 
 Single-hit lethal. Slow but relentless.

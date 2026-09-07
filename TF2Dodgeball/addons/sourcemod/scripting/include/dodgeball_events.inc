@@ -3,6 +3,8 @@
 #endif
 #define _dodgeball_events_included
 
+#define COLLISION_GROUP_PUSHAWAY 17   // m_CollisionGroup value that pushes players away
+
 /**
  * Handles all game events hooked by the plugin.
  */
@@ -194,7 +196,7 @@ public void OnPlayerDeath(Event event, char[] eventName, bool dontBroadcast)
 	// here - a RecountAlive() at this moment can miss the death. The clamp
 	// to 0 guards against the rare case where the victim has already been
 	// counted out by another path (e.g. player_team firing first).
-	if (LastDeadTeam == 2 || LastDeadTeam == 3)
+	if (LastDeadTeam == view_as<int>(TFTeam_Red) || LastDeadTeam == view_as<int>(TFTeam_Blue))
 	{
 		if (g_AliveCount[LastDeadTeam] > 0) g_AliveCount[LastDeadTeam]--;
 	}
@@ -208,7 +210,7 @@ public void OnPlayerDeath(Event event, char[] eventName, bool dontBroadcast)
 	int rocketClass = RocketClass[index];
 	int target = EntRefToEntIndex(RocketTarget[index]);
 	float speed = RocketSpeed[index];
-	float mphSpeed = RocketMphSpeed[index];
+	float mphSpeed = RocketRawMphSpeed[index];   // uncapped: @mphspeed/@nocapspeed keep stacking past the velocity cap (review fix)
 	int deflections = RocketDeflections[index];
 
 	if ((RocketInstanceFlags[index] & RocketFlag_OnExplodeCmd) && !(RocketInstanceFlags[index] & RocketFlag_Exploded))
@@ -281,7 +283,7 @@ public void OnPlayerInventory(Event event, char[] eventName, bool dontBroadcast)
 	// NoBlock: remove player-to-player collision
 	if (UseNoBlock && GetClientTeam(client) > 1)
 	{
-		SetEntProp(client, Prop_Data, "m_CollisionGroup", 17); // COLLISION_GROUP_PUSHAWAY
+		SetEntProp(client, Prop_Data, "m_CollisionGroup", COLLISION_GROUP_PUSHAWAY); // 17
 	}
 }
 
@@ -548,20 +550,16 @@ public Action OnStartTouch(int entity, int other)
 	int index = FindRocketByEntity(entity);
 
 	if (index == -1) return Plugin_Continue;
-	if (other > 0 && other <= MaxClients)
-	{
-		if (RocketDeflections[index] == 0)
-		{
-			SetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity", 0);
-			SetEntPropEnt(entity, Prop_Send, "m_hOriginalLauncher", -1);
-			SetEntPropEnt(entity, Prop_Send, "m_hLauncher", -1);
-		}
-		return Plugin_Continue;
-	}
 
-	int rocketClass = RocketClass[index];
-	if (RocketBounces[index] >= RocketClassMaxBounces[rocketClass])
+	bool hitPlayer    = (other > 0 && other <= MaxClients);
+	int  rocketClass  = RocketClass[index];
+	bool bouncesSpent = (RocketBounces[index] >= RocketClassMaxBounces[rocketClass]);
+
+	if (hitPlayer || bouncesSpent)
 	{
+		// Unowned touch: strip attribution so the bounce/impact is not
+		// credited to the spawning player. Single copy (review F2) - the
+		// two branches previously duplicated these three writes.
 		if (RocketDeflections[index] == 0)
 		{
 			SetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity", 0);
